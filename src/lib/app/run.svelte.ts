@@ -6,7 +6,7 @@
  *
  *   await run.start()                 settle the client (live.ts) and the reads the current picks need
  *   run.project, run.entityType,      the picks, read-only; change them with setProject, setEntityType,
- *   run.templateId, run.template,     setTemplate, setEntryPoint, setSelected (each clears the plans
+^ *   run.templateId, run.template,     setTemplate, setEntryPoint, setSelected (each clears the plans
  *   run.entryPoint, run.selected      it makes stale)
  *   run.types, run.templates,         reads, as `Loadable`: templatable types (cached per session), every
  *   run.defaultTemplate               template with tasks and edges, the project's default for the type (088)
@@ -35,7 +35,7 @@ import {
 } from '$lib/io/load';
 import { DEFAULT_CONCURRENCY, runPool } from '$lib/io/pool';
 import { liveWriter, prepareLive, project as storedProject, setProject as storeProject, type LiveState, type ProjectPick } from '$lib/live';
-import { accessSample, chunk, defaultRunOptions, entityListFilters, type EntryPoint } from '$lib/pure/entry';
+import { accessSample, addToSelection, chunk, defaultRunOptions, entityListFilters, selectedWithin, type EntryPoint } from '$lib/pure/entry';
 import { planRun } from '$lib/pure/planner';
 import { errorOf } from '$lib/pure/run';
 import type { AccessSummary, EntityPlan, EntitySnapshot, Id, ProjectContext, Run, RunOptions, Template } from '$lib/pure/types';
@@ -171,18 +171,15 @@ class RunState {
 	setTemplate(id: Id | null): void {
 		if (id === this.templateId) return;
 		this.templateId = id;
-		if (this.entryPoint === 'template_first') this.selected = [];
+		this.selected = [];
 		this.#clearPlans();
 		this.#save();
 	}
 
 	/** `no_template` with nothing picked takes the project's default for the type (088, brief 5). */
 	setEntryPoint(next: EntryPoint): void {
-		if (next !== this.entryPoint) {
-			this.entryPoint = next;
-			this.selected = [];
-			this.#clearPlans();
-		}
+		// A list filter, not a new run: the picks stay, and the page says how many it hides.
+		if (next !== this.entryPoint) this.entryPoint = next;
 		const fallback = this.defaultTemplate.state === 'ready' ? this.defaultTemplate.value : null;
 		if (next === 'no_template' && this.templateId === null && fallback) this.templateId = fallback.id;
 		this.#save();
@@ -200,7 +197,19 @@ class RunState {
 		if (!project || !type) return;
 		const rows = await searchAll(this.client(), type, entityListFilters(project.id, this.entryPoint, this.templateId, search), ['code']);
 		const code = (row: (typeof rows)[number]) => (typeof row.attributes?.code === 'string' ? row.attributes.code : undefined);
-		this.setSelected(rows.map((row) => ({ type: row.type, id: row.id, name: code(row) })));
+		this.setSelected(addToSelection(this.selected, rows.map((row) => ({ type: row.type, id: row.id, name: code(row) }))));
+	}
+
+	/** How many picks the list filter matches, in one `_summarize` count (020). Null when none are picked. */
+	async countSelectedShown(search: string): Promise<number | null> {
+		const project = this.project;
+		const type = this.entityType;
+		const picked = this.selected;
+		if (!project || !type || picked.length === 0) return null;
+		const filters = selectedWithin(entityListFilters(project.id, this.entryPoint, this.templateId, search), picked);
+		const summary = await this.client().summarize(type, { filters, summaryFields: [{ field: 'id', type: 'count' }] });
+		const count = summary.summaries['id'];
+		return typeof count === 'number' ? count : null;
 	}
 
 	/**

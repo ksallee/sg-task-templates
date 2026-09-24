@@ -12,7 +12,7 @@
 	import { createEntitySource, resolveColumns, type CollectionColumn } from 'sg-widgets-core';
 	import { liveContext } from '$lib/live';
 	import { run, type EntryPoint } from '$lib/app/run.svelte';
-	import { entityListFilters, planBlocker } from '$lib/pure/entry';
+	import { entityListFilters, onlySelected, planBlocker, selectionLine } from '$lib/pure/entry';
 	import { columnsKeyFor, defaultColumns, taskCount } from '$lib/pure/columns';
 	import PageHeader from '$lib/app/page-header.svelte';
 	import PageState from '$lib/app/page-state.svelte';
@@ -42,7 +42,39 @@
 	/** The type is picked on Template; this page is rebuilt when it changes. */
 	const entityType = untrack(() => run.entityType);
 	const projectId = untrack(() => run.project?.id ?? null);
-	const filters = $derived(projectId === null ? null : entityListFilters(projectId, run.entryPoint, run.templateId, query));
+	/** Show selected lists the picks alone, whatever the list filter says. */
+	let showSelected = $state(false);
+	$effect(() => {
+		if (run.selected.length === 0) showSelected = false;
+	});
+	const filters = $derived(
+		projectId === null
+			? null
+			: showSelected
+				? onlySelected(projectId, run.selected)
+				: entityListFilters(projectId, run.entryPoint, run.templateId, query)
+	);
+	/** How many picks the list filter matches; the rest are hidden by it. */
+	let shown = $state<number | null>(null);
+	$effect(() => {
+		void run.entryPoint;
+		void run.templateId;
+		const text = query;
+		const picked = run.selected;
+		if (showSelected || picked.length === 0) {
+			shown = picked.length === 0 ? null : picked.length;
+			return;
+		}
+		let live = true;
+		run.countSelectedShown(text).then(
+			(value) => live && (shown = value),
+			() => live && (shown = null)
+		);
+		return () => {
+			live = false;
+		};
+	});
+	const line = $derived(selectionLine(run.selected.length, shown));
 	let source = $state.raw<ReturnType<typeof createEntitySource> | null>(null);
 	let columns = $state<CollectionColumn[]>([]);
 	let selectingAll = $state(false);
@@ -160,7 +192,21 @@
 			<span class="text-sm" data-slot="selected-count">
 				<span class="font-semibold tabular-nums">{count}</span>
 				<span class="text-muted-foreground">selected</span>
+				{#if line.hidden > 0 && !showSelected}
+					<span class="text-muted-foreground" data-slot="hidden-count">· <span class="tabular-nums">{line.hidden}</span> hidden by the filter</span>
+				{/if}
 			</span>
+			<Button
+				size="sm"
+				variant="outline"
+				aria-pressed={showSelected}
+				data-slot="show-selected"
+				class="aria-pressed:bg-accent aria-pressed:text-accent-foreground"
+				onclick={() => (showSelected = !showSelected)}
+				disabled={count === 0}
+			>
+				Show selected
+			</Button>
 			<Button size="sm" variant="outline" onclick={() => void selectAll()} disabled={selectingAll}>
 				{selectingAll ? 'Selecting…' : query ? `Select all matching “${query}”` : 'Select all'}
 			</Button>
