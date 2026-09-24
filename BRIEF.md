@@ -5,10 +5,13 @@ Task with the template task's name and step is kept, with its status, assignees 
 what is missing is created; nothing is deleted unless asked, and never silently. Every change is shown
 per entity before it is written. Built on `../sg-widgets`, public on GitHub, a Svelte app like sg-notes.
 
-Status, 2026-09-24: grilling done, corpus probes and the client gaps landed, repo created
+Status, 2026-09-24: grilling done. Corpus probes are on probe branches under sg-groundtruth
+[#79](https://github.com/ksallee/sg-groundtruth/issues/79), merge
+[PR #80](https://github.com/ksallee/sg-groundtruth/pull/80) open. Client gaps: sg-widgets
+[PR #331](https://github.com/ksallee/sg-widgets/pull/331) open. Repo created
 ([#1](https://github.com/ksallee/sg-task-templates/issues/1),
-[PR #2](https://github.com/ksallee/sg-task-templates/pull/2)), wave 2 in progress. Deploy at the end,
-to `sg-task-templates.vercel.app`.
+[PR #2](https://github.com/ksallee/sg-task-templates/pull/2)). Deploy at the end, to
+`sg-task-templates.vercel.app`.
 
 ## Why
 
@@ -49,14 +52,15 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
 | `probe/79-092` (probe branch, #79, not yet on dev) | An added dependency edge (direct, or the apply's copy on claim) reschedules unpinned downstream Tasks at once; a pinned one holds and flags `dependency_violation`. The claim alone moves nothing. |
 | `probe/79-093` (probe branch, #79, not yet on dev) | Writing null to `start_date` and `due_date` on a dependent Task pins it. `pinned: false` afterwards recomputes both dates from upstream. |
 | `probe/79-095` (probe branch, #79, not yet on dev) | Remove an edge with `DELETE /entity/task_dependencies/<id>`, never through `upstream_tasks`/`downstream_tasks` (erases it, no revive). Undo revives the same id, type and offset; dates recompute from upstream, not restored. Reviving after the same pair is re-created is a 400. |
-| `probe/79-096` (probe branch, #79, not yet on dev) | Writing `task_template` re-syncs Tasks already linked to it: overwrites `sg_sort_order`, `sg_description` and `duration`, keeps status, removes non-template edges between linked Tasks. Corrects 084 and recipe 015; full field and edge list at 102. |
+| `probe/79-096` (probe branch, #79, not yet on dev) | Writing `task_template` re-syncs fields and edges on Tasks already linked to it (full list at 102). Corrects 084 and recipe 015. |
 | `probe/79-097` (probe branch, #79, not yet on dev) | Clearing dates on a Task with no upstream edge does not pin it; the dates stay null. |
 | `probe/79-098` (probe branch, #79, not yet on dev) | One `_batch` (claim, `task_template` null, `task_template` T) sees each request's earlier writes and gives the same result as separate calls: one batch per entity, write-backs included. |
+| `recipes/020_apply_task_template_in_one_batch` (sg-groundtruth PR #80) | Recipe 015 as one `_batch` per entity: claims, `task_template` null, `task_template` T, then the write-backs (098). |
 | `probe/79-099` (probe branch, #79, not yet on dev) | Every `task_template` write reconciles all template edges against `template_task` links: kept+claimed, kept+kept and kept+created pairs all get the missing edge. |
 | `probe/79-100` (probe branch, #79, not yet on dev) | Writing `duration` on a dependent Task does not pin it; it recomputes dates from upstream and cascades downstream. |
 | `probe/79-101` (probe branch, #79, not yet on dev) | On apply, a template edge replaces an existing edge of another type or the reverse edge; the old edge is erased, not revivable, so undo must re-create it from the recorded type and offset. Edges to Tasks outside the template are kept. |
-| `probe/79-102` (probe branch, #79, not yet on dev) | Writing `task_template`=T re-syncs every Task already linked to T, claimed-this-run included. Overwritten when T's value is non-empty: `content`, `step`, `est_in_mins`, `sg_description`, `sg_sort_order`, `task_reviewers`, `milestone`, custom fields (seen: `sg_priority_1`); `duration` only on a Task with no dates. Kept: `sg_status_list` always; `start_date`/`due_date` kept when set, filled and cascaded when empty. Filled only if empty: `task_assignees`. An empty template value never clears. Edges between T-linked Tasks: missing template edge added, wrong type/offset edge deleted and re-created as T's, non-template edge deleted; edges to Tasks outside the template kept. Writing `null` or another template touches no T-linked Task. Corrects 084 and recipe 015. |
-| `probe/79-094` (probe branch, #79, not yet on dev) | A harmless access pre-check: `GET /schema/<Type>/fields?project_id=` gives `editable` per field (`false` is a refusal, `true` only maybe); confirmed by a no-op PUT of a Task's current value (refused: 400 "not editable for this user"), a create with a deliberately bad `sg_status_list` (refused: "cannot be created by this user", vs. a plain invalid-status 400 if allowed), and a delete run as one `_batch` [delete, update of a missing id] (refused: "can not be deleted by this user"; allowed: 404 and rollback, nothing written either way). Recipe `0XX_check_permission_before_writing`. Measured via `sudo_as`, not a real launcher session (partial). |
+| `probe/79-102` (probe branch, #79, not yet on dev) | Writing `task_template`=T re-syncs every Task linked to T, claimed-this-run included. Fields: the list under Decided 4 below. Edges between T-linked Tasks: missing template edge added, other type or offset replaced by T's, non-template edge deleted. Edges to other Tasks kept. Writing `null` or another template touches no T-linked Task. Corrects 084 and recipe 015. |
+| `probe/79-094` (probe branch, #79, not yet on dev) | Access pre-check that writes nothing. `GET /schema/<Type>/fields?project_id=` gives `editable` per field: `false` is a refusal, `true` only maybe. Then three writes the server refuses before landing: a no-op PUT, a create with a bad `sg_status_list`, a `_batch` [delete, update of a missing id]. Recipe `017_check_permission_before_writing`. Partial: measured via `sudo_as`. |
 
 ## Decided
 
@@ -99,25 +103,25 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
    - An edge between an extra and a claimed/kept Task: listed for information, never removed; the apply
      keeps it (Kevin, 2026-09-24; probe 101).
 4. **Kept and claimed Tasks**
-   - Per-field policy, per run, over every field the apply overwrites (probe 102), custom fields
-     included, not only the brief's original five: keep (default) / overwrite / fill if empty where
-     that makes sense. Keep = read the field before the apply, write it back after, in the same batch
-     (probe 098). Milestone and other booleans: keep / overwrite only, no fill-if-empty (Kevin,
-     2026-09-24). Only the link is written otherwise (changed 2026-09-24, probe 102).
-   - Overwritten when the template's value is non-empty: `content`, `step`, `est_in_mins`,
-     `sg_description`, `sg_sort_order`, `task_reviewers`, `milestone`, custom fields (seen:
-     `sg_priority_1`); `duration` only on a Task with no dates. Kept: `sg_status_list` always;
-     `start_date`/`due_date` kept when set, filled then cascaded when empty. Filled only if empty:
-     `task_assignees`. An empty template value never clears a field (probe 102).
+   - What the apply does to linked Tasks (probe 102). Overwritten when the template's value is
+     non-empty: `content`, `step`, `est_in_mins`, `sg_description`, `sg_sort_order`,
+     `task_reviewers`, `milestone`, custom fields (seen: `sg_priority_1`); `duration` only on a Task
+     with no dates. Kept: `sg_status_list`. `start_date`/`due_date` kept when set, filled then
+     cascaded when empty. Filled only if empty: `task_assignees`. An empty template value never
+     clears a field.
+   - Per-field policy, per run, over every overwritten field above, custom fields included: keep
+     (default) / overwrite / fill if empty where that makes sense. Keep = read the field before the
+     apply, write it back after, in the same batch (probe 098). Milestone and other booleans: keep /
+     overwrite only (Kevin, 2026-09-24).
    - `content` (the Task's name): default is overwrite, to the template's name; keep on opt-in. The
      plan flags every rename, loudly when a linked Task was renamed by hand (Kevin, 2026-09-24).
-   - Dependencies: the apply adds the template's edges on claim, and itself deletes non-template edges
-     and edges of another type, offset or direction between linked Tasks — not opt-in, the server does
-     it regardless (changed 2026-09-24, probe 102). The plan lists each deleted or replaced edge with
-     keep (default) / remove. Keep re-creates it
-     after the apply, in the same batch, as a new edge id; that re-create may move dates (probe 092),
-     and the plan shows it (Kevin, 2026-09-24). A replaced edge is erased, not revivable, so a re-create
-     (kept, or on undo) uses the recorded type and offset (probe 101).
+   - Dependencies: the apply adds every missing template edge between linked Tasks (kept+kept,
+     kept+claimed, kept+created; probe 099). Between linked Tasks it also deletes non-template edges
+     and replaces edges of another type, offset or direction (probe 102). The server does this
+     regardless. The plan lists each deleted or replaced edge with keep (default) / remove. Keep
+     re-creates it after the apply, in the same batch, as a new edge id. That may move dates (probe
+     092); the plan shows it (Kevin, 2026-09-24). These edges are erased, not revivable, so a
+     re-create (kept, or on undo) uses the recorded type and offset (probes 101, 102).
    - Template dates on created Tasks: shown in the plan, with an opt-in to clear them, offered only on
      Tasks with no upstream edge; those stay unpinned with null dates (Kevin, 2026-09-24; probe 097).
    - Tasks whose dates may move because of new edges are shown. Pinned Tasks are never touched; the
@@ -134,15 +138,15 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
      field under policy, removed or replaced edges, previous status of omitted Tasks, deleted Task ids,
      created Task ids. Revert runs in 096's order: old `template_task` on claimed Tasks, then old
      `task_template` on the entity, then delete created Tasks, then write back pre-merge fields and
-     edges; the entity ends back on its old template (Kevin, 2026-09-24). A deleted or replaced edge is
-     re-created from its recorded type and offset, not revived (probe 101); a deleted Task is revived
-     (048).
+     edges; the entity ends back on its old template (Kevin, 2026-09-24). An edge the apply deleted or
+     replaced is re-created from its recorded type and offset (probes 101, 102). An edge removed by
+     `DELETE` is revived (095). A deleted Task is revived (048).
    - The undo record lives in IndexedDB and downloads as JSON. Undo works from either.
    - A tab closed mid-run: on reopen the unfinished run is offered. Re-plan the remaining entities from
      a fresh read, then continue or undo.
 7. **Who uses it**
    - Anyone, writing as themselves. No level gate: permission rules are not readable (027).
-   - Before the plan, an access pre-check (recipe `0XX_check_permission_before_writing`, probe 094):
+   - Before the plan, an access pre-check (recipe `017_check_permission_before_writing`, probe 094):
      `GET /schema/<Type>/fields?project_id=` for `editable`, backed by a no-op PUT, a deliberately bad
      create and a delete run as one `_batch`, all refusable without writing anything. Warns if it looks
      short. Failed writes are reported per entity.
@@ -150,8 +154,10 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
 8. **Output**: the plan as CSV, for review before applying; the result as the undo record JSON.
 9. **Views**
    - Screens: connect, template, entities, plan, apply and result.
-   - Plan: entity list on the left with counts (keep, claim, create, extra, conflict), filterable;
-     detail pane on the right with that entity's Tasks and actions; bulk actions on top.
+   - Plan: entity list on the left with five counts, filterable; detail pane on the right with that
+     entity's Tasks and actions; bulk actions on top. The counts: **keep**, already linked to this
+     template's task; **claim**, same key, link written; **create**, missing, the apply makes it;
+     **extra**, on the entity, not in the template; **conflict**, two candidates, the user picks.
    - Default theme only. Light and dark switch in the navbar, following the system preference at
      first. The docs say any sg-widgets theme can be swapped in.
 10. **Later, not v1**: combining several templates on one entity; relative offsets and date shift
@@ -160,7 +166,7 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
 ## Corpus gaps
 
 sg-groundtruth [#79](https://github.com/ksallee/sg-groundtruth/issues/79) (probe branches
-`probe/79-NNN`, not yet on `dev`): answered — 092, 093, 094, 095, 096, 097, 098, 099, 100, 101, 102.
+`probe/79-NNN`, merge PR #80 open): answered: 092, 093, 094, 095, 096, 097, 098, 099, 100, 101, 102.
 094 partial: measured via `sudo_as` as an Artist, not a real App Session Launcher session.
 
 ## Client gaps (sg-widgets)
@@ -172,7 +178,7 @@ sg-widgets [#330](https://github.com/ksallee/sg-widgets/issues/330): `delete`, `
 
 - Repo created: `ksallee/sg-task-templates`, `dev` and `main`
   ([#1](https://github.com/ksallee/sg-task-templates/issues/1),
-  [PR #2](https://github.com/ksallee/sg-task-templates/pull/2)). Wave 2 in progress.
+  [PR #2](https://github.com/ksallee/sg-task-templates/pull/2)).
 - Deploy at the end, once the app works: a Vercel project at `sg-task-templates.vercel.app`, deployed
   from `main`.
 
