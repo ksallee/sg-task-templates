@@ -1,7 +1,8 @@
 # Design
 
 sg-widgets' default theme and `docs/design-rules.md` there bind everything below: tokens only, its
-spacing and size ladders. Theme choices are Jeremy's (sg-widgets #190). The app reads as sg-notes' sibling.
+spacing and size ladders. The theme comes from sg-widgets; layout, hierarchy, illustration and copy
+are this app's. The app reads as sg-notes' sibling.
 
 ## What was wrong (2026-09-24, seeded sandbox, 1440×900)
 
@@ -22,7 +23,9 @@ spacing and size ladders. Theme choices are Jeremy's (sg-widgets #190). The app 
 
 - **Shell.** Header `h-12`, as sg-notes: wordmark, the step indicator, site host and who, scheme
   switch. Resume banner under it. The page owns everything else.
-- **Step indicator.** Connect → Template → Entities → Plan → Apply → Result, numbered. Current: primary
+- **Step indicator.** Drawn only on the six flow screens; home and How it works hide it
+  (`inFlow` in `$lib/pure/flow.ts`). Below `sm` the chevrons go and the wordmark keeps its mark, so
+  the header fits a phone. Connect → Template → Entities → Plan → Apply → Result, numbered. Current: primary
   ring and foreground label. Done: a check, muted label, still a link. Open: muted, link. Blocked:
   half opacity, not a link, the reason in its title. Rules in `$lib/pure/flow.ts`.
 - **Page header.** Every screen: title `text-lg font-semibold`, one context line `text-sm
@@ -135,3 +138,20 @@ On /plan the five counts give way to these outcomes: the run summary on top (`pl
 outcome line per entity, Tasks one line each (`plan/outcome-chip`, markers in `plan/tone.ts` tones),
 details folded. Fields show their display names (Task schema with `project_id`), the code name on
 hover and in the CSV beside it.
+
+## Home and How it works (2026-09-24, #57)
+
+Outside the flow: no step indicator, no page header bar; each page owns its composition.
+
+- **Home.** One centred column (`max-w-4xl`). Title `text-3xl sm:text-4xl font-semibold`, one line
+  under it, Start (the only one) and a ghost How it works. The one picture is `app/merge-picture`: a
+  Shot's Tasks after Flow PT's apply (duplicates in warning, the deleted Task struck in destructive
+  with its orphaned publishes) beside this app's (linked in info, created in success, the plan's
+  words). The two panels share a subgrid, so each Task sits level with its counterpart. Then the six
+  steps (numbered: a sequence) and what it never does, `text-lg` section titles.
+- **How it works.** A docs page: a side nav of `HOW_SECTIONS`, sticky from `lg`, marking the section
+  in view (`activeSection` in `$lib/pure/how.ts`); a wrapped link row above `lg`. Text at a reading
+  measure (`max-w-[42rem]`, 15px, relaxed). Section titles `text-xl`, sub-titles `text-base`,
+  sections split by a rule. A small picture where it clarifies a rule: name matching examples, a
+  glyph per outcome (`app/how/outcome-glyph`), a keep / template's / fill-if-empty table, the removed
+  and re-created edge (`app/how/edge-strip`), undo's puts back vs not exactly. Anchors unchanged.

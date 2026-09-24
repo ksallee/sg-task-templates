@@ -44,3 +44,20 @@ export type HowConcept = keyof typeof HOW_CONCEPTS;
 export function howHref(concept: HowConcept): string {
 	return `/how#${HOW_CONCEPTS[concept]}`;
 }
+
+/**
+ * The section the reader is in, for the side nav: the last one whose heading has reached `line`
+ * (px from the top of the scroll pane), the first before any has. `atEnd` (scrolled to the bottom)
+ * picks the last section, which may be too short to reach the line.
+ */
+export function activeSection(
+	tops: ReadonlyArray<{ id: HowSectionId; top: number }>,
+	line: number,
+	atEnd = false
+): HowSectionId | null {
+	if (tops.length === 0) return null;
+	if (atEnd) return tops[tops.length - 1].id;
+	let current = tops[0].id;
+	for (const t of tops) if (t.top <= line) current = t.id;
+	return current;
+}

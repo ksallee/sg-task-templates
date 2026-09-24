@@ -1,7 +1,8 @@
 <!--
 	The step indicator (docs/design.md): Connect → Template → Entities → Plan → Apply → Result,
 	numbered. Current: primary ring. Done: a check, still a link. Open: a link. Blocked: dimmed, not
-	a link, the reason in its title. The states come from `$lib/pure/flow.ts`.
+	a link, the reason in its title. The states come from `$lib/pure/flow.ts`. Below sm the chevrons
+	go and the numbers tighten, so six steps fit a phone.
 -->
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
@@ -16,7 +17,7 @@
 	<ol class="flex min-w-0 items-center gap-0.5">
 		{#each steps as step, i (step.id)}
 			<li class="flex items-center gap-0.5">
-				{#if i > 0}<ChevronRight class="text-muted-foreground/50 size-3.5 shrink-0" aria-hidden="true" />{/if}
+				{#if i > 0}<ChevronRight class="text-muted-foreground/50 hidden size-3.5 shrink-0 sm:block" aria-hidden="true" />{/if}
 				{#snippet body()}
 					<span
 						class={cn(
@@ -33,7 +34,7 @@
 				{/snippet}
 				{#if step.state === 'blocked'}
 					<span
-						class="text-muted-foreground flex h-7 cursor-not-allowed items-center gap-1.5 rounded-md px-1.5 text-sm opacity-50"
+						class="text-muted-foreground flex h-7 cursor-not-allowed items-center gap-1.5 rounded-md px-1 text-sm opacity-50 sm:px-1.5"
 						title={step.hint ?? undefined}
 						aria-disabled="true"
 						data-state={step.state}
@@ -45,7 +46,7 @@
 					<a
 						href={step.href}
 						class={cn(
-							'focus-visible:ring-ring flex h-7 items-center gap-1.5 rounded-md px-1.5 text-sm outline-none transition-colors duration-150 focus-visible:ring-2',
+							'focus-visible:ring-ring flex h-7 items-center gap-1.5 rounded-md px-1 text-sm outline-none sm:px-1.5 transition-colors duration-150 focus-visible:ring-2',
 							step.state === 'current' ? 'text-foreground font-medium' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
 						)}
 						aria-current={step.state === 'current' ? 'step' : undefined}
