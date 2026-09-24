@@ -43,10 +43,13 @@ are this app's. The app reads as sg-notes' sibling.
   items in a row `gap-2`, rows `px-2 py-1.5` with no gap. Cards `rounded-lg border bg-card p-4`.
 - **Density.** Compact rows in lists and tables (sg-widgets `density="compact"`); air goes between
   sections, not inside rows.
-- **The five counts.** One `CountChip` everywhere: a dot, the word, the number. Keep = muted (nothing
-  changes), claim = info (a link is written), create = success (a Task appears), extra = warning (not
-  in the template), conflict = destructive (you must pick). Zero is dimmed. A conflict above zero
-  outlines in destructive. In a narrow list, `compact` drops the word and keeps the dot and number.
+- **The five counts.** One `CountChip` everywhere: a dot, the word, the number. The words come from
+  `$lib/pure/kinds.ts` (code keeps keep, claim, create, extra, conflict): Already linked = muted
+  (linked to this template before the apply), Linked = info (matched by name and Step, linked),
+  Created = success (missing on the entity, created from the template), Not in template = warning
+  (not changed unless requested), Needs a choice = destructive (several Tasks match one template
+  task). Zero is dimmed. Needs a choice above zero outlines in destructive. In a narrow list,
+  `compact` drops the word and keeps the dot and number.
 - **Badges.** Chips paint no fill of their own (sg-widgets rule 1): `border`, `text-xs font-medium`,
   `h-5`. Status chips come from the registry's `StatusBadge`.
 - **Actions.** One primary (`default`) per screen, top right. Secondary `outline`. Tertiary `ghost`.
@@ -73,7 +76,7 @@ label; *marker* a small tag beside it; *detail* only in the Task's fold or the D
 
 | state | what a producer cares about | needs you | shown as |
 |---|---|---|---|
-| keep, nothing changes | Already on the template; the apply leaves it as it is. | no | label **unchanged**; headline count |
+| keep, nothing changes | Already on the template; the apply leaves it as it is. | no | label **already linked**; headline count |
 | keep, fields rewritten back (policy keep) | The apply re-syncs it, the app writes its values back: no visible change. | no | detail |
 | keep, a field overwritten or filled-if-empty | Its value becomes the template's. | no | label **updated**, marker *fields change*; headline "fields change" |
 | keep, renamed back (hand-renamed, name policy = template) | Someone renamed it; it gets the template's name back. | no, opt-out by run option | label **updated**, marker *renamed* (loud); headline "renamed" |
@@ -86,7 +89,7 @@ label; *marker* a small tag beside it; *detail* only in the Task's fold or the D
 | create, template dates | A new Task, with the template's fields and its calendar dates. | no | label **created**; headline |
 | create, dates cleared | New, no dates (clear-dates option, only without upstream). | option | detail |
 | create, has upstream | Its dates follow the upstream Task; not clearable. | no | detail |
-| extra, leave | On the Shot, not in the template: stays as it is. | no, default | label **left alone**; headline |
+| extra, leave | On the Shot, not in the template: stays as it is. | no, default | label **not in template**; headline |
 | extra, omit | Stays, its status becomes the omit status. | yes (choice) | label **omitted**; headline |
 | extra, delete | Removed; Versions and PublishedFiles lose their Task link (089). Undo revives it. | yes, confirm | label **deleted**, marker *has publishes* (loud); headline, with the count that has publishes |
 | extra, reason not in template | Why it is extra. | no | detail |
@@ -147,7 +150,7 @@ Outside the flow: no step indicator, no page header bar; each page owns its comp
   under it, Start (the only one) and a ghost How it works. The one picture is `app/merge-picture`: a
   Shot's Tasks after Flow PT's apply (duplicates in warning, the deleted Task struck in destructive
   with its orphaned publishes) beside this app's (linked in info, created in success, the plan's
-  words). The two panels share a subgrid, so each Task sits level with its counterpart. Then the six
+  words). The two panels share a subgrid, so each Task is level with its counterpart. Then the six
   steps (numbered: a sequence) and what it never does, `text-lg` section titles.
 - **How it works.** A docs page: a side nav of `HOW_SECTIONS`, sticky from `lg`, marking the section
   in view (`activeSection` in `$lib/pure/how.ts`); a wrapped link row above `lg`. Text at a reading

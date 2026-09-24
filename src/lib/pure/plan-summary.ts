@@ -88,21 +88,21 @@ export const OUTCOME_LABEL: Record<TaskOutcome, string> = {
 	linked: 'linked',
 	created: 'created',
 	updated: 'updated',
-	left: 'left alone',
-	unchanged: 'unchanged'
+	left: 'not in template',
+	unchanged: 'already linked'
 };
 
 /** What each outcome means, for the group heading. */
 export const OUTCOME_MEANING: Record<TaskOutcome, string> = {
-	needs_choice: 'several Tasks match one template task: pick one',
-	deleted: 'not in the template, removed; undo revives them',
-	omitted: 'not in the template, their status set to omit',
-	linked_renamed: 'existing Tasks linked to the template, taking its name',
-	linked: 'existing Tasks linked to the template instead of duplicated',
-	created: 'missing from the entity, made from the template',
-	updated: 'already on the template, a value changes',
-	left: 'not in the template, left as they are',
-	unchanged: 'already on the template, nothing changes'
+	needs_choice: 'several Tasks match one template task',
+	deleted: 'not in the template, deleted; undo revives them',
+	omitted: 'not in the template, status set to omit',
+	linked_renamed: 'matched by name and Step, linked to the template, renamed to its name',
+	linked: 'matched by name and Step, linked to the template',
+	created: 'missing on the entity, created from the template',
+	updated: 'linked to this template before the apply, a value changes',
+	left: 'not in the template, not changed',
+	unchanged: 'linked to this template before the apply, nothing changes'
 };
 
 export type Tone = 'muted' | 'info' | 'success' | 'warning' | 'destructive';
@@ -186,7 +186,7 @@ function edgeDetails(plan: EntityPlan, template: Template, tasks: EntityTask[]) 
 		const v = view.affected[i];
 		const then = a.action === 'keep' ? 're-created after the apply' : 'removed';
 		add(`t${a.existing.downstream}`, {
-			text: `Dependency ${words(v.phrase, v.offset)} ${end(v.upstream)}: the apply drops it (${CAUSE_WORDS[a.cause]}); ${then}.`,
+			text: `Dependency ${words(v.phrase, v.offset)} ${end(v.upstream)}: the apply removes it (${CAUSE_WORDS[a.cause]}); ${then}.`,
 			...(a.closesLoop ? { tone: 'warning' as const } : {})
 		});
 	});
@@ -229,7 +229,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 	];
 	const fillDetails = (fills: Parameters<typeof fillLabels>[0]): Detail[] => fillLabels(fills).map((text) => ({ text }));
 	const conflictDetail = (c: ConflictRow | null): Detail[] =>
-		c ? [{ text: `Chosen in a conflict: ${c.candidates.length} Tasks match ${keyLabel(c.key, c.templateTasks[0]?.step ?? null)}.` }] : [];
+		c ? [{ text: `Picked: ${c.candidates.length} Tasks match ${keyLabel(c.key, c.templateTasks[0]?.step ?? null)}.` }] : [];
 
 	for (const row of plan.rows) {
 		if (row.kind === 'conflict') {
@@ -330,7 +330,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			else if (row.reason === 'link_wins') details.push({ text: `Same name and step as a template task: ${EXTRA_REASON.link_wins}.` });
 			else
 				details.push({
-					text: unlinked ? 'Not picked in a conflict. Unlinked from the template task so only the picked Task stays linked (106).' : 'Not picked in a conflict.'
+					text: unlinked ? 'Not picked. Unlinked from the template task so only the picked Task is linked (106).' : 'Not picked.'
 				});
 			if (outcome === 'left') details.push({ text: 'Left as it is.' });
 			if (outcome === 'omitted') details.push({ text: `Status ${row.task.status ?? '(none)'} becomes ${opts.omitStatus || 'the omit status (pick one)'}.` });
@@ -602,18 +602,18 @@ export function planSummary(input: SummaryInput): PlanSummary {
 			`${tasksWord(n)} deleted${deletedUsed ? `, ${deletedUsed} with Versions or PublishedFiles` : ''}${opts.deleteConfirmed ? '' : ' (to confirm)'}`,
 		omitted: (n) => `${tasksWord(n)} not in the template set to ${opts.omitStatus || 'the omit status'}`,
 		created: (n) => `${n} new ${plural(n, 'Task')} created from the template`,
-		linked: (n) => `${n} existing ${plural(n, 'Task')} linked to the template instead of duplicated`,
+		linked: (n) => `${n} existing ${plural(n, 'Task')} matched by name and Step, linked to the template`,
 		renamed: (n) => `${tasksWord(n)} renamed to the template's name`,
 		policy: (n) => `${views.length} template ${plural(views.length, 'field')} on ${n} existing ${plural(n, 'Task')}: ${policyWords(views, input.labels)}`,
 		fields: (n) => `Field values change on ${tasksWord(n)}`,
 		filled: (n) => `Assignees or dates filled from the template on ${tasksWord(n)} that had none`,
 		deps_added: (n) => `${depsWord(n)} added`,
 		deps_removed: (n) => `${depsWord(n)} removed`,
-		deps_recreated: (n) => `${depsWord(n)} the apply drops, re-created after it`,
+		deps_recreated: (n) => `${depsWord(n)} removed by the apply, re-created after it`,
 		dates_move: (n) => `Dates may move on ${tasksWord(n)}`,
 		violation: (n) => `${n} pinned ${plural(n, 'Task')} would flag a dependency violation`,
-		left: (n) => `${tasksWord(n)} not in the template left alone`,
-		unchanged: (n) => `${tasksWord(n)} already on the template stay as they are`,
+		left: (n) => `${tasksWord(n)} not in the template, not changed`,
+		unchanged: (n) => `${tasksWord(n)} already linked, nothing changes`,
 		noop: (n) => `${n} ${noun(n)} already ${plural(n, 'matches', 'match')}: nothing to write`
 	};
 	const noWhere = new Set<SummaryKey>(['mismatch', 'noop']);

@@ -1,6 +1,6 @@
 <!--
-	Home: what the app does, shown rather than told (`$lib/app/merge-picture.svelte`), then how to
-	use it and what it never does. One centred column, one Start. Outside the step flow
+	Home: what the app does, as a picture (`$lib/app/merge-picture.svelte`), then how to use it and
+	what it never does. One centred column, one Start. Outside the step flow
 	(`$lib/pure/flow.ts`: no step is current, the shell hides the steps). The rules in full: /how.
 -->
 <script lang="ts">
@@ -11,17 +11,17 @@
 
 	const steps: Array<[string, string]> = [
 		['Connect', 'Name the Flow PT site. Sign in as yourself.'],
-		['Template', 'Pick the project, the entity type and the template.'],
-		['Entities', 'Those on the template, any you pick, or those with none.'],
-		['Plan', 'See each entity’s Tasks. Resolve conflicts. Choose what happens to fields and extras.'],
+		['Template', 'Pick the project, the entity type and the Task Template.'],
+		['Entities', 'Those on the Task Template, any you pick, or those with none.'],
+		['Plan', 'See each entity’s Tasks. Pick where several match. Set fields and Tasks not in the template.'],
 		['Apply', 'One entity at a time. A failure stops that entity only.'],
-		['Result', 'What landed. Undo is kept per run.']
+		['Result', 'What was written. Undo is kept per run.']
 	];
 
 	const never = [
 		'Write before you have seen the plan.',
 		'Delete a Task without asking twice.',
-		'Change a matched Task’s status. Only extras you mark Omit get a new one.'
+		'Change a matched Task’s status. Only Tasks you mark Omit get a new one.'
 	];
 
 	const link = 'text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground';
@@ -34,11 +34,10 @@
 		<section class="flex flex-col items-center gap-10">
 			<div class="flex max-w-2xl flex-col items-center gap-4 text-center">
 				<h1 class="text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
-					Apply a task template to Shots that already have Tasks.
+					Apply a Task Template to Shots that already have Tasks.
 				</h1>
 				<p class="text-muted-foreground max-w-xl text-base text-balance">
-					Tasks are matched by name and step. Only the missing ones are created. You see every change before
-					anything is written.
+					Tasks are matched by name and Pipeline Step. Only missing Tasks are created.
 				</p>
 				<div class="flex items-center gap-2 pt-2">
 					<Button href="/connect" size="lg">Start</Button>
@@ -49,7 +48,7 @@
 			<MergePicture />
 
 			<p class="text-muted-foreground -mt-4 text-center text-xs">
-				Shots, Assets, Sequences: any entity with a task template. Why this exists: <a
+				Shot, Asset, Sequence: any entity type with a Task Template. Background: <a
 					class={link}
 					href={FORUM}
 					target="_blank"

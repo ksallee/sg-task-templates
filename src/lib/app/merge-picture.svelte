@@ -1,7 +1,7 @@
 <!--
 	Home's one picture: a Shot's Tasks after two applies of the same template. Left, Flow PT's own
-	apply (forum topic 20654): the Tasks it doesn't recognise are flagged, kept ones come out twice,
-	deleted ones leave their publishes without a Task. Right, this app: matched by name and step,
+	apply (forum topic 20654): the old Tasks are flagged; kept, they are duplicated; deleted, their
+	publishes have no Task. Right, this app: matched by name and step,
 	linked, only the missing Task created. Static, drawn with theme tokens only; the words match the
 	plan's outcome labels (linked, created).
 -->
@@ -70,11 +70,11 @@
 
 <figure class="flex w-full flex-col gap-4" data-slot="merge-picture">
 	<figcaption class="text-muted-foreground text-center text-sm text-balance">
-		Shot <span class="text-foreground font-medium">sh010</span> has Layout, Anim and Comp, with publishes on Comp. The
-		template adds Light.
+		Shot <span class="text-foreground font-medium">sh010</span> has Layout, Anim and Comp. Comp has 3 publishes. The
+		Task Template adds Light.
 	</figcaption>
 
-	<!-- One subgrid row per template task, so each Task sits level with its counterpart. -->
+	<!-- One subgrid row per template task: each Task is level with its counterpart. -->
 	<div class="grid gap-x-4 md:grid-cols-2">
 		<div class="bg-card row-span-6 grid grid-rows-subgrid rounded-lg border" data-side="flow-pt">
 			<div class="flex items-baseline justify-between gap-3 border-b px-3 py-2.5">
@@ -100,7 +100,7 @@
 				</div>
 			{/each}
 			<p class="text-muted-foreground border-t px-3 py-2.5 text-xs leading-relaxed">
-				Old Tasks aren’t recognised. Keep them: duplicates. Delete them: their publishes lose their Task.
+				Flow PT flags the old Tasks. You keep them or delete them.
 			</p>
 		</div>
 
@@ -115,7 +115,7 @@
 				</div>
 			{/each}
 			<p class="text-muted-foreground border-t px-3 py-2.5 text-xs leading-relaxed">
-				Matched by name and step, and linked. Status, assignees and publishes stay. Only Light is created.
+				Status and assignees are unchanged.
 			</p>
 		</div>
 	</div>

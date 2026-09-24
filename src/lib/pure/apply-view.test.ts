@@ -161,12 +161,12 @@ describe('summaryGroups', () => {
 			{
 				title: 'Tasks',
 				lines: [
-					'1 existing Task linked to its template task (claimed); its status, assignees and publishes stay.',
+					'1 existing Task matched by name and Step, linked to the template; its status, assignees and publishes unchanged.',
 					'2 Tasks created from the template.',
 					"1 Task renamed to the template's name.",
-					'1 extra Task set to the omit status.',
-					'1 extra Task deleted, 1 with Versions or PublishedFiles.',
-					'1 extra Task left untouched.'
+					'1 Task not in the template set to the omit status.',
+					'1 Task not in the template deleted, 1 with Versions or PublishedFiles.',
+					'1 Task not in the template, not changed.'
 				]
 			},
 			{
@@ -177,7 +177,7 @@ describe('summaryGroups', () => {
 				title: 'Dependencies and dates',
 				lines: [
 					'1 dependency added from the template.',
-					'1 dependency the apply erases, re-created as kept (new ids).',
+					'1 dependency removed by the apply, re-created (new ids).',
 					'1 dependency removed.',
 					'2 unpinned Tasks may be rescheduled by the new dependencies.',
 					'1 pinned Task will be flagged as violating a dependency.'
@@ -198,7 +198,7 @@ describe('startBlockers', () => {
 	it('names unresolved conflicts, unconfirmed deletes, a missing omit status, and an empty run', () => {
 		const conflicted = plan(3, { warnings: [{ code: 'unresolved_conflict', templateTaskIds: [500] }] });
 		expect(startBlockers([busy, conflicted], options({ omitStatus: '' }))).toEqual([
-			'1 entity has an unresolved conflict. Resolve it on the plan.',
+			'1 entity has a Task that needs a choice. Pick it on the plan.',
 			'1 Task is marked delete but the delete is not confirmed. Confirm it on the plan, or leave the Task.',
 			'1 Task is marked omit but no omit status is chosen. Choose one on the plan.'
 		]);

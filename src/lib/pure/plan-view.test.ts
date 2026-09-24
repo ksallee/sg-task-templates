@@ -208,10 +208,10 @@ describe('policySummary', () => {
 describe('extrasSummary', () => {
 	it('counts the extra names, leave by default, then each name set otherwise', () => {
 		const names = [{ name: 'retime', count: 5 }, { name: 'paint', count: 2 }, { name: 'roto', count: 1 }];
-		expect(extrasSummary(names, opts0())).toBe('3 extra names: leave');
-		expect(extrasSummary(names, { ...opts0(), extraByName: { retime: 'delete', paint: 'leave' } })).toBe('3 extra names: leave · retime: delete');
-		expect(extrasSummary([{ name: '', count: 1 }], { ...opts0(), extraByName: { '': 'omit' } })).toBe('1 extra name: leave · (no name): omit');
-		expect(extrasSummary([], opts0())).toBe('No extras');
+		expect(extrasSummary(names, opts0())).toBe('3 names not in the template: leave');
+		expect(extrasSummary(names, { ...opts0(), extraByName: { retime: 'delete', paint: 'leave' } })).toBe('3 names not in the template: leave · retime: delete');
+		expect(extrasSummary([{ name: '', count: 1 }], { ...opts0(), extraByName: { '': 'omit' } })).toBe('1 name not in the template: leave · (no name): omit');
+		expect(extrasSummary([], opts0())).toBe('No Tasks outside the template');
 	});
 });
 
@@ -238,7 +238,7 @@ describe('applyBlockers', () => {
 		const plans = [planEntity(template, conflictSnap, c, o), planEntity(template, extraSnap, c, o)];
 		const access = { checks: [], fields: { content: 'refused' as const }, looksShort: true };
 		expect(applyBlockers(plans, o, c, access)).toEqual([
-			'1 conflict to resolve.',
+			'1 choice to make.',
 			'Write access looks refused.',
 			'Confirm 1 delete.'
 		]);

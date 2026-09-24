@@ -159,7 +159,7 @@
 							class={cn('flex size-4 shrink-0 items-center justify-center rounded-full border', chosen === 'create' ? 'border-primary' : 'border-input')}
 							aria-hidden="true">{#if chosen === 'create'}<span class="bg-primary size-2 rounded-full"></span>{/if}</span
 						>
-						<span>Create a new Task <span class="text-muted-foreground text-xs">· the candidates become extras</span></span>
+						<span>Create a new Task <span class="text-muted-foreground text-xs">· the candidates become Not in template</span></span>
 					</button>
 				</div>
 			</fieldset>

@@ -1,7 +1,7 @@
 <!--
 	/how's tiny picture of one outcome: the entity's Task(s) on the left, the template task on the
-	right, the link between. Keep: linked already. Claim: the link is written. Create: a new Task.
-	Extra: no template task. Conflict: two Tasks for one template task. Tones as the count chips.
+	right, the link between. Already linked; Linked (the link is written); Created; Not in template
+	(no template task); Needs a choice (two Tasks for one template task). Tones as the count chips.
 -->
 <script lang="ts">
 	import type { PlanKind } from '$lib/pure/types';

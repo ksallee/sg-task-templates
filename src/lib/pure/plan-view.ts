@@ -164,16 +164,16 @@ export function policySummary(views: Array<Pick<PolicyFieldView, 'field' | 'poli
 
 /** The bulk extra actions in one line: how many names, leave by default, then each name set otherwise. */
 export function extrasSummary(names: Array<{ name: string; count: number }>, opts: RunOptions): string {
-	if (names.length === 0) return 'No extras';
+	if (names.length === 0) return 'No Tasks outside the template';
 	const odd = names.filter((n) => (opts.extraByName[n.name] ?? 'leave') !== 'leave').map((n) => `${n.name || '(no name)'}: ${opts.extraByName[n.name]}`);
-	return [`${names.length} extra name${names.length === 1 ? '' : 's'}: leave`, ...odd].join(' · ');
+	return [`${names.length} name${names.length === 1 ? '' : 's'} not in the template: leave`, ...odd].join(' · ');
 }
 
 /** Why the pre-pick chose its Task (matching.ts `prePick`), in words. */
 export const PICK_REASON: Record<PickReason, string> = {
 	only: 'the only candidate',
 	usage: 'it has Versions or PublishedFiles',
-	status: 'its status moved on from the default',
+	status: 'its status is not the default',
 	oldest: 'the oldest',
 	id: 'the lowest id'
 };
@@ -181,8 +181,8 @@ export const PICK_REASON: Record<PickReason, string> = {
 /** Why a Task is an extra, in words. */
 export const EXTRA_REASON: Record<ExtraRow['reason'], string> = {
 	not_in_template: 'not in the template',
-	link_wins: 'same key, another Task is linked',
-	conflict_loser: 'conflict loser: unlinked (106)'
+	link_wins: 'same name and Step, another Task is linked',
+	conflict_loser: 'not picked: unlinked (106)'
 };
 
 /** The stock Omit code (entry.ts). The screen asks for a status only when the project lacks it. */
@@ -252,11 +252,11 @@ export function entityWarnings(plan: EntityPlan, opts: RunOptions): ViewWarning[
 		} else if (w.code === 'unresolved_conflict') {
 			out.push({ code: w.code, level: 'block', text: `A pick is no longer valid for template tasks ${w.templateTaskIds.map((id) => `#${id}`).join(', ')}. Pick again.` });
 		} else if (w.code === 'template_duplicate_key') {
-			out.push({ code: w.code, level: 'info', text: `The template has ${w.templateTaskIds.length} tasks with one key: a conflict to resolve.` });
+			out.push({ code: w.code, level: 'info', text: `The template has ${w.templateTaskIds.length} tasks with one name and Step: a choice to make.` });
 		}
 	}
 	const open = plan.rows.filter((r): r is ConflictRow => r.kind === 'conflict' && !conflictResolved(r, opts, plan.entity.id)).length;
-	if (open > 0) out.push({ code: 'unresolved_conflict_row', level: 'block', text: `${open} conflict${open === 1 ? '' : 's'} to resolve.` });
+	if (open > 0) out.push({ code: 'unresolved_conflict_row', level: 'block', text: `${open} choice${open === 1 ? '' : 's'} to make.` });
 	return out;
 }
 
@@ -311,7 +311,7 @@ export function applyBlockers(
 ): string[] {
 	const out: string[] = [];
 	const conflicts = plans.reduce((n, p) => n + unresolvedConflicts(p, opts), 0);
-	if (conflicts > 0) out.push(`${conflicts} conflict${conflicts === 1 ? '' : 's'} to resolve.`);
+	if (conflicts > 0) out.push(`${conflicts} choice${conflicts === 1 ? '' : 's'} to make.`);
 	if (access?.looksShort) out.push('Write access looks refused.');
 	const omits = plans.some((p) => p.rows.some((r) => r.kind === 'extra' && r.action === 'omit'));
 	if (omits && !ctx.validTaskStatuses.includes(opts.omitStatus)) out.push('Pick the status omitted Tasks take.');

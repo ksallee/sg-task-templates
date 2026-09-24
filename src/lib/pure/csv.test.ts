@@ -237,7 +237,7 @@ describe('planToCsv: entity row', () => {
 		const ls = lines([plan(snap(before(), { taskTemplate: 201 }))]);
 		expect(ls[0].action).toBe('apply');
 		expect(ls[0].template_task).toBe('tt2 #202');
-		expect(ls[0].reason).toBe('keep 0, claim 2, create 1, extra 1, conflict 0');
+		expect(ls[0].reason).toBe('Already linked 0, Linked 2, Created 1, Not in template 1, Needs a choice 0');
 	});
 
 	it('marks a real noop entity noop, with its rows still listed', () => {
@@ -539,7 +539,7 @@ describe('planToCsv: edges', () => {
 		it('an extra that is deleted takes its edges (103)', () => {
 			const s = snap(tasks(), { edges: [edge(77, 1, 3), edge(504, 9, 1)] });
 			const e = one(lines([plan(s, withExtraOverride(opts, 9, 'delete'))]), 'edge-outside');
-			expect(e.reason).toBe('deleted with the extra cleanup #9 (103)');
+			expect(e.reason).toBe('deleted with the Task not in the template cleanup #9 (103)');
 		});
 
 		it('names a Task of another entity by id', () => {
