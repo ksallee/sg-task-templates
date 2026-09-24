@@ -120,6 +120,14 @@ describe('templatesByType', () => {
 		expect(matching).toEqual([]);
 		expect(others).toHaveLength(1);
 	});
+
+	it('narrows both lists to codes holding the query, trimmed and case-insensitive', () => {
+		const all = [template(1, 'TT Seed · Shot v1', 'Shot'), template(2, 'anim-shot', 'Shot'), template(3, 'TT Seed · Asset', 'Asset')];
+		const { matching, others } = templatesByType(all, 'Shot', '  tt seed ');
+		expect(matching.map((t) => t.id)).toEqual([1]);
+		expect(others.map((t) => t.id)).toEqual([3]);
+		expect(templatesByType(all, 'Shot', '').matching).toHaveLength(2);
+	});
 });
 
 describe('templateEdgeRows', () => {
