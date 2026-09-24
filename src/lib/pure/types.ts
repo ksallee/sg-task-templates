@@ -8,7 +8,7 @@
  *      into layer 2.
  *
  * Corpus tag `corpus/2026-09-24`, plus the sg-groundtruth #79 probes (092..101, branches
- * probe/79-NNN). Comments name the entry each shape rests on.
+ * probe/79-NNN) and #81 (103..109, probe/81-NNN). Comments name the entry each shape rests on.
  */
 
 import type { EntityRef, EntityRow } from 'sg-widgets-core';
@@ -264,7 +264,13 @@ export interface MatchConflict {
 export type ExtraReason =
 	| 'not_in_template' // no template task has its key
 	| 'link_wins' // same key as a template task another Task is already linked to
-	| 'conflict_loser'; // set by the planner once a conflict is resolved
+	/**
+	 * Set by the planner once a conflict is resolved. A loser linked to one of the conflict's
+	 * template tasks (`task.templateTask.id` in the ConflictRow's `templateTasks`) is unlinked
+	 * (`template_task` null) in the batch before the template write: at most one Task per template
+	 * task, or the server picks one unpredictably (106). It is then outside T for the edge rules.
+	 */
+	| 'conflict_loser';
 
 /** What `matching.ts` finds for one entity, before options apply. */
 export interface Match {
@@ -373,21 +379,42 @@ export type MappedTask = { existing: Id } | { created: Id /* template task id */
 /** keep = re-create after the apply in the same batch (new id; may move dates, 092). */
 export type EdgeAction = 'keep' | 'remove';
 
-/** An existing edge between two Tasks linked to the template after apply, which the apply drops (102). */
+/**
+ * An existing edge the apply drops: between two Tasks linked to the template after apply (102), or
+ * from a linked Task to an upstream Task not linked to it (109).
+ */
 export interface AffectedEdge {
 	existing: Edge & { id: Id };
-	/** `not_in_template`: the apply deletes it. `replaced`: same pair, other type, offset or direction. */
-	cause: 'not_in_template' | 'replaced';
+	/**
+	 * `not_in_template`: both ends linked, T lacks the edge; the apply deletes it (102).
+	 * `replaced`: same pair, other type, offset or direction; T's edge takes its place (101, 102).
+	 * `outside_upstream`: the downstream end is linked to T, the upstream end is not (an extra, a
+	 * conflict loser, a Task linked to another template, a Task on another entity); the apply
+	 * erases it, not revivable (109). Keep re-creates it after the apply, like the others.
+	 */
+	cause: 'not_in_template' | 'replaced' | 'outside_upstream';
 	replacedBy: Edge | null; // the template edge, for `replaced`
 	action: EdgeAction; // default 'keep'
 }
 
 export interface EdgePlan {
-	/** Template edges between mapped Tasks the entity lacks: the apply adds them (015, 099). */
+	/**
+	 * Template edges between mapped Tasks the entity lacks: the apply adds them (015, 099) and they
+	 * survive the run. See `transientAdded` for copies the batch deletes again.
+	 */
 	expectedAdded: Array<{ templateEdge: Edge; downstream: MappedTask; upstream: MappedTask }>;
 	/** Edges the apply deletes or replaces (101, 102), each with its action. */
 	affected: AffectedEdge[];
-	/** Edges between an extra and a kept/claimed Task: information only, the apply keeps them (101). */
+	/**
+	 * Template edges the apply adds on a pair whose `replaced` edge is kept: the batch's after-apply
+	 * phase deletes this copy and re-creates the old edge, so it does not survive the run. Not in
+	 * `expectedAdded`. Absent = none.
+	 */
+	transientAdded?: Array<{ templateEdge: Edge; downstream: MappedTask; upstream: MappedTask; keptEdge: Id }>;
+	/**
+	 * Edges from a linked Task down to a Task not linked to the template: information only, the apply
+	 * keeps them (101, 109). Outside-upstream edges are `affected` (109).
+	 */
 	toExtras: Edge[];
 	/** Unpinned Tasks downstream of an added or re-created edge: rescheduled at once (092). */
 	mayMove: Id[];
