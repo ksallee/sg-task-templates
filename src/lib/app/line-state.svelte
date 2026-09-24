@@ -1,35 +1,61 @@
-<!-- One entity's state on the apply and result screens, as a small labelled pill. -->
-<script lang="ts">
+<!--
+	One entity's state on the apply and result screens, drawn as the CountChip (docs/design.md): a
+	dot in the state's tone, the word, and a count when it tallies a run. No fill of its own
+	(sg-widgets rule 1). Landing pulses; failed and differences above zero outline in their tone.
+-->
+<script lang="ts" module>
 	import type { LineState } from '$lib/pure/apply-view';
 	import type { ResultKind } from '$lib/pure/result-view';
 
-	let { state }: { state: LineState | ResultKind } = $props();
+	export type AnyLineState = LineState | ResultKind;
 
-	const LABEL: Record<LineState | ResultKind, string> = {
+	export const STATE_LABEL: Record<AnyLineState, string> = {
 		pending: 'Pending',
 		landing: 'Landing',
 		landed: 'Landed',
 		failed: 'Failed',
 		cancelled: 'Cancelled',
 		undone: 'Undone',
-		clean: 'Landed, clean',
-		differences: 'Landed, with differences',
+		clean: 'Landed clean',
+		differences: 'With differences',
 		not_applied: 'Not applied'
 	};
 
-	const TONE: Record<LineState | ResultKind, string> = {
-		pending: 'bg-muted text-muted-foreground',
-		landing: 'bg-primary/15 text-primary animate-pulse',
-		landed: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-		clean: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
-		differences: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-		failed: 'bg-destructive/15 text-destructive',
-		cancelled: 'bg-muted text-muted-foreground',
-		not_applied: 'bg-muted text-muted-foreground',
-		undone: 'bg-sky-500/15 text-sky-700 dark:text-sky-400'
+	const DOT: Record<AnyLineState, string> = {
+		pending: 'bg-muted-foreground/60',
+		landing: 'bg-info motion-safe:animate-pulse',
+		landed: 'bg-success',
+		clean: 'bg-success',
+		differences: 'bg-warning',
+		failed: 'bg-destructive',
+		cancelled: 'bg-muted-foreground/60',
+		not_applied: 'bg-muted-foreground/60',
+		undone: 'bg-info'
 	};
 </script>
 
-<span class={['inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium', TONE[state]].join(' ')} data-slot="line-state" data-state={state}>
-	{LABEL[state]}
+<script lang="ts">
+	import { cn } from '$lib/utils.js';
+
+	let { state, count, label, class: className }: { state: AnyLineState; count?: number; label?: string; class?: string } = $props();
+
+	const zero = $derived(count === 0);
+	const loud = $derived(count !== 0 && (state === 'failed' || state === 'differences'));
+	const quiet = $derived(state === 'pending' || state === 'cancelled' || state === 'not_applied');
+</script>
+
+<span
+	class={cn(
+		'inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2 text-xs font-medium whitespace-nowrap tabular-nums',
+		zero ? 'border-border/60 text-muted-foreground opacity-60' : quiet ? 'border-border text-muted-foreground' : 'border-border text-foreground',
+		loud && state === 'failed' && 'border-destructive/60 text-destructive',
+		loud && state === 'differences' && 'border-warning/70',
+		className
+	)}
+	data-slot="line-state"
+	data-state={state}
+>
+	<span class={cn('size-2 shrink-0 rounded-full', DOT[state], zero && 'opacity-50')} aria-hidden="true"></span>
+	<span>{label ?? STATE_LABEL[state]}</span>
+	{#if count !== undefined}<span class={loud && state === 'failed' ? '' : 'text-muted-foreground'}>{count}</span>{/if}
 </span>

@@ -10,7 +10,7 @@ import {
 	newRun,
 	resumedRun,
 	startBlockers,
-	summaryLines,
+	summaryGroups,
 	undoNote,
 	writablePlans,
 	writeSummary
@@ -151,25 +151,43 @@ describe('writeSummary', () => {
 	});
 });
 
-describe('summaryLines', () => {
-	it('says what will be written, non-zero items only', () => {
-		expect(summaryLines(writeSummary([busy, plan(2, { noop: true })], options({ deleteConfirmed: true })))).toEqual([
-			'task_template written on 1 entity, one atomic batch each.',
-			'1 entity already matches the template: skipped.',
-			'1 existing Task linked to the template (claimed), status, assignees and publishes kept.',
-			'2 Tasks created by the template.',
-			'1 Task renamed to the template\'s name.',
-			'1 field overwritten with the template\'s value.',
-			'1 field the template would overwrite, written back unchanged.',
-			'1 extra Task set to the omit status.',
-			'1 extra Task deleted, 1 with Versions or PublishedFiles.',
-			'1 extra Task left untouched.',
-			'1 dependency added from the template.',
-			'1 dependency the apply erases, re-created as kept (new ids).',
-			'1 dependency removed.',
-			'2 unpinned Tasks may be rescheduled by the new dependencies.',
-			'1 pinned Task will be flagged dependency_violation.'
+describe('summaryGroups', () => {
+	it('says what will be written in plain words, grouped, non-zero items only', () => {
+		expect(summaryGroups(writeSummary([busy, plan(2, { noop: true })], options({ deleteConfirmed: true })))).toEqual([
+			{
+				title: 'Entities',
+				lines: ['The template is set on 1 entity, in one atomic batch.', '1 entity already matches the template: skipped.']
+			},
+			{
+				title: 'Tasks',
+				lines: [
+					'1 existing Task linked to its template task (claimed); its status, assignees and publishes stay.',
+					'2 Tasks created from the template.',
+					"1 Task renamed to the template's name.",
+					'1 extra Task set to the omit status.',
+					'1 extra Task deleted, 1 with Versions or PublishedFiles.',
+					'1 extra Task left untouched.'
+				]
+			},
+			{
+				title: 'Fields',
+				lines: ["1 field overwritten with the template's value.", '1 field the template would overwrite, written back unchanged.']
+			},
+			{
+				title: 'Dependencies and dates',
+				lines: [
+					'1 dependency added from the template.',
+					'1 dependency the apply erases, re-created as kept (new ids).',
+					'1 dependency removed.',
+					'2 unpinned Tasks may be rescheduled by the new dependencies.',
+					'1 pinned Task will be flagged as violating a dependency.'
+				]
+			}
 		]);
+	});
+	it('leaves out a group with nothing in it', () => {
+		const groups = summaryGroups(writeSummary([plan(4, { noop: true })], options()));
+		expect(groups).toEqual([{ title: 'Entities', lines: ['1 entity already matches the template: skipped.'] }]);
 	});
 });
 

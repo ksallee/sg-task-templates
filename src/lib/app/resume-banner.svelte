@@ -10,6 +10,7 @@
 	import { session } from '$lib/app/apply.svelte';
 	import { lineCounts, linesFromRun } from '$lib/pure/apply-view';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import Notice from './notice.svelte';
 
 	let busy = $state<string | null>(null);
 	let message = $state<string | null>(null);
@@ -34,18 +35,18 @@
 </script>
 
 {#if !hidden && (runs.length || message)}
-	<div class="border-border flex shrink-0 flex-col gap-1 border-b bg-warning/10 px-4 py-2 text-sm" data-slot="resume-banner">
+	<div class="border-border flex shrink-0 flex-col gap-2 border-b px-6 py-2" data-slot="resume-banner">
 		{#each runs as { run: r, counts } (r.id)}
-			<div class="flex flex-wrap items-center gap-2">
-				<span class="mr-auto">
-					An apply of <span class="font-medium">{r.template.code}</span> started {r.startedAt.slice(0, 16).replace('T', ' ')} did not finish:
-					{counts.landed} landed, {counts.landing} in flight when it stopped, {counts.failed} failed, {counts.pending} not started.
-				</span>
-				<Button size="sm" onclick={() => void resume(r.id)} disabled={busy !== null}>{busy === r.id ? 'Re-planning…' : 'Continue'}</Button>
-				<Button size="sm" variant="outline" href={`/result?run=${r.id}`}>Review and undo</Button>
-				<Button size="sm" variant="ghost" onclick={() => void session.close(r.id)} disabled={busy !== null}>Close</Button>
-			</div>
+			<Notice tone="warning" title="An apply did not finish. ">
+				<span class="font-medium">{r.template.code}</span>, started {r.startedAt.slice(0, 16).replace('T', ' ')}:
+				<span class="tabular-nums">{counts.landed} landed, {counts.landing} in flight when it stopped, {counts.failed} failed, {counts.pending} not started.</span>
+				{#snippet action()}
+					<Button size="sm" variant="ghost" onclick={() => void session.close(r.id)} disabled={busy !== null}>Close</Button>
+					<Button size="sm" variant="outline" href={`/result?run=${r.id}`}>Review and undo</Button>
+					<Button size="sm" onclick={() => void resume(r.id)} disabled={busy !== null}>{busy === r.id ? 'Re-planning…' : 'Continue'}</Button>
+				{/snippet}
+			</Notice>
 		{/each}
-		{#if message}<p class="text-muted-foreground">{message}</p>{/if}
+		{#if message}<Notice tone="info">{message}</Notice>{/if}
 	</div>
 {/if}
