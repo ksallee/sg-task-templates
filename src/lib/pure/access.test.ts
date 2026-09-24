@@ -134,6 +134,20 @@ describe('classifyAccessResponse: update_task and update_entity', () => {
 		expect(classifyAccessResponse('update_entity', r, 'Shot')).toBe('refused');
 	});
 
+	it('is refused on a conditional rule, whose 400 continues after the field with the rule (094 row 3)', () => {
+		// 094 row 3 records this 400 as "... [Task.sg_status_list]. Rule: Artist -- PermissionRule 2615: ...",
+		// its "..." standing for row 2's prefix. The prefix and the continuation are verbatim from 094;
+		// the rest of the rule text 094 elides.
+		const r: AccessResponse = {
+			status: 400,
+			title:
+				'The field is not editable for this user: ' +
+				'[Task.sg_status_list]. Rule: Artist -- PermissionRule 2615: update_field_condition ... RULE: ' +
+				'{"logical_operator":"and","conditions": [... task_assignees is logged_in_user_token, task_reviewers is ...]}'
+		};
+		expect(classifyAccessResponse('update_task', r, 'Task')).toBe('refused');
+	});
+
 	it('is unknown on an unrecognized 400', () => {
 		const r: AccessResponse = { status: 400, title: 'Something else entirely.' };
 		expect(classifyAccessResponse('update_task', r, 'Task')).toBe('unknown');

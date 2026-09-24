@@ -97,10 +97,18 @@ export function buildAccessProbeRequests(input: {
 }
 
 const notEditablePrefix = (type: string) => `The field is not editable for this user: [${type}.`;
-const NOT_EDITABLE_SUFFIX = '].';
 
+/**
+ * 094 rows 2 and 4: an unconditional refusal ends at the field, `[Task.content].`. Row 3: a
+ * conditional rule continues after it, `[Task.sg_status_list]. Rule: Artist -- PermissionRule 2615: ...`.
+ */
 function isNotEditableRefusal(type: string, title: string): boolean {
-	return title.startsWith(notEditablePrefix(type)) && title.endsWith(NOT_EDITABLE_SUFFIX);
+	if (!title.startsWith(notEditablePrefix(type))) return false;
+	const rest = title.slice(notEditablePrefix(type).length);
+	const end = rest.indexOf('].');
+	if (end <= 0) return false;
+	const after = rest.slice(end + 2);
+	return after === '' || after.startsWith(' Rule: ');
 }
 
 function isCannotBeCreatedRefusal(type: string, title: string): boolean {
