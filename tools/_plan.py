@@ -6,28 +6,42 @@ same code builds the same site. `tools/seed.py` executes it; `fixtures/seed-expe
 `build()["expectations"]` as written by `seed.py --expectations`.
 
 Sources: the seed-scenario design (sandbox, conventions, templates, scenarios), with Kevin's
-2026-09-24 decisions over it and probe 102 (sg-groundtruth #79) for what an apply re-syncs:
+2026-09-24 decisions over it, probe 102 (sg-groundtruth #79) for what an apply re-syncs, and probe
+rounds 2 and 3 (#81, #83: 103-112). The rules are the app's planner's (src/lib/pure/matching.ts,
+planner.ts, edges.ts); src/lib/pure/seed.test.ts runs that planner on the seeded snapshot and checks
+it agrees with these expectations.
 
 - The match key is (content trimmed, casefolded, inner whitespace collapsed; step). So S02's
   `Client  Review` is claimed, not an extra.
-- Five counts: keep (already linked to this template's task), claim (same key, link to write),
-  create, extra, conflict.
+- Five counts, rows by kind as the app's planner: keep (already linked to this template's task),
+  claim (same key, link to write), create, extra, conflict. A conflict counts its own row, the
+  keep/claim/create its pre-pick resolves to, and each candidate not picked as an extra
+  (`conflict_loser`, unlinked before the template write, 106).
 - A candidate already linked to this template's task wins: no conflict, the other same-key Task is an
-  extra. A template with two tasks of one key is a conflict too (side "template").
-- Pre-pick among candidates: publishes (Versions + PublishedFiles), then a non-default status, then the
-  oldest `created_at`. A generated Task's `created_at` is the seed's wall clock: newest.
-- Fields (102): overwritten when the template value is non-empty and differs: est_in_mins,
-  sg_description, sg_sort_order, task_reviewers, milestone; duration only on a Task without dates;
-  task_assignees filled only when empty. `content` differences are listed as renames. A template
-  `milestone` false and a milestone's duration 0 count as empty (no seeded case depends on it).
+  extra (`link_wins`). A template with two tasks of one key is a conflict too; the pre-pick pairs the
+  best candidates with its tasks in template order, the rest are created.
+- Pre-pick among candidates: any Versions or PublishedFiles, then a non-default status, then the oldest
+  `created_at`. A generated Task's `created_at` is the seed's wall clock: newest.
+- Fields under policy (102, 108): sg_sort_order, duration, est_in_mins, sg_description, milestone,
+  task_reviewers, listed when the template value is non-empty and differs. 0 is a value, false and
+  "" are empty (108); a template milestone reads duration 0 (083). `duration` only on a Task with
+  no dates at all: either date keeps it (108). `task_assignees` is filled by the server, not under
+  policy. A boolean has no fill-if-empty (Q-F). `content` differences are listed as renames, flagged
+  `hand_renamed` on a linked Task whose name no longer matches.
 - Read-back values, seen by the seed on the sandbox on 2026-09-24 and not yet in the corpus: Task
   `content` is trimmed on create (so S02's ` animation` and `Comp ` and every `comp ` hand Task are
   stored trimmed; only the inner double space of `Client  Review` survives), and `sg_description` ""
-  reads back null. A date write on a root Task (S13 Layout, Tracking) did not pin it.
+  reads back null (108 measured it on template tasks). A date write on a root Task (S13 Layout,
+  Tracking) did not pin it.
 - S12's FX status is `ready`, not the design's `hld`: `hld` is hidden in the sandbox project.
-- Edges between two Tasks linked to the template after the apply: the same one stays, one of another
-  type/offset or direction is replaced, one the template lacks is removed. An edge touching any other
-  Task is kept (listed for information). A template edge with no existing pair is added.
+- Edges, "linked" meaning linked to the template after the apply (claims made, losers unlinked):
+  between two linked Tasks, the same one stays (offsets strict: null and 0 differ, 105), one of
+  another type/offset or direction is replaced (101), one the template lacks is removed (102). A
+  linked Task depending on an outside Task loses the edge (`outside_upstream`, 109); an outside Task
+  downstream keeps it (`kept`); an edge with no linked end is `untouched`. Replaced, removed and
+  outside-upstream edges default to keep (re-created after the apply), except one whose re-creation
+  would close a loop in the after-apply graph: remove, `closes_loop` (085, 107). A template edge with
+  no existing pair is added.
 """
 import copy
 
@@ -39,8 +53,9 @@ ASSET_STEPS = ["Design", "Model", "Texture", "Rigging"]
 ROLES = ("artist", "artist2")
 SEQUENCES = ["TTS_RULES", "TTS_BULK"]
 CUSTOM_FALLBACK = "Sequence"
-FIELDS = ["est_in_mins", "sg_description", "sg_sort_order", "task_reviewers", "milestone", "duration",
-          "task_assignees"]
+# Fields under policy, in the app planner's order (read.ts `policyFields`); `content` is a rename and
+# `step` never differs on a match. `task_assignees` is filled by the server, never under policy (102).
+FIELDS = ["sg_sort_order", "duration", "est_in_mins", "sg_description", "milestone", "task_reviewers"]
 
 JAN, FEB, MAR = "2026-01-05T09:00:00Z", "2026-02-05T09:00:00Z", "2026-03-05T09:00:00Z"
 HAND_AT = "2026-06-01T09:{:02d}:00Z"   # hand Tasks the design gives no date to, in creation order
@@ -325,137 +340,211 @@ def seeded_edges(e, tpls):
 
 
 # -- the expected plan -------------------------------------------------------------------------------
+#
+# The same rules as the app's planner (src/lib/pure/matching.ts, planner.ts, edges.ts), written
+# again over labels; src/lib/pure/seed.test.ts runs the app's planner on the seeded snapshot and
+# checks the two agree.
 
 def _key(content, step):
     return (norm(content), tuple(step) if step else None)
 
 
 def _empty(v):
-    return v is None or v == "" or v == [] or v is False or v == 0
+    """108: null, "", [] and false are empty; 0 is a value."""
+    return v is None or v == "" or v == [] or v is False
+
+
+def _template_value(x, f):
+    """A template task's field as the server reads it back: a milestone reads duration 0 (083)."""
+    if f == "duration" and x.get("milestone"):
+        return 0
+    return x.get(f)
 
 
 def _prepick(cands):
-    def rank(t):
-        pubs = t.get("versions", 0) + t.get("pfs", 0)
-        return (-pubs, 0 if t.get("status") else 1, t.get("created_at") or "9999")
-    ordered = sorted(cands, key=rank)
-    best, second = ordered[0], ordered[1]
-    rb, rs = rank(best), rank(second)
-    reason = "publishes" if rb[0] != rs[0] else "status" if rb[1] != rs[1] else "oldest"
-    return best, reason
+    """matching.ts: any Version or PublishedFile, then a non-default status, then oldest (070)."""
+    criteria = [("usage", lambda t: 0 if t.get("versions", 0) + t.get("pfs", 0) else 1),
+                ("status", lambda t: 0 if t.get("status") else 1),
+                ("oldest", lambda t: t.get("created_at") or "9999")]
+    ordered = sorted(cands, key=lambda t: tuple(f(t) for _, f in criteria))
+    if len(ordered) == 1:
+        return ordered, "only"
+    a, b = ordered[0], ordered[1]
+    return ordered, next((n for n, f in criteria if f(a) != f(b)), "id")
+
+
+def _match(tkey, tpl, tasks):
+    """matching.ts + planner.ts on the pre-picks: rows per template label, conflicts, extras."""
+    mine = [x["label"] for x in tpl["tasks"]]
+    linked, unlinked = {}, {}
+    for t in tasks:
+        link = t.get("template_task")
+        if link and link[0] == tkey and link[1] in mine:
+            linked.setdefault(link[1], []).append(t)
+        else:
+            unlinked.setdefault(_key(t["content"], t["step"]), []).append(t)
+    groups = {}
+    for x in tpl["tasks"]:
+        groups.setdefault(_key(x["content"], x["step"]), []).append(x)
+    row, conflicts, extras = {}, [], {}     # row: template label -> (kind, task or None)
+
+    def conflict(xs, cands):
+        ordered, reason = _prepick(cands)
+        picks = {}
+        for i, x in enumerate(xs):
+            t = ordered[i] if i < len(ordered) else None
+            picks[x["label"]] = t
+            linked_here = t is not None and (t.get("template_task") or [None, None])[1] == x["label"] \
+                and t["template_task"][0] == tkey
+            row[x["label"]] = ("create", None) if t is None else (("keep" if linked_here else "claim"), t)
+        for t in ordered[len(xs):]:
+            extras[t["label"]] = "conflict_loser"
+        conflicts.append({"template_tasks": [x["label"] for x in xs], "candidates": [t["label"] for t in ordered],
+                          "prepick": [t["label"] for t in ordered[:len(xs)]], "reason": reason})
+
+    for k, xs in groups.items():
+        free = []
+        for x in xs:
+            own = linked.get(x["label"], [])
+            if not own:
+                free.append(x)
+            elif len(own) == 1:
+                row[x["label"]] = ("keep", own[0])
+            else:
+                conflict([x], own)
+        cands = unlinked.get(k, [])
+        if not cands:
+            for x in free:
+                row[x["label"]] = ("create", None)
+        elif not free:
+            for t in cands:
+                extras[t["label"]] = "link_wins"
+        elif len(free) == 1 and len(cands) == 1:
+            row[free[0]["label"]] = ("claim", cands[0])
+        else:
+            conflict(free, cands)
+    for k, cands in unlinked.items():
+        if k not in groups:
+            for t in cands:
+                extras[t["label"]] = "not_in_template"
+    return row, conflicts, extras
+
+
+def _edges(tpl, edges, to_t):
+    """edges.ts: what the apply does to the entity's edges (099, 101, 102, 105, 107, 109).
+
+    `to_t`: entity Task label -> template label, for Tasks linked to T after the apply. An edge's
+    ends are named by template label when linked, by Task label otherwise.
+    """
+    tedges = {frozenset((e["up"], e["down"])): e for e in tpl["edges"]}
+    out = {"same": [], "replaced": [], "removed": [], "outside_upstream": [], "kept": [], "untouched": [],
+           "added": []}
+    standing, pending, satisfied = [], [], set()
+    for e in edges:
+        a, b = to_t.get(e["up"]), to_t.get(e["down"])
+        spec = {"type": e["type"], "offset": e["offset"]}
+        if a is None and b is None:
+            out["untouched"].append({"up": e["up"], "down": e["down"], **spec})
+            standing.append((e["up"], e["down"]))
+        elif b is None:            # the outside Task is downstream: kept (101, 109)
+            out["kept"].append({"up": a, "down": e["down"], **spec})
+            standing.append((a, e["down"]))
+        elif a is None:            # a linked Task depends on an outside Task: erased (109)
+            pending.append(("outside_upstream", {"up": e["up"], "down": b, **spec, "action": "keep"}, None))
+        else:
+            te = tedges.get(frozenset((a, b)))
+            if te is None:
+                pending.append(("removed", {"up": a, "down": b, **spec, "action": "keep"}, None))
+            elif (te["up"], te["down"], te["type"], te["offset"]) == (a, b, e["type"], e["offset"]):  # 105
+                out["same"].append({"up": a, "down": b})
+                satisfied.add(frozenset((a, b)))
+                standing.append((a, b))
+            else:
+                pair = frozenset((a, b))
+                pending.append(("replaced", {"up": te["up"], "down": te["down"], "from": [e["type"], e["offset"]],
+                                             "to": [te["type"], te["offset"]], "old": [a, b], "action": "keep"},
+                                pair))
+    # Loop check over the after-apply graph (085, 107), in plan order, as edges.ts.
+    kept_pairs = {p for _, _, p in pending if p}
+    graph = {}
+
+    def link(up, down):
+        graph.setdefault(up, set()).add(down)
+
+    def reaches(src, dst):
+        seen, stack = set(), [src]
+        while stack:
+            n = stack.pop()
+            if n == dst:
+                return True
+            if n not in seen:
+                seen.add(n)
+                stack += graph.get(n, ())
+        return False
+    for up, down in standing:
+        link(up, down)
+    for pair, te in tedges.items():
+        if pair not in satisfied and pair not in kept_pairs:
+            link(te["up"], te["down"])
+    for cause, d, pair in pending:
+        up, down = d["old"] if cause == "replaced" else (d["up"], d["down"])
+        if reaches(down, up):
+            d["action"], d["closes_loop"] = "remove", True
+        if d["action"] == "keep":
+            link(up, down)
+        elif pair:                 # a replaced edge left removed lets T's copy stand
+            link(tedges[pair]["up"], tedges[pair]["down"])
+    for cause, d, pair in pending:
+        d.pop("old", None)
+        out[cause].append(d)
+    covered = satisfied | {p for _, d, p in pending if p}
+    for te in tpl["edges"]:
+        if frozenset((te["up"], te["down"])) not in covered:
+            out["added"].append({"up": te["up"], "down": te["down"], "type": te["type"], "offset": te["offset"]})
+    out["added"].sort(key=lambda d: tpl["edges"].index(next(e for e in tpl["edges"]
+                                                            if (e["up"], e["down"]) == (d["up"], d["down"]))))
+    out["counts"] = {k: len(v) for k, v in out.items()}
+    out["counts"]["closes_loop"] = sum(1 for _, d, _ in pending if d.get("closes_loop"))
+    return out
 
 
 def expect(tkey, tpl, tasks, edges, entity_type, on_template):
     """The plan for applying template `tkey` (`tpl`) to an entity holding `tasks` and `edges`."""
     tpl = _typed(copy.deepcopy(tpl))
-    mine = {t["label"]: t for t in tpl["tasks"]}
-    assigned = {}        # template label -> entity task
-    kind = {}            # template label -> keep | claim | create | conflict
-    used = set()
-    for t in tasks:
-        link = t.get("template_task")
-        if link and link[0] == tkey and link[1] in mine and link[1] not in assigned:
-            assigned[link[1]] = t
-            kind[link[1]] = "keep"
-            used.add(t["label"])
-    groups = {}
-    for x in tpl["tasks"]:
-        if x["label"] not in assigned:
-            groups.setdefault(_key(x["content"], x["step"]), []).append(x)
-    conflicts = []
-    reserved = set()
-    for k, xs in groups.items():
-        cands = [t for t in tasks if t["label"] not in used and _key(t["content"], t["step"]) == k]
-        if len(xs) > 1:
-            conflicts.append({"side": "template", "key": list(k[:1]) + [list(k[1]) if k[1] else None],
-                              "template_tasks": [x["label"] for x in xs],
-                              "candidates": [t["label"] for t in cands], "prepick": None, "reason": None})
-            reserved |= {t["label"] for t in cands}
-            for x in xs:
-                kind[x["label"]] = "conflict"
-            continue
-        x = xs[0]
-        if not cands:
-            kind[x["label"]] = "create"
-        elif len(cands) == 1:
-            kind[x["label"]] = "claim"
-            assigned[x["label"]] = cands[0]
-            used.add(cands[0]["label"])
-        else:
-            best, reason = _prepick(cands)
-            kind[x["label"]] = "conflict"
-            assigned[x["label"]] = best
-            reserved |= {t["label"] for t in cands}
-            conflicts.append({"side": "entity", "task": x["label"], "candidates": [t["label"] for t in cands],
-                              "prepick": best["label"], "reason": reason})
+    tpl["tasks"].sort(key=lambda x: (x["sg_sort_order"] is None, x["sg_sort_order"] or 0))
+    row, conflicts, extra_reason = _match(tkey, tpl, tasks)
+
     counts = {k: 0 for k in ("keep", "claim", "create", "extra", "conflict")}
-    for x in tpl["tasks"]:
-        if kind[x["label"]] != "conflict":
-            counts[kind[x["label"]]] += 1
+    for kind, _ in row.values():
+        counts[kind] += 1
     counts["conflict"] = len(conflicts)
-    extras = [t for t in tasks if t["label"] not in used and t["label"] not in reserved]
+    extras = [t for t in tasks if t["label"] in extra_reason]
     counts["extra"] = len(extras)
 
-    renames = []
+    renames, fields = [], []
     for x in tpl["tasks"]:
-        t = assigned.get(x["label"])
-        if t is not None and t["content"] != x["content"]:
-            renames.append({"task": t["label"], "from": t["content"], "to": x["content"],
-                            "linked": kind[x["label"]] == "keep"})
-    renames.sort(key=lambda r: [t["label"] for t in tasks].index(r["task"]))
-
-    fields = []
-    for x in tpl["tasks"]:
-        t = assigned.get(x["label"])
+        kind, t = row[x["label"]]
         if t is None:
             continue
+        if t["content"] != x["content"]:
+            renames.append({"task": t["label"], "from": t["content"], "to": x["content"],
+                            "hand_renamed": kind == "keep" and norm(t["content"]) != norm(x["content"])})
         for f in FIELDS:
-            want, have = x.get(f), t.get(f)
+            want, have = _template_value(x, f), t.get(f)
             if _empty(want) or want == have:
                 continue
-            if f == "duration" and t.get("dated"):
-                continue
-            if f == "task_assignees" and not _empty(have):
+            if f == "duration" and t.get("dated"):      # 102, 108: either date keeps it
                 continue
             fields.append({"task": t["label"], "field": f, "current": have, "template": want,
-                           "kind": "fill" if _empty(have) and have is not False else "overwrite"})
-    order = {f: i for i, f in enumerate(FIELDS)}
-    tl = [x["label"] for x in tpl["tasks"]]
-    fields.sort(key=lambda d: (tl.index(_tlabel(assigned, d["task"])), order[d["field"]]))
+                           # Q-F: a boolean has no fill-if-empty
+                           "kind": "fill" if _empty(have) and not isinstance(want, bool) else "overwrite"})
 
-    to_t = {t["label"]: lbl for lbl, t in assigned.items()}
-    tedges = {(e["up"], e["down"]): e for e in tpl["edges"]}
-    out = {"same": [], "replaced": [], "removed": [], "kept": [], "added": []}
-    covered = set()
-    for e in edges:
-        a, b = to_t.get(e["up"]), to_t.get(e["down"])
-        if a is None or b is None:
-            out["kept"].append({"up": e["up"], "down": e["down"], "type": e["type"], "offset": e["offset"]})
-            continue
-        te = tedges.get((a, b)) or tedges.get((b, a))
-        if te is None:
-            out["removed"].append({"up": a, "down": b, "type": e["type"], "offset": e["offset"]})
-            continue
-        covered.add((te["up"], te["down"]))
-        if (te["up"], te["down"]) == (a, b) and (te["type"], te["offset"]) == (e["type"], e["offset"]):
-            out["same"].append({"up": a, "down": b})
-        else:
-            out["replaced"].append({"up": te["up"], "down": te["down"], "from": [e["type"], e["offset"]],
-                                    "to": [te["type"], te["offset"]]})
-    for te in tpl["edges"]:
-        if (te["up"], te["down"]) not in covered:
-            out["added"].append({"up": te["up"], "down": te["down"], "type": te["type"], "offset": te["offset"]})
-    out["counts"] = {k: len(out[k]) for k in ("same", "replaced", "removed", "kept", "added")}
-
+    to_t = {t["label"]: lbl for lbl, (kind, t) in row.items() if t is not None}
     return {"counts": counts, "conflicts": conflicts,
-            "extras": [{"task": t["label"], "versions": t.get("versions", 0), "pfs": t.get("pfs", 0),
-                        "status": t.get("status")} for t in extras],
-            "renames": renames, "fields": fields, "edges": out,
+            "extras": [{"task": t["label"], "reason": extra_reason[t["label"]], "versions": t.get("versions", 0),
+                        "pfs": t.get("pfs", 0), "status": t.get("status")} for t in extras],
+            "renames": renames, "fields": fields, "edges": _edges(tpl, edges, to_t),
             "mismatch": tpl["entity_type"] != entity_type, "on_template": on_template == tkey}
-
-
-def _tlabel(assigned, task_label):
-    return next(lbl for lbl, t in assigned.items() if t["label"] == task_label)
 
 
 # -- the whole seed ----------------------------------------------------------------------------------
@@ -498,6 +587,27 @@ def build(custom_type=CUSTOM_FALLBACK):
     return {"templates": tpls, "t3_edit": t3_edit(), "sequences": list(SEQUENCES), "scenarios": scens,
             "order": [list(o) for o in ORDER], "expectations": exp, "filters": filters,
             "default_task_template": {"Shot": "T2", "Asset": "T4"}}
+
+
+def expectations_file(plan, custom_type):
+    """`fixtures/seed-expectations.json`: the expected plans, plus the seed spec the vitest
+    (src/lib/pure/seed.test.ts) needs to rebuild the template rows and hand Tasks' `created_at`."""
+    tpls = {**plan["templates"], "T3": edited_t3(plan["templates"]["T3"])}
+    return {
+        "about": "Expected plan per scenario entity on pristine seed state, from tools/_plan.py. Counts: "
+                 "keep (linked to this template's task), claim, create, extra, conflict; a conflict counts "
+                 "its row, the pick's row and its losers as extras, as the app's planner. Task labels are "
+                 "`content@Step` (generated) or `hand:<name>` (hand-made); ids are in seed-manifest.json. "
+                 "`templates` (T3 as edited) and `hands` are the seed's spec, for src/lib/pure/seed.test.ts.",
+        "custom_type": custom_type,
+        "filters": plan["filters"],
+        "default_task_template": plan["default_task_template"],
+        "templates": {k: {"entity_type": t["entity_type"], "tasks": t["tasks"], "edges": t["edges"]}
+                      for k, t in tpls.items()},
+        "hands": {sc["id"]: {e["code"]: {h["label"]: {"step": h["step"], "created_at": h["created_at"]}
+                                         for h in e["hand"]} for e in sc["entities"]}
+                  for sc in plan["scenarios"]},
+        "scenarios": plan["expectations"]}
 
 
 def needed_steps(plan):
