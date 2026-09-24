@@ -43,17 +43,17 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
 | `recipes/015_apply_task_template_without_duplicates` | The merge: point each same-name, same-step Task's `template_task` at its template task in one batch, then clear and set `task_template`. The server creates only what is missing, and copies dependencies onto claimed Tasks too. Corrected by 096 and 102 below: the final `task_template` write also re-syncs fields and edges on every linked Task, not only newly claimed ones. |
 | `findings/085_task_dependency_types`, `recipes/016_create_tasks_with_dependencies` | Four dependency types; `offset_days` in working days, may be negative; `task` is the downstream Task, `dependent_task` the upstream one. |
 | `findings/086_batch_tasks_with_dependencies` | One `_batch` cannot link rows it creates. |
-| `findings/087_dependency_cascade` | Unpinned downstream Tasks move with their upstream; pinned ones stay and flag `dependency_violation`. Writing a Task's own dates pins it. |
+| `findings/087_dependency_cascade` | Unpinned downstream Tasks move with their upstream; pinned ones stay and flag `dependency_violation`. Writing a Task's own dates pins it; corrected by 093: only a `start_date` write does. |
 | `findings/088_project_template_defaults` | The default per entity type is `Project.tracking_settings.default_task_template.<Type>`. Whether API create applies it is unmeasured. |
 | `findings/089_task_delete_side_effects` | Deleting a Task orphans `Version.sg_task` and `PublishedFile.task` and cuts the dependency chain. Revive restores all of it. |
 | `findings/090_template_task_events` | Every apply is in the event log under the writer; filter on `attribute_name` `template_task`. |
 | `recipes/002_batch`, `reports/001` | A batch is atomic and ordered; a create inside a batch skips validation. |
 | `findings/052`, `recipes/012` | Sign in as a person with the App Session Launcher. |
 | `probe/79-092` (probe branch, #79, not yet on dev) | An added dependency edge (direct, or the apply's copy on claim) reschedules unpinned downstream Tasks at once; a pinned one holds and flags `dependency_violation`. The claim alone moves nothing. |
-| `probe/79-093` (probe branch, #79, not yet on dev) | Writing null to `start_date` and `due_date` on a dependent Task pins it. `pinned: false` afterwards recomputes both dates from upstream. |
+| `probe/79-093` (probe branch, #79, not yet on dev) | On a dependent Task, a `start_date` write pins it, null or a real date. A `due_date` write never pins; it recomputes `duration`. `pinned: false` recomputes both dates from upstream. |
 | `probe/79-095` (probe branch, #79, not yet on dev) | Remove an edge with `DELETE /entity/task_dependencies/<id>`, never through `upstream_tasks`/`downstream_tasks` (erases it, no revive). Undo revives the same id, type and offset; dates recompute from upstream, not restored. Reviving after the same pair is re-created is a 400. |
 | `probe/79-096` (probe branch, #79, not yet on dev) | Writing `task_template` re-syncs fields and edges on Tasks already linked to it (full list at 102). Corrects 084 and recipe 015. |
-| `probe/79-097` (probe branch, #79, not yet on dev) | Clearing dates on a Task with no upstream edge does not pin it; the dates stay null. |
+| `probe/79-097` (probe branch, #79, not yet on dev) | A Task with no upstream edge never pins. Cleared dates stay null. |
 | `probe/79-098` (probe branch, #79, not yet on dev) | One `_batch` (claim, `task_template` null, `task_template` T) sees each request's earlier writes and gives the same result as separate calls: one batch per entity, write-backs included. |
 | `recipes/020_apply_task_template_in_one_batch` (sg-groundtruth PR #80) | Recipe 015 as one `_batch` per entity: claims, `task_template` null, `task_template` T, then the write-backs (098). |
 | `probe/79-099` (probe branch, #79, not yet on dev) | Every `task_template` write reconciles all template edges against `template_task` links: kept+claimed, kept+kept and kept+created pairs all get the missing edge. |
