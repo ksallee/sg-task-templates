@@ -545,14 +545,7 @@ class Seed:
 
 
 def write_expectations(plan, custom_type):
-    _site.write_json(_site.EXPECTATIONS, {
-        "about": "Expected plan per scenario entity on pristine seed state, from tools/_plan.py. Counts: "
-                 "keep (linked to this template's task), claim, create, extra, conflict. Task labels are "
-                 "`content@Step` (generated) or `hand:<name>` (hand-made); ids are in seed-manifest.json.",
-        "custom_type": custom_type,
-        "filters": plan["filters"],
-        "default_task_template": plan["default_task_template"],
-        "scenarios": plan["expectations"]})
+    _site.write_json(_site.EXPECTATIONS, _plan.expectations_file(plan, custom_type))
 
 
 def main():
