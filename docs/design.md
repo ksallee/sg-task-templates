@@ -57,3 +57,81 @@ spacing and size ladders. Theme choices are Jeremy's (sg-widgets #190). The app 
 
 Shared pieces: `src/lib/app/` (`app-shell`, `flow-steps`, `page-header`, `section`, `count-chip`,
 `count-chips`, `notice`, `page-state`, `segmented` (a small choice, the pick raised), `wordmark`).
+
+## Plan states (2026-09-24, #48)
+
+Every state the plan can put a Task, a field, an edge or an entity in, from `types.ts`, `planner.ts`,
+`edges.ts`, `plan-view.ts` and the decisions. **Needs you**: the plan waits on the user. **Shown
+as**: *headline* is a line of the run summary on top of /plan; *label* is the Task's one outcome
+label; *marker* a small tag beside it; *detail* only in the Task's fold or the Dependencies fold.
+`$lib/pure/plan-summary.ts` turns plans into these.
+
+### Tasks
+
+| state | what a producer cares about | needs you | shown as |
+|---|---|---|---|
+| keep, nothing changes | Already on the template; the apply leaves it as it is. | no | label **unchanged**; headline count |
+| keep, fields rewritten back (policy keep) | The apply re-syncs it, the app writes its values back: no visible change. | no | detail |
+| keep, a field overwritten or filled-if-empty | Its value becomes the template's. | no | label **updated**, marker *fields change*; headline "fields change" |
+| keep, renamed back (hand-renamed, name policy = template) | Someone renamed it; it gets the template's name back. | no, opt-out by run option | label **updated**, marker *renamed* (loud); headline "renamed" |
+| keep, key mismatch (linked, name or step moved) | Still the same Task; it stays linked. | no | detail |
+| keep or claim, assignees filled | People are put on a Task that had none. | no | marker *assignees filled*; headline "filled" |
+| keep or claim, dates filled | A Task with no dates gets the template's, then follows its upstream. | no | marker *dates filled*; headline "filled" |
+| claim, same name | An existing Task is linked to the template instead of a duplicate. | no | label **linked**; headline |
+| claim, renamed | Linked, and takes the template's name (casing, spacing). | no, opt-out | label **linked + renamed**; headline "renamed" |
+| claim, from another template | Its old link, shown so the switch is visible; undo keeps it. | no | detail |
+| create, template dates | A new Task, with the template's fields and its calendar dates. | no | label **created**; headline |
+| create, dates cleared | New, no dates (clear-dates option, only without upstream). | option | detail |
+| create, has upstream | Its dates follow the upstream Task; not clearable. | no | detail |
+| extra, leave | On the Shot, not in the template: stays as it is. | no, default | label **left alone**; headline |
+| extra, omit | Stays, its status becomes the omit status. | yes (choice) | label **omitted**; headline |
+| extra, delete | Removed; Versions and PublishedFiles lose their Task link (089). Undo revives it. | yes, confirm | label **deleted**, marker *has publishes* (loud); headline, with the count that has publishes |
+| extra, reason not in template | Why it is extra. | no | detail |
+| extra, reason link wins | Same name as a template task another Task is already linked to. | no | detail |
+| extra, reason conflict loser | Lost a conflict; unlinked when it was linked there (106). | no | detail |
+| extra, still linked and re-synced | Another template task's link: the apply re-syncs its fields too. | no | marker *fields change* when a value changes; detail |
+| conflict, unresolved (pre-pick shown) | Several Tasks match one template task, or the template has the key twice: pick one. | **yes** | label **needs a choice**, listed first; headline "need a choice" |
+| conflict, user pick or accepted pre-pick | Resolves to linked / unchanged / created, the others to extras. | no | the resolved label; the picker in the fold |
+| conflict, create new | The template task gets a new Task; every candidate becomes an extra. | no | label **created** |
+| downstream of a new edge, unpinned | Its dates may move when the apply lands (092). | no | marker *dates may move*; headline |
+| downstream of a new edge, pinned | Keeps its dates, flags a dependency violation (092). | no | marker *would flag violation*; headline |
+
+### Edges
+
+| state | what a producer cares about | needs you | shown as |
+|---|---|---|---|
+| added (template edge the entity lacks) | A new dependency; may move dates. | no | headline count; Task detail "will wait on"; Dependencies fold |
+| removed by the server, action keep (default) | Dropped by the apply, re-created after as a new edge. | no, can remove | headline count; Task detail; Dependencies fold with keep / remove |
+| removed, action remove | Gone after the run. | option | headline count; same |
+| replaced by the template's (other type, offset, direction) | The template's version wins unless kept. | option | Task detail; Dependencies fold |
+| outside upstream (upstream not linked to the template, 109) | Erased by the apply; kept by default (re-created). | option | Task detail; Dependencies fold |
+| outside downstream | Kept by the apply; information. | no | Dependencies fold |
+| would close a loop | Cannot be kept: removed (085, 107). Keeping it blocks Apply. | only if kept | headline; Dependencies fold; blocker |
+| date impact may move / would violate | See Tasks above. | no | headline, marker |
+
+### Fields and run options
+
+| state | what a producer cares about | needs you | shown as |
+|---|---|---|---|
+| policy keep (default) | Values stay the Task's. | option | run options line |
+| policy overwrite / fill if empty | Values become the template's. | option | run options; *fields change* marker per Task |
+| name policy template (default) / keep | Renames happen / do not. | option | run options; *renamed* |
+| omit status missing | The project has no `omt`: pick one before Apply. | **yes** | blocker, run options line |
+| delete unconfirmed | Deletes wait for the second confirmation. | **yes** | blocker, headline "(to confirm)" |
+
+### Entities
+
+| state | what a producer cares about | needs you | shown as |
+|---|---|---|---|
+| noop | Already matches: nothing is written. | no | headline "nothing to write"; entity line |
+| needs clear first | Already on this template: the write clears then sets it (084). | no | detail (entity header) |
+| template type mismatch | The template is for another type; allowed (083). | no | headline; entity notice |
+| unresolved conflict / invalid pick | Pick before Apply. | **yes** | headline; entity line; blocker |
+| kept edge closes a loop | Removed by default. | only if kept | headline; blocker when kept |
+| access looks short | The server may refuse the writes (094). | **yes** | blocker notice |
+| per entity | One line: "3 linked, 8 created, 1 needs a choice". | no | entity list |
+
+On /plan the five counts give way to these outcomes: the run summary on top (`plan/run-summary`), one
+outcome line per entity, Tasks one line each (`plan/outcome-chip`, markers in `plan/tone.ts` tones),
+details folded. Fields show their display names (Task schema with `project_id`), the code name on
+hover and in the CSV beside it.

@@ -1,6 +1,6 @@
 <!--
-	The run options, for every entity at once: a policy per field (102; keep by default, the name
-	takes the template's), one action per extra name, the omit status when the project has no `omt`,
+	The run options, for every entity at once: a policy per field the apply rewrites (102; yours by
+	default, the name takes the template's), said in plain words with display names, one action per extra name, the omit status when the project has no `omt`,
 	the clear-dates opt-in where a created Task may take it (097). Collapsed, one line sums them up;
 	the omit status stays in that line when the project needs one picked. Every change goes out as new
 	RunOptions.
@@ -14,12 +14,11 @@
 		extrasSummary,
 		omitChoice,
 		policyFieldViews,
-		policyLabel,
-		policySummary,
 		withClearCreatedDates,
 		withExtraNameAction,
 		withOmitStatus
 	} from '$lib/pure/plan-view';
+	import { fieldLabel, policyChoice, policyWords } from '$lib/pure/plan-summary';
 	import Segmented from '$lib/app/segmented.svelte';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
@@ -37,8 +36,10 @@
 		onToggle: () => void;
 		/** A line under the options: the access check. */
 		footer?: Snippet;
+		/** Task field display names by code name. */
+		labels?: Record<string, string>;
 	};
-	let { template, plans, ctx, options, onOptions, open, onToggle, footer }: Props = $props();
+	let { template, plans, ctx, options, onOptions, open, onToggle, footer, labels }: Props = $props();
 
 	const fields = $derived(policyFieldViews(template, options));
 	const names = $derived(extraNames(plans));
@@ -46,7 +47,7 @@
 	const clearable = $derived(clearableCreates(plans));
 	const summary = $derived(
 		[
-			policySummary(fields),
+			fields.length ? `Fields: ${policyWords(fields, labels)}` : 'No field to rewrite',
 			names.length > 0 ? extrasSummary(names, options) : null,
 			omit.ask ? null : `omit sets ${options.omitStatus}`,
 			clearable > 0 && options.clearCreatedDates ? `template dates cleared on ${clearable}` : null
@@ -92,23 +93,36 @@
 
 	{#if open}
 		<div class="flex flex-col gap-4 px-6 pt-1 pb-4">
-			<div class="flex flex-col gap-2">
-				<p class="text-xs font-medium">
-					Fields on kept and claimed Tasks <span class="text-muted-foreground font-normal">· keep writes the Task's value back after the apply; template takes the template's</span>
-				</p>
-				<div class="grid grid-cols-[repeat(auto-fill,20rem)] gap-x-6 gap-y-1.5">
+			<div class="flex flex-col gap-2" data-slot="policy-fields">
+				<div class="flex flex-col gap-0.5">
+					<p class="text-xs font-medium">Fields the template rewrites</p>
+					<p class="text-muted-foreground text-xs">
+						Applying the template overwrites these fields on your existing Tasks, only those the template has a value for. For each:
+						keep yours, or take the template's?
+					</p>
+				</div>
+				<div class="grid grid-cols-[repeat(auto-fill,24rem)] gap-x-6 gap-y-1.5">
 					{#each fields as f (f.field)}
 						<div class="flex items-center gap-2">
-							<span class="w-28 truncate font-mono text-xs" title={f.field}>{f.field}</span>
+							<span class="w-32 truncate text-xs" title={f.field}>{fieldLabel(labels, f.field)}</span>
 							<Segmented
-								label={`Policy for ${f.field}`}
+								label={`Policy for ${fieldLabel(labels, f.field)}`}
 								value={f.policy}
-								options={f.choices.map((c) => ({ value: c, label: policyLabel(f.field, c) }))}
+								options={f.choices.map((c) => ({ value: c, label: policyChoice(c).short, title: policyChoice(c).long }))}
 								onChange={(v) => onOptions(withFieldPolicy(options, f.field, v as FieldPolicy))}
 							/>
 						</div>
 					{/each}
 				</div>
+				<p class="text-muted-foreground text-xs">
+					<span class="text-foreground font-medium">Yours</span>: written back after the apply ·
+					<span class="text-foreground font-medium">Template's</span>: the template's value ·
+					<span class="text-foreground font-medium">Template's if empty</span>: only where yours is empty.
+				</p>
+				<p class="text-muted-foreground text-xs" data-slot="policy-note">
+					Not listed: Flow Production Tracking always fills empty assignees and dates from the template (undo empties them again; dates
+					only on Tasks with no dependency upstream). Status is never touched.
+				</p>
 			</div>
 
 			{#if names.length > 0}

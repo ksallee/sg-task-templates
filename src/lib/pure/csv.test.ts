@@ -195,8 +195,8 @@ function parse(csv: string): string[][] {
 type Col = (typeof PLAN_CSV_COLUMNS)[number];
 type Line = Record<Col, string>;
 
-function lines(plans: EntityPlan[], template: Template = tt2): Line[] {
-	const csv = planToCsv(plans, template);
+function lines(plans: EntityPlan[], template: Template = tt2, labels?: Record<string, string>): Line[] {
+	const csv = planToCsv(plans, template, labels);
 	const [header, ...body] = parse(csv.slice(1));
 	expect(header).toEqual([...PLAN_CSV_COLUMNS]);
 	return body.map((cells) => {
@@ -343,6 +343,17 @@ describe('planToCsv: keep rows, field changes and renames', () => {
 		expect(keep.field_changes).toBe(
 			'step: keeps step12, template step11 (keep); sg_description: keeps A, template T (keep); est_in_mins: ∅ -> 480 (fill_if_empty)'
 		);
+	});
+
+	it('names fields by display name, code name beside it; the code name alone without one', () => {
+		const t: Template = {
+			...tt2,
+			tasks: [tt(47201, 'comp', 11, 10, { fields: { sg_description: 'T', est_in_mins: 480 } })],
+			edges: []
+		};
+		const k = task(1, 'comp', 11, { link: 47201, linkTemplate: 202, fields: { sg_description: 'A' } });
+		const keep = one(lines([plan(snap([k]), opts, t)], t, { sg_description: 'Description', est_in_mins: '' }), 'keep');
+		expect(keep.field_changes).toBe('Description (sg_description): keeps A, template T (keep); est_in_mins: keeps ∅, template 480 (keep)');
 	});
 
 	it('shows re-sync field changes on an extra still linked to the template (conflict loser, 102)', () => {

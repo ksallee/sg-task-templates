@@ -20,6 +20,7 @@ import type {
 	EntityPlan,
 	EntityTask,
 	FieldChange,
+	FieldName,
 	Id,
 	MappedTask,
 	MatchKey,
@@ -89,13 +90,19 @@ function usageLabel(u: TaskUsage): string {
 	return usageCounts(u);
 }
 
-function fieldChangesLabel(changes: FieldChange[] | undefined, skipContent: boolean): string {
+/** A field by its display name with the code name beside it, the code name alone without one. */
+function fieldName(field: FieldName, labels: Record<FieldName, string> | undefined): string {
+	const label = labels?.[field]?.trim();
+	return label && label !== field ? `${label} (${field})` : field;
+}
+
+function fieldChangesLabel(changes: FieldChange[] | undefined, skipContent: boolean, labels?: Record<FieldName, string>): string {
 	return (changes ?? [])
 		.filter((c) => !(skipContent && c.field === 'content'))
 		.map((c) =>
 			c.result === c.current
-				? `${c.field}: keeps ${value(c.current)}, template ${value(c.template)} (${c.policy})`
-				: `${c.field}: ${value(c.current)} -> ${value(c.result)} (${c.policy})`
+				? `${fieldName(c.field, labels)}: keeps ${value(c.current)}, template ${value(c.template)} (${c.policy})`
+				: `${fieldName(c.field, labels)}: ${value(c.current)} -> ${value(c.result)} (${c.policy})`
 		)
 		.join('; ');
 }
@@ -123,7 +130,7 @@ function warningLabel(w: PlanWarning, stepOf: (key: MatchKey) => StepRef): strin
 
 // --- one entity ---------------------------------------------------------------------------------
 
-function entityRows(plan: EntityPlan, template: Template): Row[] {
+function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldName, string>): Row[] {
 	const { entityType, name, id } = plan.entity;
 	const entity = name ? `${entityType} ${name} #${id}` : `${entityType} #${id}`;
 	const blank = (action: string): Row => {
@@ -200,7 +207,7 @@ function entityRows(plan: EntityPlan, template: Template): Row[] {
 						: 'unlinked, same key';
 				}
 				// A rename prints once, as a warning, not again as a content change.
-				r.field_changes = fieldChangesLabel(row.fieldChanges, row.rename !== null);
+				r.field_changes = fieldChangesLabel(row.fieldChanges, row.rename !== null, labels);
 				r.dates = datesOf(row.task.id);
 				take(r, aboutTask(row.task.id));
 				break;
@@ -225,7 +232,7 @@ function entityRows(plan: EntityPlan, template: Template): Row[] {
 				r.reason = row.reason;
 				r.decision = row.action;
 				r.usage = usageLabel(row.usage);
-				r.field_changes = fieldChangesLabel(row.fieldChanges, false);
+				r.field_changes = fieldChangesLabel(row.fieldChanges, false, labels);
 				r.dates = datesOf(row.task.id);
 				take(r, aboutTask(row.task.id));
 				break;
@@ -347,10 +354,11 @@ function entityRows(plan: EntityPlan, template: Template): Row[] {
 const cell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 const line = (cells: readonly string[]) => cells.map(cell).join(',');
 
-export function planToCsv(plans: EntityPlan[], template: Template): string {
+/** `labels`: Task field display names by code name; fields print as "Description (sg_description)". */
+export function planToCsv(plans: EntityPlan[], template: Template, labels?: Record<FieldName, string>): string {
 	const out = [line(PLAN_CSV_COLUMNS)];
 	for (const plan of plans) {
-		for (const r of entityRows(plan, template)) out.push(line(PLAN_CSV_COLUMNS.map((c) => r[c])));
+		for (const r of entityRows(plan, template, labels)) out.push(line(PLAN_CSV_COLUMNS.map((c) => r[c])));
 	}
 	return `${BOM}${out.join('\r\n')}\r\n`;
 }
