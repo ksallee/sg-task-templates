@@ -7,6 +7,7 @@ import {
   extraNames,
   fieldChanges,
   fieldsUnderPolicy,
+  templateFills,
   isNoop,
   planEntity,
   planRun,
@@ -652,6 +653,48 @@ describe("fieldChanges", () => {
       policy: "keep",
       result: step(12),
     });
+  });
+});
+
+describe("templateFills (102: filled only if empty, not under policy)", () => {
+  const G = { type: "Group", id: 1, name: "G1" };
+  const P = { type: "HumanUser", id: 517, name: "Kevin" };
+  const withAssignees = (t: TemplateTask, a: typeof G[]) => ({ ...t, assignees: a });
+
+  it("fills empty assignees from a template task that has some", () => {
+    const tpl = withAssignees(tt(5, "paint", 14, 30), [G]);
+    expect(templateFills(task(1, "paint", 14), tpl)).toEqual([
+      { field: "task_assignees", value: [G] },
+    ]);
+  });
+
+  it("keeps set assignees, and fills nothing from an empty template", () => {
+    const tpl = withAssignees(tt(5, "paint", 14, 30), [G]);
+    const set = { ...task(1, "paint", 14), assignees: [P] };
+    expect(templateFills(set, tpl)).toEqual([]);
+    expect(templateFills(task(1, "paint", 14), tt(5, "paint", 14, 30))).toEqual([]);
+  });
+
+  it("fills dates only on a Task with neither date (102, 108)", () => {
+    const tpl = tt(5, "paint", 14, 30, { start: "2026-03-02", due: "2026-03-04" });
+    expect(templateFills(task(1, "paint", 14), tpl)).toEqual([
+      { field: "start_date", value: "2026-03-02" },
+      { field: "due_date", value: "2026-03-04" },
+    ]);
+    expect(templateFills(task(1, "paint", 14, { start: "2026-05-01" }), tpl)).toEqual([]);
+  });
+
+  it("puts the fills on keep, claim and linked conflict-loser rows", () => {
+    const tpl: Template = {
+      ...tt2,
+      tasks: tt2.tasks.map((t) => (t.id === 47201 ? withAssignees(t, [G]) : t)),
+    };
+    const p = planEntity(tpl, snap(before(), { taskTemplate: 201 }), ctx, opts);
+    const comp = rowFor(p, 47296);
+    expect(comp.kind).toBe("claim");
+    expect(comp.kind === "claim" && comp.fills).toEqual([
+      { field: "task_assignees", value: [G] },
+    ]);
   });
 });
 

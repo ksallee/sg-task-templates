@@ -210,6 +210,9 @@ const createReq = (e: Edge): BatchRequest => ({
 /** The revert batch, built after the Task revives as the flow runs it (110). */
 const revert = (rec: UndoRecord, live: Edge[]) => buildRevert(rec, live, rec.deletedTasks);
 
+/** A's re-sync fills empty assignees (102): recorded empty on every Task it re-syncs. */
+const noOne = { task_assignees: [] };
+
 const fieldsOf = (rec: UndoRecord, taskId: Id) =>
 	Object.fromEntries(rec.fieldValues.filter((v) => v.taskId === taskId).map((v) => [v.field, v.previous]));
 
@@ -240,9 +243,9 @@ describe('buildUndoRecord', () => {
 
 	it('records every policy field of Tasks the old template re-syncs on undo (096: roto)', () => {
 		const rec = record();
-		expect(fieldsOf(rec, 11)).toEqual({ ...f('hand', 1, 480), content: 'comp' }); // content too: A renames (112)
-		expect(fieldsOf(rec, 13)).toEqual({ sg_description: null, sg_sort_order: 99, content: 'lay' }); // dated: duration kept (102)
-		expect(fieldsOf(rec, 12)).toEqual({ sg_description: 'hand', sg_sort_order: 2, content: 'roto' }); // untouched by B, reset by A
+		expect(fieldsOf(rec, 11)).toEqual({ ...f('hand', 1, 480), content: 'comp', ...noOne }); // content too: A renames (112); A fills empty assignees (102)
+		expect(fieldsOf(rec, 13)).toEqual({ sg_description: null, sg_sort_order: 99, content: 'lay', ...noOne }); // dated: duration kept (102)
+		expect(fieldsOf(rec, 12)).toEqual({ sg_description: 'hand', sg_sort_order: 2, content: 'roto', ...noOne }); // untouched by B, reset by A
 	});
 
 	it('records only the fields the apply changed on a Task the old template does not hold', () => {
@@ -304,7 +307,7 @@ describe('buildUndoRecord', () => {
 	it('records the fields of a deleted Task linked to the old template: revived, then re-synced (096)', () => {
 		const rec = record(withDeletedA);
 		expect(rec.resyncedOnUndo).toContain(14);
-		expect(fieldsOf(rec, 14)).toEqual({ sg_description: 'old', sg_sort_order: 7, duration: 120, content: 'old' });
+		expect(fieldsOf(rec, 14)).toEqual({ sg_description: 'old', sg_sort_order: 7, duration: 120, content: 'old', ...noOne });
 	});
 
 	it('records outside-upstream edges the apply erased (109), and the one it re-created', () => {
@@ -345,9 +348,9 @@ describe('buildRevert', () => {
 	it('writes the pre-merge fields back after the old template re-syncs them, then the statuses', () => {
 		const { batch } = revert(record(), after.edges);
 		expect(batch.slice(5)).toEqual([
-			upd('Task', 11, { ...f('hand', 1, 480), content: 'comp' }),
-			upd('Task', 12, { sg_description: 'hand', sg_sort_order: 2, content: 'roto' }),
-			upd('Task', 13, { sg_description: null, sg_sort_order: 99, content: 'lay' }),
+			upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', ...noOne }),
+			upd('Task', 12, { sg_description: 'hand', sg_sort_order: 2, content: 'roto', ...noOne }),
+			upd('Task', 13, { sg_description: null, sg_sort_order: 99, content: 'lay', ...noOne }),
 			upd('Task', 17, { sg_sort_order: 5 }),
 			upd('Task', 15, { sg_status_list: 'ip' })
 		]);
@@ -373,7 +376,7 @@ describe('buildRevert', () => {
 			)
 		};
 		const { batch } = revert(record({ before: withStep }), after.edges);
-		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', step: { type: 'Step', id: 4 } }));
+		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', step: { type: 'Step', id: 4 }, ...noOne }));
 	});
 
 	it("writes a conflict loser's previous template_task back with the claims, before task_template (106, 096)", () => {
@@ -479,6 +482,81 @@ describe('buildRevert', () => {
 		});
 		expect(revert(rec, onB.edges).batch).toEqual([]);
 		expect(tasksToRevive(rec)).toEqual([]);
+	});
+});
+
+// 102: the apply fills what a Task lacks from B. grade (19) has no edge; fx (17) depends on comp.
+const P = { type: 'HumanUser', id: 517, name: 'Kevin' };
+const grade = task(19, 'grade');
+const withFills = {
+	before: { ...before, tasks: [...before.tasks, grade] },
+	after: {
+		...after,
+		tasks: [
+			...after.tasks.map((t) =>
+				t.id === 17 ? { ...t, assignees: [P], startDate: '2026-03-06', dueDate: '2026-03-09' } : t
+			),
+			{ ...grade, templateTask: { id: 2006, templateId: B_ID }, assignees: [P], startDate: '2026-03-02', dueDate: '2026-03-04' }
+		]
+	}
+};
+
+describe('buildUndoRecord and buildRevert, values the apply fills (102)', () => {
+	it('records the empty assignees the apply filled and writes them back empty', () => {
+		const rec = record(withFills);
+		expect(fieldsOf(rec, 17).task_assignees).toEqual([]);
+		expect(fieldsOf(rec, 19).task_assignees).toEqual([]);
+		const writes = revert(rec, after.edges).batch.filter(
+			(r) => r.request_type === 'update' && r.record_id === 19
+		);
+		expect(writes).toContainEqual(expect.objectContaining({ data: expect.objectContaining({ task_assignees: [] }) }));
+	});
+
+	it('does not record assignees the apply left alone', () => {
+		expect(fieldsOf(record(), 17)).not.toHaveProperty('task_assignees');
+	});
+
+	it('writes null dates back on a Task with no upstream the apply filled: no pin (097)', () => {
+		const rec = record(withFills);
+		expect(fieldsOf(rec, 19)).toMatchObject({ start_date: null, due_date: null });
+		expect(rec.datesMoved?.map((d) => d.taskId)).not.toContain(19);
+	});
+
+	it('leaves filled dates on a dependent Task, noted: a null start_date pins it (093)', () => {
+		const rec = record(withFills);
+		expect(fieldsOf(rec, 17)).not.toHaveProperty('start_date');
+		expect(revert(rec, after.edges).notes).toContainEqual({
+			code: 'dates_moved',
+			taskId: 17,
+			before: { start: null, due: null },
+			after: { start: '2026-03-06', due: '2026-03-09' }
+		});
+	});
+});
+
+describe('violation flags undo may change (087, 092)', () => {
+	const pin = (t: EntityTask): EntityTask => ({ ...t, pinned: true });
+	const pinRoto = (tasks: EntityTask[]) => tasks.map((t) => (t.id === 12 ? pin(t) : t));
+
+	it('lists a pinned Task whose upstream Task the apply moved', () => {
+		const moved = after.tasks.map((t) => (t.id === 11 ? { ...t, startDate: '2026-03-09', dueDate: '2026-03-10' } : t));
+		const rec = record({ before: { ...before, tasks: pinRoto(before.tasks) }, after: { ...after, tasks: pinRoto(moved) } });
+		expect(rec.violationMayChange).toEqual([12]);
+		expect(revert(rec, after.edges).notes).toContainEqual({ code: 'violation_may_change', taskIds: [12] });
+	});
+
+	it('lists a pinned Task whose upstream edges the apply changed, or whose flag it changed', () => {
+		const pinned = (tasks: EntityTask[]) => tasks.map((t) => (t.id === 11 || t.id === 17 ? pin(t) : t));
+		const flagged = after.tasks.map((t) => (t.id === 17 ? { ...t, dependencyViolation: true } : t));
+		const rec = record({ before: { ...before, tasks: pinned(before.tasks) }, after: { ...after, tasks: pinned(flagged) } });
+		// comp (11): its upstream 504 (on lay) erased. fx (17): 506 re-created as 603, flag now true.
+		expect(rec.violationMayChange).toEqual([11, 17]);
+	});
+
+	it('lists nothing when no pinned Task has an upstream that changed', () => {
+		const rec = record({ before: { ...before, tasks: pinRoto(before.tasks) }, after: { ...after, tasks: pinRoto(after.tasks) } });
+		expect(rec.violationMayChange).toEqual([]);
+		expect(revert(rec, after.edges).notes.map((n) => n.code)).not.toContain('violation_may_change');
 	});
 });
 
@@ -704,8 +782,8 @@ describe('buildRevert, two Tasks linked to one old template task (112)', () => {
 
 	it("writes content back with the other fields: A's re-sync renames the Task it wires (112)", () => {
 		const { batch } = revert(twice(), []);
-		expect(batch).toContainEqual(upd('Task', 22, { content: 'x_hand', sg_description: 'hand-b', sg_sort_order: 99 }));
-		expect(batch).toContainEqual(upd('Task', 21, xFields('x', 'hand-a', 55)));
+		expect(batch).toContainEqual(upd('Task', 22, { content: 'x_hand', sg_description: 'hand-b', sg_sort_order: 99, ...noOne }));
+		expect(batch).toContainEqual(upd('Task', 21, { ...xFields('x', 'hand-a', 55), ...noOne }));
 	});
 });
 
@@ -716,7 +794,7 @@ describe('buildRevert, field write-back', () => {
 			tasks: before.tasks.map((t) => (t.id === 11 ? { ...t, fields: { ...t.fields, step: 4 } } : t))
 		};
 		const { batch } = revert(record({ before: withStep }), after.edges);
-		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', step: { type: 'Step', id: 4 } }));
+		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', step: { type: 'Step', id: 4 }, ...noOne }));
 	});
 });
 

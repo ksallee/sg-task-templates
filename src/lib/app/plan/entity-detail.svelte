@@ -3,7 +3,7 @@
 	calls `onOptions` with new RunOptions (plan-view.ts setters); the page re-plans through `run`.
 -->
 <script lang="ts">
-	import type { EntityPlan, EntityTask, ExtraAction, FieldChange, Id, RunOptions, Template } from '$lib/pure/types';
+	import type { EntityPlan, EntityTask, ExtraAction, FieldChange, FieldFill, Id, RunOptions, Template } from '$lib/pure/types';
 	import { withEntityConflictPick } from '$lib/pure/planner';
 	import {
 		CAUSE_LABEL,
@@ -12,6 +12,7 @@
 		picksFor,
 		edgeView,
 		entityWarnings,
+		fillLabels,
 		groupRows,
 		keyLabel,
 		previousLinkLabel,
@@ -63,6 +64,12 @@
 			{/each}
 		</ul>
 	{/if}
+{/snippet}
+
+{#snippet fillList(fills: FieldFill[] | undefined)}
+	{#each fillLabels(fills) as line (line)}
+		<p class="text-muted-foreground text-xs" data-slot="fill">{line}</p>
+	{/each}
 {/snippet}
 
 {#snippet status(code: string | null)}
@@ -165,6 +172,7 @@
 						</p>
 					{/if}
 					{@render fieldList(row.fieldChanges)}
+					{@render fillList(row.fills)}
 				</div>
 			{/each}
 		</section>
@@ -186,6 +194,7 @@
 						<p class="text-warning text-xs" data-slot="rename">Rename: {row.rename.from ?? '(empty)'} → {row.rename.to ?? '(empty)'}</p>
 					{/if}
 					{@render fieldList(row.fieldChanges)}
+					{@render fillList(row.fills)}
 				</div>
 			{/each}
 		</section>
@@ -247,6 +256,7 @@
 						</p>
 					{/if}
 					{@render fieldList(row.fieldChanges)}
+					{@render fillList(row.fills)}
 				</div>
 			{/each}
 		</section>

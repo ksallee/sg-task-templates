@@ -329,6 +329,17 @@ export interface FieldChange {
 	result: unknown;
 }
 
+/**
+ * A value the apply fills from the template task where the Task has none (102): `task_assignees`
+ * when empty; `start_date`/`due_date` when the Task has neither date (102, 108), then moved by the
+ * cascade on a dependent Task (087). Not under policy: the server always does it, and the corpus
+ * shows no way to prevent it. Undo writes the empty value back where that is safe (undo.ts).
+ */
+export interface FieldFill {
+	field: 'task_assignees' | 'start_date' | 'due_date';
+	value: unknown;
+}
+
 /** The name changes (content under overwrite). Loud when a linked Task was renamed by hand. */
 export interface Rename {
 	from: string | null;
@@ -344,6 +355,8 @@ export interface KeepRow {
 	keyMismatch: boolean; // linked but renamed or moved step: shown, still kept
 	fieldChanges: FieldChange[];
 	rename: Rename | null;
+	/** Filled from the template task (102). Absent = none. */
+	fills?: FieldFill[];
 }
 
 /** A same-key Task whose `template_task` will point at this template's task. */
@@ -354,6 +367,8 @@ export interface ClaimRow {
 	previousTemplateTask: EntityTask['templateTask']; // shown in the plan, kept in undo (brief 2)
 	fieldChanges: FieldChange[];
 	rename: Rename | null;
+	/** Filled from the template task (102). Absent = none. */
+	fills?: FieldFill[];
 }
 
 /** A template task no Task matches: the server creates it (083 copies the fields). */
@@ -373,6 +388,8 @@ export interface ExtraRow {
 	reason: ExtraReason;
 	/** Set on a Task that stays linked to this template's task (a conflict loser): the apply re-syncs it too (102). */
 	fieldChanges?: FieldChange[];
+	/** Filled from the template task on that same Task (102). Absent = none. */
+	fills?: FieldFill[];
 }
 
 /** Unresolved: shown with its candidates; resolves into keep/claim/create + extras. */
@@ -576,6 +593,11 @@ export interface UndoRecord {
 	edgesBefore?: Array<Edge & { id: Id }>;
 	/** Surviving Tasks whose dates the apply's cascade moved (087, 092, 102). Not undoable. */
 	datesMoved?: Array<{ taskId: Id; before: TaskDates; after: TaskDates }>;
+	/**
+	 * Pinned Tasks whose `dependency_violation` may read other than before after the undo (087,
+	 * 092): an upstream edge or an upstream Task's dates changed, or the flag did. Missing in older records.
+	 */
+	violationMayChange?: Id[];
 }
 
 export interface TaskDates {
@@ -596,6 +618,8 @@ export type UndoNote =
 	 * which one the old template's write wires is the server's pick (106, 112), not measured.
 	 */
 	| { code: 'linked_twice_unmeasured'; templateTask: Id; taskIds: Id[] }
+	/** Pinned Tasks whose dependency_violation flag may differ from before the apply (087, 092). */
+	| { code: 'violation_may_change'; taskIds: Id[] }
 	/** Event log rows of the apply and the undo stay (096 recipe, 090). */
 	| { code: 'history_kept' };
 

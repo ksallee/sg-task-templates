@@ -29,6 +29,7 @@ import {
   type ExtraReason,
   type ExtraRow,
   type FieldChange,
+  type FieldFill,
   type FieldName,
   type FieldPolicies,
   type FieldPolicy,
@@ -176,6 +177,23 @@ export function fieldChanges(
   return out;
 }
 
+/**
+ * What the apply fills on `task` from `tpl` where the Task has nothing (102): assignees when empty,
+ * dates when the Task has neither (108: one date set, none filled). Always done, never under policy.
+ */
+export function templateFills(task: EntityTask, tpl: TemplateTask): FieldFill[] {
+  const out: FieldFill[] = [];
+  if (task.assignees.length === 0 && tpl.assignees.length > 0)
+    out.push({ field: "task_assignees", value: tpl.assignees });
+  if (task.startDate === null && task.dueDate === null) {
+    if (tpl.startDate !== null)
+      out.push({ field: "start_date", value: tpl.startDate });
+    if (tpl.dueDate !== null)
+      out.push({ field: "due_date", value: tpl.dueDate });
+  }
+  return out;
+}
+
 /** The fields a run can set a policy on: non-empty on at least one template task. */
 export function fieldsUnderPolicy(template: Template): FieldName[] {
   return [...new Set(template.tasks.flatMap(templateFields))];
@@ -194,6 +212,12 @@ function renameOf(
 // ---------------------------------------------------------------------------------------------
 // Entity plan
 // ---------------------------------------------------------------------------------------------
+
+/** `{ fills }` when the apply fills anything on the Task, else nothing (the key stays absent). */
+function fillsOf(task: EntityTask, tt: TemplateTask): { fills?: FieldFill[] } {
+  const fills = templateFills(task, tt);
+  return fills.length ? { fills } : {};
+}
 
 const ZERO: TaskUsage = { versions: 0, publishedFiles: 0 };
 
@@ -296,6 +320,7 @@ export function planEntity(
       keyMismatch,
       fieldChanges: fc,
       rename: renameOf(task, fc, handRenamed),
+      ...fillsOf(task, tt),
     };
   };
   const claimRow = (tt: TemplateTask, task: EntityTask): ClaimRow => {
@@ -307,6 +332,7 @@ export function planEntity(
       previousTemplateTask: task.templateTask,
       fieldChanges: fc,
       rename: renameOf(task, fc, false),
+      ...fillsOf(task, tt),
     };
   };
   const hasUpstream = new Set(template.edges.map((e) => e.downstream));
@@ -326,8 +352,10 @@ export function planEntity(
     };
     const link = task.templateTask?.id;
     const tt = link === undefined ? undefined : ttById.get(link);
-    if (tt && row.action !== "delete")
+    if (tt && row.action !== "delete") {
       row.fieldChanges = fieldChanges(task, tt, pol);
+      Object.assign(row, fillsOf(task, tt));
+    }
     return row;
   };
 
