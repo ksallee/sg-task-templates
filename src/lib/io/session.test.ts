@@ -157,7 +157,7 @@ describe('apply, result, retry, undo', () => {
 		expect(s.batches.at(-1)).toEqual([
 			{ request_type: 'update', entity: 'Task', record_id: 10, data: { template_task: { type: 'Task', id: 400 } } },
 			{ request_type: 'update', entity: 'Shot', record_id: 1, data: { task_template: { type: 'TaskTemplate', id: 4 } } },
-			{ request_type: 'update', entity: 'Task', record_id: 10, data: { content: 'comp' } } // 112: content written back
+			{ request_type: 'update', entity: 'Task', record_id: 10, data: { content: 'comp', task_assignees: [] } } // 112: content written back; 102: the old template fills empty assignees
 		]);
 		expect((await store.loadRun('run-1'))!.entities[0].status.state).toBe('undone');
 

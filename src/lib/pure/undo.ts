@@ -19,7 +19,11 @@
  *      offset), not by id: the old template's write erases every edge whose downstream Task it
  *      holds and it lacks, and may re-create one of its own under a new id (111).
  * Dates are not restored: writing them pins (087), and revive/re-create reschedule from upstream
- * now (095). `notes` carry that, and the edges that come back under a new id, to the result screen.
+ * now (095). One exception: dates the apply filled on a Task that had none (102) are written back
+ * null when no edge runs into the Task, before or after the apply: that write pins nothing (097). On
+ * a dependent Task a null `start_date` pins it (093), so there they stay, noted. Assignees the apply
+ * filled (102) are written back empty. `notes` carry what stays, the edges that come back under a
+ * new id, and the pinned Tasks whose `dependency_violation` may differ (087, 092), to the result screen.
  */
 
 import type {
@@ -112,6 +116,8 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 		.filter((t) => t.templateTask !== null)
 		.map((t) => ({ taskId: t.id, templateTask: t.templateTask!.id, templateId: t.templateTask!.templateId }));
 
+	const hasUpstream = new Set([...before.edges, ...after.edges].map((e) => e.downstream));
+	const datesRestored = new Set<Id>();
 	const fieldValues: UndoRecord['fieldValues'] = [];
 	for (const t of before.tasks) {
 		const now = afterTask.get(t.id) ?? (deleted.has(t.id) ? t : undefined);
@@ -127,6 +133,22 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 			// 102: the re-sync writes `duration` only on a Task without dates.
 			const atRisk = resynced && !(field === 'duration' && dated);
 			if (changed || atRisk) fieldValues.push({ taskId: t.id, field, previous: was[field] });
+		}
+		// 102: the re-sync fills empty assignees; not under policy, so not in `fields`.
+		if (t.assignees.length === 0 && (now.assignees.length > 0 || resynced))
+			fieldValues.push({ taskId: t.id, field: 'task_assignees', previous: [] });
+		// 102, 108: it fills the dates of a Task with neither. Written back null only where no edge
+		// runs into it, before or after: a null start_date pins a dependent Task (093), not a root (097).
+		if (
+			!deleted.has(t.id) &&
+			t.startDate === null &&
+			t.dueDate === null &&
+			(now.startDate !== null || now.dueDate !== null) &&
+			!hasUpstream.has(t.id)
+		) {
+			fieldValues.push({ taskId: t.id, field: 'start_date', previous: null });
+			fieldValues.push({ taskId: t.id, field: 'due_date', previous: null });
+			datesRestored.add(t.id);
 		}
 	}
 
@@ -152,9 +174,40 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 	const datesMoved: NonNullable<UndoRecord['datesMoved']> = [];
 	for (const t of surviving) {
 		const now = afterTask.get(t.id)!;
-		if (t.startDate !== now.startDate || t.dueDate !== now.dueDate)
+		if (!datesRestored.has(t.id) && (t.startDate !== now.startDate || t.dueDate !== now.dueDate))
 			datesMoved.push({ taskId: t.id, before: dates(t), after: dates(now) });
 	}
+
+	// 087, 092: a pinned Task holds its dates and flags dependency_violation while an upstream edge
+	// is broken. Where the apply changed its upstream edges or an upstream Task's dates, or its flag,
+	// the undo's edge revert and dates it cannot restore may leave the flag other than before.
+	const upstreamSpecs = (edges: Edge[], id: Id) =>
+		edges
+			.filter((e) => e.downstream === id)
+			.map((e) => `${e.upstream}:${e.type}:${e.offsetDays}`)
+			.sort()
+			.join('|');
+	const upstreamIds = (id: Id) =>
+		new Set([...before.edges, ...after.edges].filter((e) => e.downstream === id).map((e) => e.upstream));
+	const datesChanged = (id: Id) => {
+		const b = beforeTask.get(id);
+		const a = afterTask.get(id);
+		if (!b || !a) return b !== a;
+		return b.startDate !== a.startDate || b.dueDate !== a.dueDate;
+	};
+	const violationMayChange = before.tasks
+		.filter((t) => {
+			const now = afterTask.get(t.id) ?? t;
+			if (!t.pinned && !now.pinned) return false;
+			if (!hasUpstream.has(t.id)) return false;
+			return (
+				t.dependencyViolation !== now.dependencyViolation ||
+				upstreamSpecs(before.edges, t.id) !== upstreamSpecs(after.edges, t.id) ||
+				[...upstreamIds(t.id)].some(datesChanged)
+			);
+		})
+		.map((t) => t.id)
+		.sort((a, b) => a - b);
 
 	return {
 		version: 1,
@@ -177,7 +230,8 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 		addedEdges,
 		clearedDates: input.clearedDates ?? [],
 		edgesBefore: beforeEdges,
-		datesMoved
+		datesMoved,
+		violationMayChange
 	};
 }
 
@@ -238,6 +292,7 @@ export function buildRevert(rec: UndoRecord, live: Edge[], revived: Id[]): Rever
 
 	const notes: UndoNote[] = (rec.datesMoved ?? []).map((d) => ({ code: 'dates_moved', ...d }));
 	notes.push(...warnings);
+	if (rec.violationMayChange?.length) notes.push({ code: 'violation_may_change', taskIds: [...rec.violationMayChange] });
 	notes.push({ code: 'history_kept' });
 
 	return { batch, notes };

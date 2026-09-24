@@ -154,6 +154,12 @@ describe('describeNote', () => {
 			'comp and Task 11 were both linked to Comp: which one the old template wires is the server\'s pick, not measured.'
 		);
 		expect(describeNote({ code: 'history_kept' }, names)).toBe('The event log keeps the apply and the undo.');
+		expect(
+			describeNote({ code: 'dates_moved', taskId: 10, before: { start: null, due: null }, after: { start: '2026-11-03', due: '2026-11-04' } }, names)
+		).toBe('comp: the apply filled its dates from the template (now 2026-11-03 to 2026-11-04). Undo does not clear them: a null start date pins a Task with an upstream dependency.');
+		expect(describeNote({ code: 'violation_may_change', taskIds: [10, 11] }, names)).toBe(
+			'The dependency violation flag may differ from before on comp and Task 11: pinned Tasks keep their dates while what they depend on changed.'
+		);
 	});
 });
 
@@ -185,11 +191,13 @@ describe('mergeNotes', () => {
 		expect(
 			mergeNotes([
 				[{ code: 'edges_recreated', edgeIds: [1] }, { code: 'history_kept' }],
-				[{ code: 'edges_recreated', edgeIds: [2] }, { code: 'dates_may_move', taskIds: [3] }, { code: 'history_kept' }]
+				[{ code: 'edges_recreated', edgeIds: [2] }, { code: 'dates_may_move', taskIds: [3] }, { code: 'violation_may_change', taskIds: [5] }, { code: 'history_kept' }],
+				[{ code: 'violation_may_change', taskIds: [4] }]
 			])
 		).toEqual([
 			{ code: 'edges_recreated', edgeIds: [1, 2] },
 			{ code: 'dates_may_move', taskIds: [3] },
+			{ code: 'violation_may_change', taskIds: [4, 5] },
 			{ code: 'history_kept' }
 		]);
 	});

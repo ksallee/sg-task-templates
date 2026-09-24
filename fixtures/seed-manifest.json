@@ -10245,29 +10245,29 @@
    "entities": {
     "tts_claim": {
      "type": "Shot",
-     "id": 8142,
+     "id": 8145,
      "code": "tts_claim",
      "tasks": {
-      "Lighting@Light": 48588,
-      "Animation@Animation": 48589,
-      "Client Review@Comp": 48590,
-      "Matchmove@Tracking": 48591,
-      "Paint@Comp": 48592,
-      "FX@FX": 48593,
-      "Tracking@Tracking": 48594,
-      "Roto@Roto": 48595,
-      "Layout@Layout": 48596,
-      "Comp@Comp": 48597
+      "Lighting@Light": 48633,
+      "Animation@Animation": 48634,
+      "Client Review@Comp": 48635,
+      "Matchmove@Tracking": 48636,
+      "Paint@Comp": 48637,
+      "FX@FX": 48638,
+      "Tracking@Tracking": 48639,
+      "Roto@Roto": 48640,
+      "Layout@Layout": 48641,
+      "Comp@Comp": 48642
      },
      "versions": {},
      "pfs": {}
     }
    },
    "snapshot": {
-    "8142": {
+    "8145": {
      "task_template": 165,
      "tasks": {
-      "48588": {
+      "48633": {
        "content": "Lighting",
        "step": 7,
        "template_task": 47574,
@@ -10284,7 +10284,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48589": {
+      "48634": {
        "content": "Animation",
        "step": 106,
        "template_task": 47571,
@@ -10301,7 +10301,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48590": {
+      "48635": {
        "content": "Client Review",
        "step": 8,
        "template_task": 47577,
@@ -10318,7 +10318,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48591": {
+      "48636": {
        "content": "Matchmove",
        "step": 133,
        "template_task": 47570,
@@ -10335,7 +10335,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48592": {
+      "48637": {
        "content": "Paint",
        "step": 8,
        "template_task": 47576,
@@ -10352,7 +10352,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48593": {
+      "48638": {
        "content": "FX",
        "step": 6,
        "template_task": 47572,
@@ -10369,7 +10369,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48594": {
+      "48639": {
        "content": "Tracking",
        "step": 133,
        "template_task": 47569,
@@ -10386,7 +10386,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48595": {
+      "48640": {
        "content": "Roto",
        "step": 134,
        "template_task": 47573,
@@ -10403,7 +10403,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48596": {
+      "48641": {
        "content": "Layout",
        "step": 35,
        "template_task": 47568,
@@ -10420,7 +10420,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48597": {
+      "48642": {
        "content": "Comp",
        "step": 8,
        "template_task": 47575,
@@ -10440,56 +10440,56 @@
      },
      "edges": [
       [
-       48588,
-       48597,
+       48633,
+       48642,
        "finish-to-start-next-day",
        null
       ],
       [
-       48589,
-       48588,
+       48634,
+       48633,
        "finish-to-start-next-day",
        null
       ],
       [
-       48589,
-       48593,
+       48634,
+       48638,
        "finish-to-start-next-day",
        null
       ],
       [
-       48592,
-       48597,
+       48637,
+       48642,
        "start-to-start",
        null
       ],
       [
-       48593,
-       48588,
+       48638,
+       48633,
        "start-to-start",
        null
       ],
       [
-       48594,
-       48589,
+       48639,
+       48634,
        "finish-to-start-next-day",
        null
       ],
       [
-       48595,
-       48597,
+       48640,
+       48642,
        "finish-to-start-next-day",
        null
       ],
       [
-       48596,
-       48589,
+       48641,
+       48634,
        "finish-to-start-next-day",
        null
       ],
       [
-       48597,
-       48590,
+       48642,
+       48635,
        "finish-to-start-next-day",
        null
       ]
@@ -10498,47 +10498,47 @@
      "pfs": []
     }
    },
-   "seeded_at": "2026-09-24T18:40:22+00:00"
+   "seeded_at": "2026-09-24T18:55:01+00:00"
   },
   "S11": {
    "entities": {
     "tts_extras": {
      "type": "Shot",
-     "id": 8143,
+     "id": 8146,
      "code": "tts_extras",
      "tasks": {
-      "Lighting@Light": 48598,
-      "Animation@Animation": 48599,
-      "Client Review@Comp": 48600,
-      "Matchmove@Tracking": 48601,
-      "Paint@Comp": 48602,
-      "FX@FX": 48603,
-      "Tracking@Tracking": 48604,
-      "Roto@Roto": 48605,
-      "Layout@Layout": 48606,
-      "Comp@Comp": 48607
+      "Lighting@Light": 48643,
+      "Animation@Animation": 48644,
+      "Client Review@Comp": 48645,
+      "Matchmove@Tracking": 48646,
+      "Paint@Comp": 48647,
+      "FX@FX": 48648,
+      "Tracking@Tracking": 48649,
+      "Roto@Roto": 48650,
+      "Layout@Layout": 48651,
+      "Comp@Comp": 48652
      },
      "versions": {
       "Lighting@Light": [
-       32507,
-       32508
+       32509,
+       32510
       ]
      },
      "pfs": {
       "Lighting@Light": [
-       7134
+       7136
       ],
       "Matchmove@Tracking": [
-       7135
+       7137
       ]
      }
     }
    },
    "snapshot": {
-    "8143": {
+    "8146": {
      "task_template": 165,
      "tasks": {
-      "48598": {
+      "48643": {
        "content": "Lighting",
        "step": 7,
        "template_task": 47574,
@@ -10555,7 +10555,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48599": {
+      "48644": {
        "content": "Animation",
        "step": 106,
        "template_task": 47571,
@@ -10572,7 +10572,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48600": {
+      "48645": {
        "content": "Client Review",
        "step": 8,
        "template_task": 47577,
@@ -10589,7 +10589,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48601": {
+      "48646": {
        "content": "Matchmove",
        "step": 133,
        "template_task": 47570,
@@ -10606,7 +10606,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48602": {
+      "48647": {
        "content": "Paint",
        "step": 8,
        "template_task": 47576,
@@ -10623,7 +10623,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48603": {
+      "48648": {
        "content": "FX",
        "step": 6,
        "template_task": 47572,
@@ -10640,7 +10640,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48604": {
+      "48649": {
        "content": "Tracking",
        "step": 133,
        "template_task": 47569,
@@ -10657,7 +10657,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48605": {
+      "48650": {
        "content": "Roto",
        "step": 134,
        "template_task": 47573,
@@ -10674,7 +10674,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48606": {
+      "48651": {
        "content": "Layout",
        "step": 35,
        "template_task": 47568,
@@ -10691,7 +10691,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48607": {
+      "48652": {
        "content": "Comp",
        "step": 8,
        "template_task": 47575,
@@ -10711,111 +10711,111 @@
      },
      "edges": [
       [
-       48598,
-       48607,
+       48643,
+       48652,
        "finish-to-start-next-day",
        null
       ],
       [
-       48599,
-       48598,
+       48644,
+       48643,
        "finish-to-start-next-day",
        null
       ],
       [
-       48599,
-       48603,
+       48644,
+       48648,
        "finish-to-start-next-day",
        null
       ],
       [
-       48602,
-       48607,
+       48647,
+       48652,
        "start-to-start",
        null
       ],
       [
-       48603,
-       48598,
+       48648,
+       48643,
        "start-to-start",
        null
       ],
       [
-       48604,
-       48599,
+       48649,
+       48644,
        "finish-to-start-next-day",
        null
       ],
       [
-       48605,
-       48607,
+       48650,
+       48652,
        "finish-to-start-next-day",
        null
       ],
       [
-       48606,
-       48599,
+       48651,
+       48644,
        "finish-to-start-next-day",
        null
       ],
       [
-       48607,
-       48600,
+       48652,
+       48645,
        "finish-to-start-next-day",
        null
       ]
      ],
      "versions": [
       [
-       32507,
-       48598
+       32509,
+       48643
       ],
       [
-       32508,
-       48598
+       32510,
+       48643
       ]
      ],
      "pfs": [
       [
-       7134,
-       48598
+       7136,
+       48643
       ],
       [
-       7135,
-       48601
+       7137,
+       48646
       ]
      ]
     }
    },
-   "seeded_at": "2026-09-24T18:40:28+00:00"
+   "seeded_at": "2026-09-24T18:55:06+00:00"
   },
   "S13": {
    "entities": {
     "tts_dates": {
      "type": "Shot",
-     "id": 8144,
+     "id": 8147,
      "code": "tts_dates",
      "tasks": {
-      "Lighting@Light": 48608,
-      "Animation@Animation": 48609,
-      "Client Review@Comp": 48610,
-      "Matchmove@Tracking": 48611,
-      "Paint@Comp": 48612,
-      "FX@FX": 48613,
-      "Tracking@Tracking": 48614,
-      "Roto@Roto": 48615,
-      "Layout@Layout": 48616,
-      "Comp@Comp": 48617
+      "Lighting@Light": 48653,
+      "Animation@Animation": 48654,
+      "Client Review@Comp": 48655,
+      "Matchmove@Tracking": 48656,
+      "Paint@Comp": 48657,
+      "FX@FX": 48658,
+      "Tracking@Tracking": 48659,
+      "Roto@Roto": 48660,
+      "Layout@Layout": 48661,
+      "Comp@Comp": 48662
      },
      "versions": {},
      "pfs": {}
     }
    },
    "snapshot": {
-    "8144": {
+    "8147": {
      "task_template": 165,
      "tasks": {
-      "48608": {
+      "48653": {
        "content": "Lighting",
        "step": 7,
        "template_task": 47574,
@@ -10832,7 +10832,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48609": {
+      "48654": {
        "content": "Animation",
        "step": 106,
        "template_task": 47571,
@@ -10849,7 +10849,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48610": {
+      "48655": {
        "content": "Client Review",
        "step": 8,
        "template_task": 47577,
@@ -10866,7 +10866,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48611": {
+      "48656": {
        "content": "Matchmove",
        "step": 133,
        "template_task": 47570,
@@ -10883,7 +10883,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48612": {
+      "48657": {
        "content": "Paint",
        "step": 8,
        "template_task": 47576,
@@ -10900,7 +10900,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48613": {
+      "48658": {
        "content": "FX",
        "step": 6,
        "template_task": 47572,
@@ -10917,7 +10917,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48614": {
+      "48659": {
        "content": "Tracking",
        "step": 133,
        "template_task": 47569,
@@ -10934,7 +10934,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48615": {
+      "48660": {
        "content": "Roto",
        "step": 134,
        "template_task": 47573,
@@ -10951,7 +10951,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48616": {
+      "48661": {
        "content": "Layout",
        "step": 35,
        "template_task": 47568,
@@ -10968,7 +10968,7 @@
        "task_assignees": [],
        "task_reviewers": []
       },
-      "48617": {
+      "48662": {
        "content": "Comp",
        "step": 8,
        "template_task": 47575,
@@ -10988,56 +10988,56 @@
      },
      "edges": [
       [
-       48608,
-       48617,
+       48653,
+       48662,
        "finish-to-start-next-day",
        null
       ],
       [
-       48609,
-       48608,
+       48654,
+       48653,
        "finish-to-start-next-day",
        null
       ],
       [
-       48609,
-       48613,
+       48654,
+       48658,
        "finish-to-start-next-day",
        null
       ],
       [
-       48612,
-       48617,
+       48657,
+       48662,
        "start-to-start",
        null
       ],
       [
-       48613,
-       48608,
+       48658,
+       48653,
        "start-to-start",
        null
       ],
       [
-       48614,
-       48609,
+       48659,
+       48654,
        "finish-to-start-next-day",
        null
       ],
       [
-       48615,
-       48617,
+       48660,
+       48662,
        "finish-to-start-next-day",
        null
       ],
       [
-       48616,
-       48609,
+       48661,
+       48654,
        "finish-to-start-next-day",
        null
       ],
       [
-       48617,
-       48610,
+       48662,
+       48655,
        "finish-to-start-next-day",
        null
       ]
@@ -11046,7 +11046,7 @@
      "pfs": []
     }
    },
-   "seeded_at": "2026-09-24T18:40:36+00:00"
+   "seeded_at": "2026-09-24T18:55:13+00:00"
   }
  },
  "tracking_settings_before": {
@@ -11063,5 +11063,5 @@
  },
  "custom_type": "Sequence",
  "default_status": "wtg",
- "seeded_at": "2026-09-24T18:40:36+00:00"
+ "seeded_at": "2026-09-24T18:55:13+00:00"
 }

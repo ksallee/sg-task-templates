@@ -71,6 +71,8 @@ const list = (names: string[]) => (names.length <= 1 ? names.join('') : `${names
 export function describeNote(note: UndoNote, n: NameBook): string {
 	switch (note.code) {
 		case 'dates_moved':
+			if (note.before.start === null && note.before.due === null)
+				return `${n.task(note.taskId)}: the apply filled its dates from the template (now ${span(note.after)}). Undo does not clear them: a null start date pins a Task with an upstream dependency.`;
 			return `${n.task(note.taskId)}: the apply moved its dates (${span(note.before)}, now ${span(note.after)}). Undo does not write them back: that would pin it.`;
 		case 'edges_recreated':
 			return `${note.edgeIds.length} ${note.edgeIds.length === 1 ? 'dependency comes' : 'dependencies come'} back as new rows: same ends, type and offset, new ids.`;
@@ -78,6 +80,8 @@ export function describeNote(note: UndoNote, n: NameBook): string {
 			return `Dates may move on ${list(note.taskIds.map(n.task))}: unpinned Tasks downstream of a revived or re-created dependency reschedule.`;
 		case 'linked_twice_unmeasured':
 			return `${list(note.taskIds.map(n.task))} were both linked to ${n.templateTask(note.templateTask)}: which one the old template wires is the server's pick, not measured.`;
+		case 'violation_may_change':
+			return `The dependency violation flag may differ from before on ${list(note.taskIds.map(n.task))}: pinned Tasks keep their dates while what they depend on changed.`;
 		case 'history_kept':
 			return 'The event log keeps the apply and the undo.';
 	}
@@ -107,6 +111,7 @@ export function mergeNotes(groups: UndoNote[][]): UndoNote[] {
 	const out: UndoNote[] = [];
 	let recreated: Extract<UndoNote, { code: 'edges_recreated' }> | null = null;
 	let mayMove: Extract<UndoNote, { code: 'dates_may_move' }> | null = null;
+	let violation: Extract<UndoNote, { code: 'violation_may_change' }> | null = null;
 	let history = false;
 	for (const note of groups.flat()) {
 		if (note.code === 'history_kept') history = true;
@@ -116,6 +121,9 @@ export function mergeNotes(groups: UndoNote[][]): UndoNote[] {
 		} else if (note.code === 'dates_may_move') {
 			if (mayMove) mayMove.taskIds = [...new Set([...mayMove.taskIds, ...note.taskIds])].sort((a, b) => a - b);
 			else out.push((mayMove = { ...note, taskIds: [...note.taskIds] }));
+		} else if (note.code === 'violation_may_change') {
+			if (violation) violation.taskIds = [...new Set([...violation.taskIds, ...note.taskIds])].sort((a, b) => a - b);
+			else out.push((violation = { ...note, taskIds: [...note.taskIds] }));
 		} else out.push(note);
 	}
 	if (history) out.push({ code: 'history_kept' });

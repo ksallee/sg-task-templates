@@ -27,6 +27,7 @@ import type {
 	EntityTask,
 	ExtraAction,
 	ExtraRow,
+	FieldFill,
 	FieldName,
 	FieldPolicy,
 	Id,
@@ -310,6 +311,24 @@ export function valueLabel(v: unknown): string {
 		return JSON.stringify(v);
 	}
 	return String(v);
+}
+
+/**
+ * What the apply fills on a Task from its template task (102): always, not under policy. Dates
+ * then follow the dependency cascade on a dependent Task (087).
+ */
+export function fillLabels(fills: FieldFill[] | undefined): string[] {
+	const out: string[] = [];
+	const get = (f: FieldFill['field']) => fills?.find((x) => x.field === f);
+	const assignees = get('task_assignees');
+	if (assignees) out.push(`Assignees will be filled from the template: ${valueLabel(assignees.value)}.`);
+	const start = get('start_date');
+	const due = get('due_date');
+	if (start || due)
+		out.push(
+			`Dates will be filled from the template: ${valueLabel(start?.value)} to ${valueLabel(due?.value)}; a dependency may move them.`
+		);
+	return out;
 }
 
 /** Old link of a claimed Task: which template task, of which template when known (brief 2). */

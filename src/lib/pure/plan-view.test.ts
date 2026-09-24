@@ -11,6 +11,7 @@ import {
 	conflictResolved,
 	edgeView,
 	entityWarnings,
+	fillLabels,
 	filterPlans,
 	groupRows,
 	keyLabel,
@@ -317,5 +318,24 @@ describe('labels', () => {
 		expect(text).toMatch(/cannot delete Tasks; cannot write sg_description/);
 		expect(text).toMatch(/094/);
 		expect(accessWarningText({ checks: [], fields: {}, looksShort: false })).toBeNull();
+	});
+});
+
+describe('fillLabels', () => {
+	it('says what the apply fills from the template (102)', () => {
+		expect(fillLabels(undefined)).toEqual([]);
+		expect(
+			fillLabels([
+				{ field: 'task_assignees', value: [{ type: 'HumanUser', id: 517, name: 'Kevin' }] },
+				{ field: 'start_date', value: '2026-03-02' },
+				{ field: 'due_date', value: '2026-03-04' }
+			])
+		).toEqual([
+			'Assignees will be filled from the template: Kevin.',
+			'Dates will be filled from the template: 2026-03-02 to 2026-03-04; a dependency may move them.'
+		]);
+		expect(fillLabels([{ field: 'due_date', value: '2026-03-04' }])).toEqual([
+			'Dates will be filled from the template: (empty) to 2026-03-04; a dependency may move them.'
+		]);
 	});
 });
