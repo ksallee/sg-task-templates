@@ -116,6 +116,8 @@ function warningLabel(w: PlanWarning, stepOf: (key: MatchKey) => StepRef): strin
 			return `access: ${w.detail}`;
 		case 'unresolved_conflict':
 			return `pick not valid on template tasks ${w.templateTaskIds.map((id) => `#${id}`).join(', ')}: pre-pick used`;
+		case 'edge_closes_loop':
+			return `edge #${w.edgeId} would close a loop: ${w.action} (107)`;
 	}
 }
 
@@ -311,7 +313,8 @@ function entityRows(plan: EntityPlan, template: Template): Row[] {
 				r.decision = '';
 			} else r.reason = 'outside Task upstream: erased by the apply (109)';
 		}
-		if ((aff as { closesLoop?: boolean }).closesLoop) r.reason += '; keeping it would close a loop (107)';
+		if (aff.closesLoop) r.reason += '; keeping it would close a loop (107)';
+		take(r, (w) => w.code === 'edge_closes_loop' && w.edgeId === e.id);
 		return r;
 	};
 	for (const aff of plan.edges.affected) rows.push(affectedRow(aff));

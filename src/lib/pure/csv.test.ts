@@ -427,6 +427,20 @@ describe('planToCsv: warnings', () => {
 		expect(ls[0].warnings).toBe('template is for Asset, entity is Shot');
 		expect(ls.filter((l) => l.warnings !== '')).toHaveLength(1);
 	});
+
+	it('prints a kept edge that would close a loop on its edge row (085, 107)', () => {
+		// tt2 adds comp(1) on paint(3). Site: roto(2) on comp(1), paint(3) on roto(2): 3 -> 1 -> 2 -> 3.
+		const a = edge(6, 2, 1, 'finish-to-start-next-day', null);
+		const b = edge(7, 3, 2, 'finish-to-start-next-day', null);
+		const ls = lines([plan(snap(linked(), { taskTemplate: 202, edges: [a, b] }))]);
+		const hits = ls.filter((l) => l.warnings !== '');
+		expect(hits).toHaveLength(1);
+		expect(hits[0].action).toBe('edge-delete');
+		expect(hits[0].edge_upstream).toBe('roto #2');
+		expect(hits[0].decision).toBe('remove');
+		expect(hits[0].reason).toContain('keeping it would close a loop (107)');
+		expect(hits[0].warnings).toBe('edge #7 would close a loop: remove (107)');
+	});
 });
 
 describe('planToCsv: edges', () => {
