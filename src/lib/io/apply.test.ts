@@ -177,6 +177,31 @@ describe('applyRun', () => {
 		expect(stored?.entities.every((e) => e.status.state === 'done')).toBe(true);
 	});
 
+	it('cancel after current: finishes what is in flight, starts nothing more, leaves the rest pending', async () => {
+		const site = claimedSite();
+		const store = await openUndoStore(undefined);
+		const plans = Array.from({ length: 10 }, (_, i) => claimPlan(i + 1));
+		let stop = false;
+		const onProgress = (p: ApplyProgress) => {
+			if (p.state === 'done' && p.entity.id === 1) stop = true;
+		};
+		const outcomes = await applyRun(newRun(10), plans, ctx, { client: site.client, read: site.read, store, shouldStop: () => stop, onProgress });
+
+		// Four were in flight when the first landed: they finish, nothing else starts.
+		expect(outcomes.map((o) => o.entity.id)).toEqual([1, 2, 3, 4]);
+		const stored = (await store.loadRun('run-1'))!;
+		expect(stored.entities.map((e) => e.status.state)).toEqual([...Array(4).fill('done'), ...Array(6).fill('pending')]);
+		expect(stored.finishedAt).not.toBeNull();
+	});
+
+	it('reports a failed entity with its error title on progress', async () => {
+		const site = claimedSite(new Map([[1, new SgApiError(400, null, 'The field is not editable for this user')]]));
+		const store = await openUndoStore(undefined);
+		const seen: ApplyProgress[] = [];
+		await applyRun(newRun(1), [claimPlan(1)], ctx, { client: site.client, read: site.read, store, onProgress: (p) => seen.push(p) });
+		expect(seen.at(-1)).toEqual({ entity: shot(1), state: 'failed', finished: 1, total: 1, error: { status: 400, message: 'The field is not editable for this user' } });
+	});
+
 	it('sends the one batch per entity, claim then template (recipe 020)', async () => {
 		const site = claimedSite();
 		const store = await openUndoStore(undefined);

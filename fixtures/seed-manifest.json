@@ -402,265 +402,6 @@
    },
    "seeded_at": "2026-09-24T17:00:13+00:00"
   },
-  "S04": {
-   "entities": {
-    "tts_claim": {
-     "type": "Shot",
-     "id": 7984,
-     "code": "tts_claim",
-     "tasks": {
-      "Lighting@Light": 47612,
-      "Animation@Animation": 47613,
-      "Client Review@Comp": 47614,
-      "Matchmove@Tracking": 47615,
-      "Paint@Comp": 47616,
-      "FX@FX": 47617,
-      "Tracking@Tracking": 47618,
-      "Roto@Roto": 47619,
-      "Layout@Layout": 47620,
-      "Comp@Comp": 47621
-     },
-     "versions": {},
-     "pfs": {}
-    }
-   },
-   "snapshot": {
-    "7984": {
-     "task_template": 165,
-     "tasks": {
-      "47612": {
-       "content": "Lighting",
-       "step": 7,
-       "template_task": 47574,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 60,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47613": {
-       "content": "Animation",
-       "step": 106,
-       "template_task": 47571,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 2400,
-       "est_in_mins": 1800,
-       "sg_description": "Body and face",
-       "sg_sort_order": 30,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47614": {
-       "content": "Client Review",
-       "step": 8,
-       "template_task": 47577,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 0,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 90,
-       "milestone": true,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47615": {
-       "content": "Matchmove",
-       "step": 133,
-       "template_task": 47570,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 25,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47616": {
-       "content": "Paint",
-       "step": 8,
-       "template_task": 47576,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 480,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 80,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47617": {
-       "content": "FX",
-       "step": 6,
-       "template_task": 47572,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 40,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47618": {
-       "content": "Tracking",
-       "step": 133,
-       "template_task": 47569,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 20,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47619": {
-       "content": "Roto",
-       "step": 134,
-       "template_task": 47573,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 50,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47620": {
-       "content": "Layout",
-       "step": 35,
-       "template_task": 47568,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": "Camera and blocking",
-       "sg_sort_order": 10,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47621": {
-       "content": "Comp",
-       "step": 8,
-       "template_task": 47575,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": "Final comp",
-       "sg_sort_order": 70,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      }
-     },
-     "edges": [
-      [
-       47612,
-       47621,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47613,
-       47612,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47613,
-       47617,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47616,
-       47621,
-       "start-to-start",
-       null
-      ],
-      [
-       47617,
-       47612,
-       "start-to-start",
-       null
-      ],
-      [
-       47618,
-       47613,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47619,
-       47621,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47620,
-       47613,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47621,
-       47614,
-       "finish-to-start-next-day",
-       null
-      ]
-     ],
-     "versions": [],
-     "pfs": []
-    }
-   },
-   "seeded_at": "2026-09-24T17:00:16+00:00"
-  },
   "S05": {
    "entities": {
     "tts_claim_loose": {
@@ -1265,295 +1006,6 @@
    },
    "seeded_at": "2026-09-24T17:00:37+00:00"
   },
-  "S11": {
-   "entities": {
-    "tts_extras": {
-     "type": "Shot",
-     "id": 7991,
-     "code": "tts_extras",
-     "tasks": {
-      "Lighting@Light": 47643,
-      "Animation@Animation": 47644,
-      "Client Review@Comp": 47645,
-      "Matchmove@Tracking": 47646,
-      "Paint@Comp": 47647,
-      "FX@FX": 47648,
-      "Tracking@Tracking": 47649,
-      "Roto@Roto": 47650,
-      "Layout@Layout": 47651,
-      "Comp@Comp": 47652
-     },
-     "versions": {
-      "Lighting@Light": [
-       32501,
-       32502
-      ]
-     },
-     "pfs": {
-      "Lighting@Light": [
-       7132
-      ],
-      "Matchmove@Tracking": [
-       7133
-      ]
-     }
-    }
-   },
-   "snapshot": {
-    "7991": {
-     "task_template": 165,
-     "tasks": {
-      "47643": {
-       "content": "Lighting",
-       "step": 7,
-       "template_task": 47574,
-       "status": "fin",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 60,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47644": {
-       "content": "Animation",
-       "step": 106,
-       "template_task": 47571,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 2400,
-       "est_in_mins": 1800,
-       "sg_description": "Body and face",
-       "sg_sort_order": 30,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47645": {
-       "content": "Client Review",
-       "step": 8,
-       "template_task": 47577,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 0,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 90,
-       "milestone": true,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47646": {
-       "content": "Matchmove",
-       "step": 133,
-       "template_task": 47570,
-       "status": "ip",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 25,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47647": {
-       "content": "Paint",
-       "step": 8,
-       "template_task": 47576,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 480,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 80,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47648": {
-       "content": "FX",
-       "step": 6,
-       "template_task": 47572,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 40,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47649": {
-       "content": "Tracking",
-       "step": 133,
-       "template_task": 47569,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 20,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47650": {
-       "content": "Roto",
-       "step": 134,
-       "template_task": 47573,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 50,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47651": {
-       "content": "Layout",
-       "step": 35,
-       "template_task": 47568,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": "Camera and blocking",
-       "sg_sort_order": 10,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47652": {
-       "content": "Comp",
-       "step": 8,
-       "template_task": 47575,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": "Final comp",
-       "sg_sort_order": 70,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      }
-     },
-     "edges": [
-      [
-       47643,
-       47652,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47644,
-       47643,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47644,
-       47648,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47647,
-       47652,
-       "start-to-start",
-       null
-      ],
-      [
-       47648,
-       47643,
-       "start-to-start",
-       null
-      ],
-      [
-       47649,
-       47644,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47650,
-       47652,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47651,
-       47644,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47652,
-       47645,
-       "finish-to-start-next-day",
-       null
-      ]
-     ],
-     "versions": [
-      [
-       32501,
-       47643
-      ],
-      [
-       32502,
-       47643
-      ]
-     ],
-     "pfs": [
-      [
-       7132,
-       47643
-      ],
-      [
-       7133,
-       47646
-      ]
-     ]
-    }
-   },
-   "seeded_at": "2026-09-24T17:00:42+00:00"
-  },
   "S12": {
    "entities": {
     "tts_state": {
@@ -1819,265 +1271,6 @@
     }
    },
    "seeded_at": "2026-09-24T17:00:46+00:00"
-  },
-  "S13": {
-   "entities": {
-    "tts_dates": {
-     "type": "Shot",
-     "id": 7993,
-     "code": "tts_dates",
-     "tasks": {
-      "Lighting@Light": 47663,
-      "Animation@Animation": 47664,
-      "Client Review@Comp": 47665,
-      "Matchmove@Tracking": 47666,
-      "Paint@Comp": 47667,
-      "FX@FX": 47668,
-      "Tracking@Tracking": 47669,
-      "Roto@Roto": 47670,
-      "Layout@Layout": 47671,
-      "Comp@Comp": 47672
-     },
-     "versions": {},
-     "pfs": {}
-    }
-   },
-   "snapshot": {
-    "7993": {
-     "task_template": 165,
-     "tasks": {
-      "47663": {
-       "content": "Lighting",
-       "step": 7,
-       "template_task": 47574,
-       "status": "wtg",
-       "start_date": "2026-11-11",
-       "due_date": "2026-11-13",
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 60,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47664": {
-       "content": "Animation",
-       "step": 106,
-       "template_task": 47571,
-       "status": "wtg",
-       "start_date": "2026-11-04",
-       "due_date": "2026-11-10",
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 2400,
-       "est_in_mins": 1800,
-       "sg_description": "Body and face",
-       "sg_sort_order": 30,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47665": {
-       "content": "Client Review",
-       "step": 8,
-       "template_task": 47577,
-       "status": "wtg",
-       "start_date": "2026-11-02",
-       "due_date": "2026-11-02",
-       "pinned": true,
-       "dependency_violation": true,
-       "duration": 0,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 90,
-       "milestone": true,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47666": {
-       "content": "Matchmove",
-       "step": 133,
-       "template_task": 47570,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 25,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47667": {
-       "content": "Paint",
-       "step": 8,
-       "template_task": 47576,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 480,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 80,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47668": {
-       "content": "FX",
-       "step": 6,
-       "template_task": 47572,
-       "status": "wtg",
-       "start_date": "2026-11-11",
-       "due_date": "2026-11-13",
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 40,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47669": {
-       "content": "Tracking",
-       "step": 133,
-       "template_task": 47569,
-       "status": "wtg",
-       "start_date": "2026-11-02",
-       "due_date": "2026-11-03",
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 20,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47670": {
-       "content": "Roto",
-       "step": 134,
-       "template_task": 47573,
-       "status": "wtg",
-       "start_date": null,
-       "due_date": null,
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": null,
-       "sg_sort_order": 50,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47671": {
-       "content": "Layout",
-       "step": 35,
-       "template_task": 47568,
-       "status": "wtg",
-       "start_date": "2026-11-02",
-       "due_date": "2026-11-03",
-       "pinned": false,
-       "dependency_violation": false,
-       "duration": 960,
-       "est_in_mins": null,
-       "sg_description": "Camera and blocking",
-       "sg_sort_order": 10,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      },
-      "47672": {
-       "content": "Comp",
-       "step": 8,
-       "template_task": 47575,
-       "status": "wtg",
-       "start_date": "2026-11-16",
-       "due_date": "2026-11-18",
-       "pinned": true,
-       "dependency_violation": false,
-       "duration": 1440,
-       "est_in_mins": null,
-       "sg_description": "Final comp",
-       "sg_sort_order": 70,
-       "milestone": false,
-       "task_assignees": [],
-       "task_reviewers": []
-      }
-     },
-     "edges": [
-      [
-       47663,
-       47672,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47664,
-       47663,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47664,
-       47668,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47667,
-       47672,
-       "start-to-start",
-       null
-      ],
-      [
-       47668,
-       47663,
-       "start-to-start",
-       null
-      ],
-      [
-       47669,
-       47664,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47670,
-       47672,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47671,
-       47664,
-       "finish-to-start-next-day",
-       null
-      ],
-      [
-       47672,
-       47665,
-       "finish-to-start-next-day",
-       null
-      ]
-     ],
-     "versions": [],
-     "pfs": []
-    }
-   },
-   "seeded_at": "2026-09-24T17:00:51+00:00"
   },
   "S14": {
    "entities": {
@@ -11047,6 +10240,813 @@
     }
    },
    "seeded_at": "2026-09-24T17:05:14+00:00"
+  },
+  "S04": {
+   "entities": {
+    "tts_claim": {
+     "type": "Shot",
+     "id": 8142,
+     "code": "tts_claim",
+     "tasks": {
+      "Lighting@Light": 48588,
+      "Animation@Animation": 48589,
+      "Client Review@Comp": 48590,
+      "Matchmove@Tracking": 48591,
+      "Paint@Comp": 48592,
+      "FX@FX": 48593,
+      "Tracking@Tracking": 48594,
+      "Roto@Roto": 48595,
+      "Layout@Layout": 48596,
+      "Comp@Comp": 48597
+     },
+     "versions": {},
+     "pfs": {}
+    }
+   },
+   "snapshot": {
+    "8142": {
+     "task_template": 165,
+     "tasks": {
+      "48588": {
+       "content": "Lighting",
+       "step": 7,
+       "template_task": 47574,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 60,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48589": {
+       "content": "Animation",
+       "step": 106,
+       "template_task": 47571,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 2400,
+       "est_in_mins": 1800,
+       "sg_description": "Body and face",
+       "sg_sort_order": 30,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48590": {
+       "content": "Client Review",
+       "step": 8,
+       "template_task": 47577,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 0,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 90,
+       "milestone": true,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48591": {
+       "content": "Matchmove",
+       "step": 133,
+       "template_task": 47570,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 25,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48592": {
+       "content": "Paint",
+       "step": 8,
+       "template_task": 47576,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 480,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 80,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48593": {
+       "content": "FX",
+       "step": 6,
+       "template_task": 47572,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 40,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48594": {
+       "content": "Tracking",
+       "step": 133,
+       "template_task": 47569,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 20,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48595": {
+       "content": "Roto",
+       "step": 134,
+       "template_task": 47573,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 50,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48596": {
+       "content": "Layout",
+       "step": 35,
+       "template_task": 47568,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": "Camera and blocking",
+       "sg_sort_order": 10,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48597": {
+       "content": "Comp",
+       "step": 8,
+       "template_task": 47575,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": "Final comp",
+       "sg_sort_order": 70,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      }
+     },
+     "edges": [
+      [
+       48588,
+       48597,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48589,
+       48588,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48589,
+       48593,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48592,
+       48597,
+       "start-to-start",
+       null
+      ],
+      [
+       48593,
+       48588,
+       "start-to-start",
+       null
+      ],
+      [
+       48594,
+       48589,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48595,
+       48597,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48596,
+       48589,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48597,
+       48590,
+       "finish-to-start-next-day",
+       null
+      ]
+     ],
+     "versions": [],
+     "pfs": []
+    }
+   },
+   "seeded_at": "2026-09-24T18:40:22+00:00"
+  },
+  "S11": {
+   "entities": {
+    "tts_extras": {
+     "type": "Shot",
+     "id": 8143,
+     "code": "tts_extras",
+     "tasks": {
+      "Lighting@Light": 48598,
+      "Animation@Animation": 48599,
+      "Client Review@Comp": 48600,
+      "Matchmove@Tracking": 48601,
+      "Paint@Comp": 48602,
+      "FX@FX": 48603,
+      "Tracking@Tracking": 48604,
+      "Roto@Roto": 48605,
+      "Layout@Layout": 48606,
+      "Comp@Comp": 48607
+     },
+     "versions": {
+      "Lighting@Light": [
+       32507,
+       32508
+      ]
+     },
+     "pfs": {
+      "Lighting@Light": [
+       7134
+      ],
+      "Matchmove@Tracking": [
+       7135
+      ]
+     }
+    }
+   },
+   "snapshot": {
+    "8143": {
+     "task_template": 165,
+     "tasks": {
+      "48598": {
+       "content": "Lighting",
+       "step": 7,
+       "template_task": 47574,
+       "status": "fin",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 60,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48599": {
+       "content": "Animation",
+       "step": 106,
+       "template_task": 47571,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 2400,
+       "est_in_mins": 1800,
+       "sg_description": "Body and face",
+       "sg_sort_order": 30,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48600": {
+       "content": "Client Review",
+       "step": 8,
+       "template_task": 47577,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 0,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 90,
+       "milestone": true,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48601": {
+       "content": "Matchmove",
+       "step": 133,
+       "template_task": 47570,
+       "status": "ip",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 25,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48602": {
+       "content": "Paint",
+       "step": 8,
+       "template_task": 47576,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 480,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 80,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48603": {
+       "content": "FX",
+       "step": 6,
+       "template_task": 47572,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 40,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48604": {
+       "content": "Tracking",
+       "step": 133,
+       "template_task": 47569,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 20,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48605": {
+       "content": "Roto",
+       "step": 134,
+       "template_task": 47573,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 50,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48606": {
+       "content": "Layout",
+       "step": 35,
+       "template_task": 47568,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": "Camera and blocking",
+       "sg_sort_order": 10,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48607": {
+       "content": "Comp",
+       "step": 8,
+       "template_task": 47575,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": "Final comp",
+       "sg_sort_order": 70,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      }
+     },
+     "edges": [
+      [
+       48598,
+       48607,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48599,
+       48598,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48599,
+       48603,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48602,
+       48607,
+       "start-to-start",
+       null
+      ],
+      [
+       48603,
+       48598,
+       "start-to-start",
+       null
+      ],
+      [
+       48604,
+       48599,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48605,
+       48607,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48606,
+       48599,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48607,
+       48600,
+       "finish-to-start-next-day",
+       null
+      ]
+     ],
+     "versions": [
+      [
+       32507,
+       48598
+      ],
+      [
+       32508,
+       48598
+      ]
+     ],
+     "pfs": [
+      [
+       7134,
+       48598
+      ],
+      [
+       7135,
+       48601
+      ]
+     ]
+    }
+   },
+   "seeded_at": "2026-09-24T18:40:28+00:00"
+  },
+  "S13": {
+   "entities": {
+    "tts_dates": {
+     "type": "Shot",
+     "id": 8144,
+     "code": "tts_dates",
+     "tasks": {
+      "Lighting@Light": 48608,
+      "Animation@Animation": 48609,
+      "Client Review@Comp": 48610,
+      "Matchmove@Tracking": 48611,
+      "Paint@Comp": 48612,
+      "FX@FX": 48613,
+      "Tracking@Tracking": 48614,
+      "Roto@Roto": 48615,
+      "Layout@Layout": 48616,
+      "Comp@Comp": 48617
+     },
+     "versions": {},
+     "pfs": {}
+    }
+   },
+   "snapshot": {
+    "8144": {
+     "task_template": 165,
+     "tasks": {
+      "48608": {
+       "content": "Lighting",
+       "step": 7,
+       "template_task": 47574,
+       "status": "wtg",
+       "start_date": "2026-11-11",
+       "due_date": "2026-11-13",
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 60,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48609": {
+       "content": "Animation",
+       "step": 106,
+       "template_task": 47571,
+       "status": "wtg",
+       "start_date": "2026-11-04",
+       "due_date": "2026-11-10",
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 2400,
+       "est_in_mins": 1800,
+       "sg_description": "Body and face",
+       "sg_sort_order": 30,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48610": {
+       "content": "Client Review",
+       "step": 8,
+       "template_task": 47577,
+       "status": "wtg",
+       "start_date": "2026-11-02",
+       "due_date": "2026-11-02",
+       "pinned": true,
+       "dependency_violation": true,
+       "duration": 0,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 90,
+       "milestone": true,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48611": {
+       "content": "Matchmove",
+       "step": 133,
+       "template_task": 47570,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 25,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48612": {
+       "content": "Paint",
+       "step": 8,
+       "template_task": 47576,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 480,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 80,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48613": {
+       "content": "FX",
+       "step": 6,
+       "template_task": 47572,
+       "status": "wtg",
+       "start_date": "2026-11-11",
+       "due_date": "2026-11-13",
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 40,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48614": {
+       "content": "Tracking",
+       "step": 133,
+       "template_task": 47569,
+       "status": "wtg",
+       "start_date": "2026-11-02",
+       "due_date": "2026-11-03",
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 20,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48615": {
+       "content": "Roto",
+       "step": 134,
+       "template_task": 47573,
+       "status": "wtg",
+       "start_date": null,
+       "due_date": null,
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": null,
+       "sg_sort_order": 50,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48616": {
+       "content": "Layout",
+       "step": 35,
+       "template_task": 47568,
+       "status": "wtg",
+       "start_date": "2026-11-02",
+       "due_date": "2026-11-03",
+       "pinned": false,
+       "dependency_violation": false,
+       "duration": 960,
+       "est_in_mins": null,
+       "sg_description": "Camera and blocking",
+       "sg_sort_order": 10,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      },
+      "48617": {
+       "content": "Comp",
+       "step": 8,
+       "template_task": 47575,
+       "status": "wtg",
+       "start_date": "2026-11-16",
+       "due_date": "2026-11-18",
+       "pinned": true,
+       "dependency_violation": false,
+       "duration": 1440,
+       "est_in_mins": null,
+       "sg_description": "Final comp",
+       "sg_sort_order": 70,
+       "milestone": false,
+       "task_assignees": [],
+       "task_reviewers": []
+      }
+     },
+     "edges": [
+      [
+       48608,
+       48617,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48609,
+       48608,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48609,
+       48613,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48612,
+       48617,
+       "start-to-start",
+       null
+      ],
+      [
+       48613,
+       48608,
+       "start-to-start",
+       null
+      ],
+      [
+       48614,
+       48609,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48615,
+       48617,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48616,
+       48609,
+       "finish-to-start-next-day",
+       null
+      ],
+      [
+       48617,
+       48610,
+       "finish-to-start-next-day",
+       null
+      ]
+     ],
+     "versions": [],
+     "pfs": []
+    }
+   },
+   "seeded_at": "2026-09-24T18:40:36+00:00"
   }
  },
  "tracking_settings_before": {
@@ -11063,5 +11063,5 @@
  },
  "custom_type": "Sequence",
  "default_status": "wtg",
- "seeded_at": "2026-09-24T17:05:14+00:00"
+ "seeded_at": "2026-09-24T18:40:36+00:00"
 }

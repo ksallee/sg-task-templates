@@ -44,6 +44,8 @@ export interface ApplyDeps {
 	concurrency?: number;
 	onProgress?: (p: ApplyProgress) => void;
 	now?: () => string;
+	/** Cancel after current: checked before each entity starts; true = start no more (the in-flight ones finish). */
+	shouldStop?: () => boolean;
 }
 
 export interface ApplyProgress {
@@ -52,6 +54,8 @@ export interface ApplyProgress {
 	/** Entities finished (done or failed) so far, out of `total`. */
 	finished: number;
 	total: number;
+	/** On `failed`: the client's error title, verbatim. */
+	error?: { status: number | null; message: string };
 }
 
 /** Where a failed entity stopped. `after_apply`: phase 1 landed, its record is stored. */
@@ -71,7 +75,9 @@ const nowIso = () => new Date().toISOString();
 
 /**
  * Run every plan of `run`, `concurrency` at a time. Plans must be for the run's template. Stores
- * the run as given first (its entities pending), then each entity as it goes.
+ * the run as given first (its entities pending), then each entity as it goes. A cancel
+ * (`shouldStop`) finishes the entities in flight and leaves the rest pending; the run is finished
+ * either way, and the outcomes are those of the entities that ran.
  */
 export async function applyRun(
 	run: Run,
@@ -93,12 +99,22 @@ function eachEntity<T>(items: T[], deps: ApplyDeps, work: (item: T, deps: ApplyD
 		...deps,
 		onProgress: (p) => deps.onProgress?.({ entity: p.entity, state: p.state, finished, total })
 	};
-	return runPool(items, deps.concurrency ?? DEFAULT_CONCURRENCY, async (item) => {
-		const outcome = await work(item, tracked);
-		finished++;
-		tracked.onProgress!({ entity: outcome.entity, state: outcome.result.kind === 'ok' ? 'done' : 'failed', finished, total });
-		return outcome;
-	});
+	return runPool(
+		items,
+		deps.concurrency ?? DEFAULT_CONCURRENCY,
+		async (item) => {
+			const outcome = await work(item, tracked);
+			finished++;
+			const r = outcome.result;
+			deps.onProgress?.(
+				r.kind === 'ok'
+					? { entity: outcome.entity, state: 'done', finished, total }
+					: { entity: outcome.entity, state: 'failed', finished, total, error: r.error }
+			);
+			return outcome;
+		},
+		deps.shouldStop
+	);
 }
 
 /**
