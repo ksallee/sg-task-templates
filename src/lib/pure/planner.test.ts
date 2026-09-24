@@ -608,6 +608,20 @@ describe("fieldChanges", () => {
     expect(fieldChanges(dated, tpl, {})).toEqual([]);
   });
 
+  it("leaves duration alone on a task with only one date (108)", () => {
+    const tpl = tt(5, "paint", 14, 30, { fields: { duration: 960 } });
+    const startOnly = task(1, "paint", 14, {
+      fields: { duration: 1920 },
+      start: "2026-05-04",
+    });
+    const dueOnly = task(2, "paint", 14, {
+      fields: { duration: 1920 },
+      due: "2026-05-08",
+    });
+    expect(fieldChanges(startOnly, tpl, {})).toEqual([]);
+    expect(fieldChanges(dueOnly, tpl, {})).toEqual([]);
+  });
+
   it("defaults content to overwrite and step to keep", () => {
     const tpl = tt(5, "paint", 14, 30);
     const t = task(1, "Paint v2", 12);

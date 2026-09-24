@@ -59,7 +59,7 @@ const NEVER_UNDER_POLICY = new Set([
   "task_assignees",
 ]);
 
-/** 102: `duration` is re-synced only on a Task without dates. */
+/** 102, 108: `duration` is re-synced only on a Task with no dates at all; one date set keeps it. */
 const DURATION = "duration";
 
 /** Built-ins mirrored on TaskCore, read when `fields` lacks them. */
@@ -92,7 +92,7 @@ function valueOf(t: EntityTask | TemplateTask, field: FieldName): unknown {
 
 /**
  * Empty: null, undefined, "", [], and `false`. A template checkbox left false is treated as
- * empty (102 saw milestone false -> true only; false over a true Task is unmeasured).
+ * empty: it never overwrites (108). A template "" is stored as null (108). 0 is a value (108).
  */
 export function isEmptyValue(v: unknown): boolean {
   return (
@@ -156,7 +156,7 @@ export function fieldChanges(
   tpl: TemplateTask,
   policies: FieldPolicies,
 ): FieldChange[] {
-  const dated = task.startDate !== null && task.dueDate !== null;
+  const dated = task.startDate !== null || task.dueDate !== null; // 108: either date blocks it
   const out: FieldChange[] = [];
   for (const field of templateFields(tpl)) {
     if (field === DURATION && dated) continue;
