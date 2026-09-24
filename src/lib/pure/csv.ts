@@ -1,369 +1,353 @@
 /**
  * csv.ts: the plan as CSV, for review before applying (brief decision 8). Pure, no I/O.
  *
- * One row per Task action (`PlanRow`) per entity, plus one row per edge change (`EdgePlan`).
- * Columns are fixed (`PLAN_CSV_COLUMNS`); a row leaves the columns it has nothing to say blank.
- * RFC 4180 quoting (double-quote a cell holding a comma, quote or CR/LF; double an embedded
- * quote), CRLF line endings, a UTF-8 BOM for spreadsheet apps, and a `'` prefix on a cell
- * starting `= + - @` (formula injection).
+ * Per entity, in order:
+ *   1. one entity row: action `apply` or `noop`, the five counts, entity-level warnings;
+ *   2. one row per plan row: keep, claim, create, extra, and one `conflict` row per template task
+ *      of a conflict (Q-E), next to the keep/claim/create it resolves to;
+ *   3. one row per edge pair: `edge-add` (a template edge that survives the run), `edge-replace`,
+ *      `edge-delete`, `edge-outside` (one end not linked to the template, 109).
+ * Tasks print as `name #id`, a created Task as `name (new)`, refs by name. Each warning prints once,
+ * on the row it is about. Values print as they are (no formula guard, Kevin). RFC 4180 quoting,
+ * CRLF line endings, a UTF-8 BOM for spreadsheet apps.
  */
 
 import { keyParts } from './matching';
 import type {
 	AffectedEdge,
+	ConflictRow,
+	Edge,
 	EntityPlan,
 	EntityTask,
-	EntitySnapshot,
-	Edge,
 	FieldChange,
 	Id,
 	MappedTask,
 	MatchKey,
 	PlanRow,
 	PlanWarning,
+	TaskUsage,
 	Template,
 	TemplateTask
 } from './types';
-import type { EntityRef } from 'sg-widgets-core';
 
 export const PLAN_CSV_COLUMNS = [
-	'entity_type',
-	'entity_id',
-	'entity_name',
+	'entity',
 	'action',
-	'task_id',
-	'current_name',
-	'template_task_id',
-	'template_name',
-	'normalized_key',
-	'previous_template_task',
+	'task', // the Task; conflict: its candidates in pre-pick order
+	'template_task', // entity row: the template
+	'key', // normalized content @ step
+	'reason', // why this action; entity row: the counts
 	'field_changes',
-	'extra_action',
-	'versions',
-	'published_files',
-	'edge_partner_task_id',
-	'edge_partner_name',
-	'edge_type',
-	'edge_offset_days',
-	'edge_decision',
+	'decision', // extra action, conflict pick, edge keep/remove
+	'usage', // Versions and PublishedFiles (089)
+	'edge_upstream',
+	'edge_downstream',
+	'edge_spec', // type and offset; replace: old -> template
+	'dates', // may move / would flag (092); create: template dates and the clear option (097)
 	'warnings'
 ] as const;
 
 type Column = (typeof PLAN_CSV_COLUMNS)[number];
 type Row = Record<Column, string>;
+type StepRef = { name?: string } | null;
 
-function blankRow(): Row {
-	const row = {} as Row;
-	for (const column of PLAN_CSV_COLUMNS) row[column] = '';
-	return row;
+const BOM = '﻿';
+
+// --- values -------------------------------------------------------------------------------------
+
+/** A field value: refs by name, lists joined, null as ∅, "" as (empty). */
+function value(v: unknown): string {
+	if (v === null || v === undefined) return '∅';
+	if (v === '') return '(empty)';
+	if (Array.isArray(v)) return v.length === 0 ? '(none)' : v.map(value).join(', ');
+	if (typeof v === 'object') {
+		const o = v as { name?: unknown; id?: unknown };
+		if (typeof o.name === 'string') return o.name;
+		if (o.id !== undefined) return `#${o.id}`;
+		return JSON.stringify(v);
+	}
+	return String(v);
 }
 
-// --- value formatting --------------------------------------------------------------------------
+const taskLabel = (t: { id: Id; content: string | null }) => `${t.content ?? '(no name)'} #${t.id}`;
+const newLabel = (tt: TemplateTask | undefined) => `${tt?.content ?? '(no name)'} (new)`;
 
-function fmt(value: unknown): string {
-	if (value === null || value === undefined) return '';
-	if (Array.isArray(value)) return value.map(fmt).join(', ');
-	if (typeof value === 'object') return JSON.stringify(value);
-	return String(value);
-}
-
-function describeKey(key: MatchKey, step: EntityRef | null): string {
+function keyLabel(key: MatchKey, step: StepRef): string {
 	const { content, stepId } = keyParts(key);
-	const stepLabel = step?.name ?? (stepId === null ? 'no step' : String(stepId));
-	return `${content || '(empty)'} @ ${stepLabel}`;
+	const stepName = step?.name ?? (stepId === null ? 'no step' : `step #${stepId}`);
+	return `${content || '(empty)'} @ ${stepName}`;
 }
 
-function describeLink(link: { id: Id; name?: string } | null): string {
-	if (!link) return '';
-	return link.name ? `${link.id} (${link.name})` : String(link.id);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const usageCounts = (u: TaskUsage) =>
+	`${plural(u.versions, 'version')}, ${plural(u.publishedFiles, 'published file')}`;
+
+function usageLabel(u: TaskUsage): string {
+	if (u.versions === 0 && u.publishedFiles === 0) return 'none';
+	if (u.publishedFiles === 0) return plural(u.versions, 'version');
+	if (u.versions === 0) return plural(u.publishedFiles, 'published file');
+	return usageCounts(u);
 }
 
-/** `fmt`, but null/undefined and "" get an explicit marker so a change against "empty" reads clearly. */
-function fmtFieldValue(value: unknown): string {
-	if (value === null || value === undefined) return '∅';
-	if (value === '') return '(empty)';
-	return fmt(value);
-}
-
-function fmtFieldChanges(changes: FieldChange[]): string {
-	return changes
-		.map(
-			(c) =>
-				`${c.field}: ${fmtFieldValue(c.current)} -> ${fmtFieldValue(c.template)} [${c.policy} => ${fmtFieldValue(c.result)}]`
+function fieldChangesLabel(changes: FieldChange[] | undefined, skipContent: boolean): string {
+	return (changes ?? [])
+		.filter((c) => !(skipContent && c.field === 'content'))
+		.map((c) =>
+			c.result === c.current
+				? `${c.field}: keeps ${value(c.current)}, template ${value(c.template)} (${c.policy})`
+				: `${c.field}: ${value(c.current)} -> ${value(c.result)} (${c.policy})`
 		)
 		.join('; ');
 }
 
-function fmtWarning(w: PlanWarning): string {
+const specLabel = (e: Edge) => `${e.type}, offset ${e.offsetDays === null ? 'none' : e.offsetDays}`;
+
+function warningLabel(w: PlanWarning, stepOf: (key: MatchKey) => StepRef): string {
 	switch (w.code) {
 		case 'template_entity_type_mismatch':
-			return `template entity_type ${fmt(w.templateType)} vs entity ${w.entityType}`;
+			return `template is for ${w.templateType}, entity is ${w.entityType}`;
 		case 'template_duplicate_key':
-			return `duplicate template key "${keyParts(w.key).content}" on template tasks ${w.templateTaskIds.join(', ')}`;
+			return `template has ${w.templateTaskIds.length} tasks of key ${keyLabel(w.key, stepOf(w.key))}`;
 		case 'delete_with_usage':
-			return `delete with ${w.usage.versions} version(s), ${w.usage.publishedFiles} published file(s)`;
+			return `delete with ${usageCounts(w.usage)}`;
 		case 'rename':
-			return `${w.handRenamed ? 'renamed by hand' : 'renamed'}: ${fmt(w.from)} -> ${fmt(w.to)}`;
+			return `${w.handRenamed ? 'RENAMED BY HAND' : 'rename'}: ${w.from ?? '∅'} -> ${w.to ?? '∅'}`;
 		case 'access_short':
 			return `access: ${w.detail}`;
 		case 'unresolved_conflict':
-			return `unresolved conflict on template tasks ${w.templateTaskIds.join(', ')}`;
+			return `pick not valid on template tasks ${w.templateTaskIds.map((id) => `#${id}`).join(', ')}: pre-pick used`;
 	}
 }
 
-function fmtWarnings(list: PlanWarning[]): string {
-	return list.map(fmtWarning).join('; ');
-}
+// --- one entity ---------------------------------------------------------------------------------
 
-function joinNonEmpty(parts: string[]): string {
-	return parts.filter((p) => p.length > 0).join('; ');
-}
-
-// --- warning grouping: attach each warning to the row(s) it is about ---------------------------
-
-interface WarningGroups {
-	byTask: Map<Id, PlanWarning[]>;
-	byTemplateTask: Map<Id, PlanWarning[]>;
-	entityLevel: PlanWarning[];
-}
-
-function pushInto<K>(map: Map<K, PlanWarning[]>, key: K, w: PlanWarning): void {
-	const list = map.get(key);
-	if (list) list.push(w);
-	else map.set(key, [w]);
-}
-
-function groupWarnings(warnings: PlanWarning[]): WarningGroups {
-	const byTask = new Map<Id, PlanWarning[]>();
-	const byTemplateTask = new Map<Id, PlanWarning[]>();
-	const entityLevel: PlanWarning[] = [];
-	for (const w of warnings) {
-		switch (w.code) {
-			case 'delete_with_usage':
-			case 'rename':
-				pushInto(byTask, w.taskId, w);
-				break;
-			case 'template_duplicate_key':
-			case 'unresolved_conflict':
-				for (const id of w.templateTaskIds) pushInto(byTemplateTask, id, w);
-				break;
-			case 'template_entity_type_mismatch':
-			case 'access_short':
-				entityLevel.push(w);
-				break;
-		}
-	}
-	return { byTask, byTemplateTask, entityLevel };
-}
-
-// --- entity Tasks reachable from a plan, for naming edge endpoints -----------------------------
-
-function collectTasks(plan: EntityPlan): Map<Id, EntityTask> {
-	const byId = new Map<Id, EntityTask>();
-	for (const row of plan.rows) {
-		if (row.kind === 'keep' || row.kind === 'claim' || row.kind === 'extra') {
-			byId.set(row.task.id, row.task);
-		} else if (row.kind === 'conflict') {
-			for (const c of row.candidates) byId.set(c.task.id, c.task);
-		}
-	}
-	return byId;
-}
-
-function entityCells(entity: EntitySnapshot['entity']): Pick<Row, 'entity_type' | 'entity_id' | 'entity_name'> {
-	return {
-		entity_type: entity.entityType,
-		entity_id: fmt(entity.id),
-		entity_name: fmt(entity.name ?? null)
+function entityRows(plan: EntityPlan, template: Template): Row[] {
+	const { entityType, name, id } = plan.entity;
+	const entity = name ? `${entityType} ${name} #${id}` : `${entityType} #${id}`;
+	const blank = (action: string): Row => {
+		const r = {} as Row;
+		for (const c of PLAN_CSV_COLUMNS) r[c] = '';
+		r.entity = entity;
+		r.action = action;
+		return r;
 	};
-}
 
-// --- one row per PlanRow ------------------------------------------------------------------------
-
-function taskRow(plan: EntityPlan, row: PlanRow, groups: WarningGroups): Row {
-	const r = blankRow();
-	Object.assign(r, entityCells(plan.entity));
-	r.action = row.kind;
-
-	switch (row.kind) {
-		case 'keep':
-		case 'claim': {
-			r.task_id = fmt(row.task.id);
-			r.current_name = fmt(row.task.content);
-			r.template_task_id = fmt(row.templateTask.id);
-			r.template_name = fmt(row.templateTask.content);
-			r.normalized_key = describeKey(row.templateTask.key, row.templateTask.step);
-			r.field_changes = fmtFieldChanges(row.fieldChanges);
-			if (row.kind === 'claim') r.previous_template_task = describeLink(row.previousTemplateTask);
-			r.warnings = fmtWarnings([
-				...(groups.byTask.get(row.task.id) ?? []),
-				...(groups.byTemplateTask.get(row.templateTask.id) ?? [])
-			]);
-			break;
-		}
-		case 'create': {
-			r.template_task_id = fmt(row.templateTask.id);
-			r.template_name = fmt(row.templateTask.content);
-			r.normalized_key = describeKey(row.templateTask.key, row.templateTask.step);
-			r.warnings = fmtWarnings(groups.byTemplateTask.get(row.templateTask.id) ?? []);
-			break;
-		}
-		case 'extra': {
-			r.task_id = fmt(row.task.id);
-			r.current_name = fmt(row.task.content);
-			r.normalized_key = describeKey(row.task.key, row.task.step);
-			r.extra_action = row.action;
-			r.versions = fmt(row.usage.versions);
-			r.published_files = fmt(row.usage.publishedFiles);
-			r.warnings = fmtWarnings(groups.byTask.get(row.task.id) ?? []);
-			break;
-		}
-		case 'conflict': {
-			r.template_task_id = row.templateTasks.map((t) => fmt(t.id)).join(', ');
-			r.template_name = row.templateTasks.map((t) => fmt(t.content)).join(' / ');
-			r.normalized_key = describeKey(row.key, row.templateTasks[0]?.step ?? null);
-			r.task_id = row.candidates.map((c) => fmt(c.task.id)).join(', ');
-			r.current_name = row.candidates.map((c) => fmt(c.task.content)).join(' / ');
-			r.versions = row.candidates.map((c) => fmt(c.usage.versions)).join(', ');
-			r.published_files = row.candidates.map((c) => fmt(c.usage.publishedFiles)).join(', ');
-			r.warnings = joinNonEmpty([
-				fmtWarnings(row.templateTasks.flatMap((t) => groups.byTemplateTask.get(t.id) ?? [])),
-				`pre-pick (${row.reason}): ${describeLink(pickDescriptor(row))}`
-			]);
-			break;
-		}
+	const ttById = new Map(template.tasks.map((t) => [t.id, t] as const));
+	const taskById = new Map<Id, EntityTask>();
+	for (const row of plan.rows) {
+		if (row.kind === 'conflict') for (const c of row.candidates) taskById.set(c.task.id, c.task);
+		else if (row.kind !== 'create') taskById.set(row.task.id, row.task);
 	}
-	return r;
-}
+	const idLabel = (taskId: Id) => {
+		const t = taskById.get(taskId);
+		return t ? taskLabel(t) : `#${taskId}`;
+	};
+	const endLabel = (m: MappedTask) =>
+		'existing' in m ? idLabel(m.existing) : newLabel(ttById.get(m.created));
+	const stepOf = (key: MatchKey): StepRef => template.tasks.find((t) => t.key === key)?.step ?? null;
 
-function pickDescriptor(row: Extract<PlanRow, { kind: 'conflict' }>): { id: Id; name?: string } | null {
-	const templateTaskId = row.templateTasks[0]?.id;
-	const pickedId = templateTaskId === undefined ? undefined : row.pick[templateTaskId];
-	if (pickedId === undefined || pickedId === null) return null;
-	const candidate = row.candidates.find((c) => c.task.id === pickedId);
-	return { id: pickedId, name: candidate?.task.content ?? undefined };
-}
+	// Warnings: each prints once, on the first row it is about; the rest on the entity row.
+	const pending = [...plan.warnings];
+	const take = (r: Row, about: (w: PlanWarning) => boolean) => {
+		const mine = pending.filter(about);
+		if (mine.length === 0) return;
+		for (const w of mine) pending.splice(pending.indexOf(w), 1);
+		r.warnings = mine.map((w) => warningLabel(w, stepOf)).join('; ');
+	};
+	const aboutTask = (taskId: Id) => (w: PlanWarning) =>
+		(w.code === 'rename' || w.code === 'delete_with_usage') && w.taskId === taskId;
+	const aboutTemplateTask = (ttId: Id) => (w: PlanWarning) =>
+		(w.code === 'template_duplicate_key' || w.code === 'unresolved_conflict') &&
+		w.templateTaskIds.includes(ttId);
 
-// --- one row per edge change ---------------------------------------------------------------------
+	const mayMove = new Set(plan.edges.mayMove);
+	const wouldViolate = new Set(plan.edges.wouldViolate);
+	const datesOf = (taskId: Id) =>
+		wouldViolate.has(taskId)
+			? 'pinned: would flag dependency_violation (092)'
+			: mayMove.has(taskId)
+				? 'may move (092)'
+				: '';
 
-function endInfo(
-	end: MappedTask,
-	templateTaskId: Id,
-	templateTaskById: Map<Id, TemplateTask>,
-	taskById: Map<Id, EntityTask>
-): { taskId: string; name: string } {
-	if ('existing' in end) {
-		const task = taskById.get(end.existing);
-		const tt = templateTaskById.get(templateTaskId);
-		return { taskId: fmt(end.existing), name: fmt(task?.content ?? tt?.content ?? null) };
+	// 1. The entity row.
+	const head = blank(plan.noop ? 'noop' : 'apply');
+	head.template_task = `${template.code} #${template.id}`;
+	const c = plan.counts;
+	head.reason = plan.noop
+		? `already on ${template.code}: nothing to write`
+		: `keep ${c.keep}, claim ${c.claim}, create ${c.create}, extra ${c.extra}, conflict ${c.conflict}` +
+			(plan.needsClearFirst ? `; already on ${template.code}: cleared then set (084)` : '');
+	const rows: Row[] = [head];
+
+	// 2. Task rows.
+	const taskRow = (row: Exclude<PlanRow, ConflictRow>): Row => {
+		const r = blank(row.kind);
+		switch (row.kind) {
+			case 'keep':
+			case 'claim': {
+				r.task = taskLabel(row.task);
+				r.template_task = taskLabel(row.templateTask);
+				r.key = keyLabel(row.templateTask.key, row.templateTask.step);
+				if (row.kind === 'keep') {
+					r.reason = row.keyMismatch ? 'linked; key differs (renamed or step moved)' : 'linked';
+				} else {
+					const prev = row.previousTemplateTask;
+					r.reason = prev
+						? `was linked to #${prev.id}${prev.name ? ` ${prev.name}` : ''}` +
+							(prev.templateId !== null ? ` (template ${prev.templateId})` : '')
+						: 'unlinked, same key';
+				}
+				// A rename prints once, as a warning, not again as a content change.
+				r.field_changes = fieldChangesLabel(row.fieldChanges, row.rename !== null);
+				r.dates = datesOf(row.task.id);
+				take(r, aboutTask(row.task.id));
+				break;
+			}
+			case 'create': {
+				const tt = row.templateTask;
+				r.task = newLabel(tt);
+				r.template_task = taskLabel(tt);
+				r.key = keyLabel(tt.key, tt.step);
+				r.reason = 'no Task with this key';
+				const { start, due } = row.templateDates;
+				r.dates =
+					(start === null && due === null
+						? 'no template dates'
+						: `template dates ${start ?? '∅'} .. ${due ?? '∅'}`) +
+					(row.datesClearable ? '; clearable' : '; not clearable (upstream edge)');
+				break;
+			}
+			case 'extra': {
+				r.task = taskLabel(row.task);
+				r.key = keyLabel(row.task.key, row.task.step);
+				r.reason = row.reason;
+				r.decision = row.action;
+				r.usage = usageLabel(row.usage);
+				r.field_changes = fieldChangesLabel(row.fieldChanges, false);
+				r.dates = datesOf(row.task.id);
+				take(r, aboutTask(row.task.id));
+				break;
+			}
+		}
+		return r;
+	};
+
+	const choice = (taskId: Id | null) => (taskId === null ? 'create a new Task' : idLabel(taskId));
+	const conflictRows = (row: ConflictRow): Row[] =>
+		row.templateTasks.map((tt) => {
+			const r = blank('conflict');
+			r.task = row.candidates.map((x) => taskLabel(x.task)).join(', ');
+			r.template_task = taskLabel(tt);
+			r.key = keyLabel(row.key, tt.step);
+			r.reason = `pre-pick by ${row.reason}`;
+			const pick = row.pick[tt.id] ?? null;
+			const pre = row.prePick[tt.id] ?? null;
+			r.decision =
+				pick === pre
+					? `pick = pre-pick: ${choice(pick)}`
+					: `pick: ${choice(pick)}; pre-pick: ${choice(pre)}`;
+			r.usage = row.candidates.map((x) => `#${x.task.id}: ${usageLabel(x.usage)}`).join('; ');
+			take(r, aboutTemplateTask(tt.id));
+			return r;
+		});
+
+	for (const row of plan.rows) {
+		if (row.kind === 'conflict') rows.push(...conflictRows(row));
+		else rows.push(taskRow(row));
 	}
-	const tt = templateTaskById.get(templateTaskId);
-	return { taskId: '', name: tt ? `${fmt(tt.content)} (new)` : '(new)' };
-}
 
-function edgeAddRow(
-	plan: EntityPlan,
-	added: EntityPlan['edges']['expectedAdded'][number],
-	templateTaskById: Map<Id, TemplateTask>,
-	taskById: Map<Id, EntityTask>
-): Row {
-	const r = blankRow();
-	Object.assign(r, entityCells(plan.entity));
-	r.action = 'edge-add';
-	const down = endInfo(added.downstream, added.templateEdge.downstream, templateTaskById, taskById);
-	const up = endInfo(added.upstream, added.templateEdge.upstream, templateTaskById, taskById);
-	r.task_id = down.taskId;
-	r.current_name = down.name;
-	r.template_task_id = fmt(added.templateEdge.downstream);
-	r.template_name = fmt(templateTaskById.get(added.templateEdge.downstream)?.content ?? null);
-	r.edge_partner_task_id = up.taskId;
-	r.edge_partner_name = up.name;
-	r.edge_type = added.templateEdge.type;
-	r.edge_offset_days = fmt(added.templateEdge.offsetDays);
-	return r;
-}
-
-function affectedEdgeRow(plan: EntityPlan, aff: AffectedEdge, taskById: Map<Id, EntityTask>): Row {
-	const r = blankRow();
-	Object.assign(r, entityCells(plan.entity));
-	r.action = aff.cause === 'replaced' ? 'edge-replace' : 'edge-delete';
-	r.task_id = fmt(aff.existing.downstream);
-	r.current_name = fmt(taskById.get(aff.existing.downstream)?.content ?? null);
-	r.edge_partner_task_id = fmt(aff.existing.upstream);
-	r.edge_partner_name = fmt(taskById.get(aff.existing.upstream)?.content ?? null);
-	if (aff.replacedBy) {
-		r.edge_type = `${aff.existing.type} -> ${aff.replacedBy.type}`;
-		r.edge_offset_days = `${fmt(aff.existing.offsetDays)} -> ${fmt(aff.replacedBy.offsetDays)}`;
-	} else {
-		r.edge_type = aff.existing.type;
-		r.edge_offset_days = fmt(aff.existing.offsetDays);
+	// 3. Edge rows, one per pair. A replaced edge's row carries the template edge that takes its
+	// place, so a surviving template edge on that pair is not listed again; transient copies
+	// (`transientAdded`, deleted again by the batch) are never listed.
+	const pair = (a: Id | string, b: Id | string) => [String(a), String(b)].sort().join('|');
+	const end = (m: MappedTask) => ('existing' in m ? m.existing : `new${m.created}`);
+	const replacedPairs = new Set(
+		plan.edges.affected
+			.filter((a) => a.cause === 'replaced')
+			.map((a) => pair(a.existing.downstream, a.existing.upstream))
+	);
+	for (const add of plan.edges.expectedAdded) {
+		if (replacedPairs.has(pair(end(add.downstream), end(add.upstream)))) continue;
+		const r = blank('edge-add');
+		r.edge_upstream = endLabel(add.upstream);
+		r.edge_downstream = endLabel(add.downstream);
+		r.edge_spec = specLabel(add.templateEdge);
+		r.reason = 'template edge (099)';
+		rows.push(r);
 	}
-	r.edge_decision = aff.action;
-	return r;
-}
 
-function toExtraEdgeRow(plan: EntityPlan, edge: Edge, taskById: Map<Id, EntityTask>): Row {
-	const r = blankRow();
-	Object.assign(r, entityCells(plan.entity));
-	r.action = 'edge-extra';
-	r.task_id = fmt(edge.downstream);
-	r.current_name = fmt(taskById.get(edge.downstream)?.content ?? null);
-	r.edge_partner_task_id = fmt(edge.upstream);
-	r.edge_partner_name = fmt(taskById.get(edge.upstream)?.content ?? null);
-	r.edge_type = edge.type;
-	r.edge_offset_days = fmt(edge.offsetDays);
-	r.edge_decision = 'keep';
-	return r;
-}
+	// An extra that is deleted takes its edges with it (103).
+	const deleted = new Set<Id>();
+	for (const r of plan.rows) if (r.kind === 'extra' && r.action === 'delete') deleted.add(r.task.id);
+	const deletedEnd = (e: Edge) => [e.upstream, e.downstream].find((t) => deleted.has(t));
+	const edgeRow = (action: string, e: Edge): Row => {
+		const r = blank(action);
+		r.edge_upstream = idLabel(e.upstream);
+		r.edge_downstream = idLabel(e.downstream);
+		r.edge_spec = specLabel(e);
+		return r;
+	};
 
-function edgeRows(plan: EntityPlan, templateTaskById: Map<Id, TemplateTask>, taskById: Map<Id, EntityTask>): Row[] {
-	return [
-		...plan.edges.expectedAdded.map((added) => edgeAddRow(plan, added, templateTaskById, taskById)),
-		...plan.edges.affected.map((aff) => affectedEdgeRow(plan, aff, taskById)),
-		...plan.edges.toExtras.map((edge) => toExtraEdgeRow(plan, edge, taskById))
-	];
+	const affectedRow = (aff: AffectedEdge): Row => {
+		const e = aff.existing;
+		const action = {
+			replaced: 'edge-replace',
+			not_in_template: 'edge-delete',
+			outside_upstream: 'edge-outside'
+		}[aff.cause];
+		const r = edgeRow(action, e);
+		r.decision = aff.action;
+		if (aff.cause === 'replaced') {
+			const t = aff.replacedBy;
+			if (t) r.edge_spec = `${specLabel(e)} -> ${specLabel(t)}`;
+			const reversed = t !== null && t.downstream !== e.downstream;
+			r.reason = `replaced by the template edge${reversed ? ', reversed' : ''} (101)`;
+		} else if (aff.cause === 'not_in_template') {
+			r.reason = 'not in the template: the apply deletes it (102)';
+		} else {
+			const gone = deletedEnd(e);
+			if (gone !== undefined) {
+				r.reason = `deleted with the extra ${idLabel(gone)} (103)`;
+				r.decision = '';
+			} else r.reason = 'outside Task upstream: erased by the apply (109)';
+		}
+		if ((aff as { closesLoop?: boolean }).closesLoop) r.reason += '; keeping it would close a loop (107)';
+		return r;
+	};
+	for (const aff of plan.edges.affected) rows.push(affectedRow(aff));
+
+	for (const e of plan.edges.toExtras) {
+		const r = edgeRow('edge-outside', e);
+		const gone = deletedEnd(e);
+		r.reason =
+			gone !== undefined ? `deleted with the extra ${idLabel(gone)} (103)` : 'outside Task downstream: kept';
+		rows.push(r);
+	}
+
+	// Tasks with no row of their own (another entity) that may move: named on the entity row.
+	const unlisted = (ids: Id[]) => ids.filter((t) => !taskById.has(t)).map((t) => `#${t}`);
+	const moves = unlisted(plan.edges.mayMove);
+	const flags = unlisted(plan.edges.wouldViolate);
+	head.dates = [
+		moves.length ? `outside Tasks may move: ${moves.join(', ')}` : '',
+		flags.length ? `outside pinned Tasks would flag: ${flags.join(', ')}` : ''
+	]
+		.filter(Boolean)
+		.join('; ');
+
+	take(head, () => true); // entity-level warnings, and any not placed on a row
+	return rows;
 }
 
 // --- RFC 4180 -------------------------------------------------------------------------------------
 
-function csvCell(value: string): string {
-	let v = value;
-	if (/^[=+\-@]/.test(v)) v = `'${v}`;
-	if (/[",\r\n]/.test(v)) v = `"${v.replace(/"/g, '""')}"`;
-	return v;
-}
-
-function csvLine(row: Row): string {
-	return PLAN_CSV_COLUMNS.map((c) => csvCell(row[c])).join(',');
-}
-
-// --- entry point ------------------------------------------------------------------------------
+const cell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+const line = (cells: readonly string[]) => cells.map(cell).join(',');
 
 export function planToCsv(plans: EntityPlan[], template: Template): string {
-	const templateTaskById = new Map(template.tasks.map((t) => [t.id, t] as const));
-	const lines: string[] = [PLAN_CSV_COLUMNS.map((c) => csvCell(c)).join(',')];
-
+	const out = [line(PLAN_CSV_COLUMNS)];
 	for (const plan of plans) {
-		const taskById = collectTasks(plan);
-		const groups = groupWarnings(plan.warnings);
-		const rows: Row[] = [
-			...plan.rows.map((row) => taskRow(plan, row, groups)),
-			...edgeRows(plan, templateTaskById, taskById)
-		];
-
-		if (rows.length === 0) {
-			const r = blankRow();
-			Object.assign(r, entityCells(plan.entity));
-			r.action = plan.noop ? 'noop' : '';
-			rows.push(r);
-		}
-
-		if (groups.entityLevel.length > 0) {
-			rows[0].warnings = joinNonEmpty([rows[0].warnings, fmtWarnings(groups.entityLevel)]);
-		}
-
-		for (const row of rows) lines.push(csvLine(row));
+		for (const r of entityRows(plan, template)) out.push(line(PLAN_CSV_COLUMNS.map((c) => r[c])));
 	}
-
-	return `﻿${lines.join('\r\n')}\r\n`;
+	return `${BOM}${out.join('\r\n')}\r\n`;
 }
