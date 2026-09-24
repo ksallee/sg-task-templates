@@ -56,4 +56,4 @@ spacing and size ladders. Theme choices are Jeremy's (sg-widgets #190). The app 
   (whole page). Errors say what failed and offer the way back. Inside a widget, its own `StateLine`.
 
 Shared pieces: `src/lib/app/` (`app-shell`, `flow-steps`, `page-header`, `section`, `count-chip`,
-`count-chips`, `notice`, `page-state`, `wordmark`).
+`count-chips`, `notice`, `page-state`, `segmented` (a small choice, the pick raised), `wordmark`).

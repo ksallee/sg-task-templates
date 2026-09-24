@@ -7,7 +7,6 @@ import {
 	entityListFilters,
 	planBlocker,
 	planTotals,
-	templateEdgeRows,
 	templatesByType
 } from './entry';
 import type { EntityPlan, EntitySnapshot, EntityTask, ProjectContext, Template, TemplateTask } from './types';
@@ -127,26 +126,6 @@ describe('templatesByType', () => {
 		expect(matching.map((t) => t.id)).toEqual([1]);
 		expect(others.map((t) => t.id)).toEqual([3]);
 		expect(templatesByType(all, 'Shot', '').matching).toHaveLength(2);
-	});
-});
-
-describe('templateEdgeRows', () => {
-	it('names both ends by task content; task is downstream, dependent_task upstream (085)', () => {
-		const t = template(5, 'T', 'Shot', {
-			tasks: [tplTask(100, 'Layout'), tplTask(101, 'Anim')],
-			edges: [{ id: 900, downstream: 101, upstream: 100, type: 'start-to-start', offsetDays: -2 }]
-		});
-		expect(templateEdgeRows(t)).toEqual([
-			{ id: 900, upstream: 'Layout', downstream: 'Anim', type: 'start-to-start', offsetDays: -2 }
-		]);
-	});
-
-	it('falls back to the task id when a task is not in the template', () => {
-		const t = template(5, 'T', 'Shot', {
-			tasks: [tplTask(100, 'Layout')],
-			edges: [{ id: 901, downstream: 777, upstream: 100, type: 'finish-to-start-next-day', offsetDays: null }]
-		});
-		expect(templateEdgeRows(t)[0].downstream).toBe('Task 777');
 	});
 });
 
