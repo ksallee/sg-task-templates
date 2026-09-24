@@ -518,8 +518,9 @@ export type EntityResult = EntityResultOk | EntityResultFailed;
 // --- undo ------------------------------------------------------------------------------------------
 
 /**
- * Everything the full undo needs, in 096's order:
- *   1. `claimed`: write each old `template_task` back;
+ * Everything the full undo needs, in 096's order (one batch, 104):
+ *   0. revive `deletedTasks` (103), before the old template's write re-creates them (096);
+ *   1. `claimed`, `unlinked`: write each old `template_task` back;
  *   2. `previousTaskTemplate`: write the entity's old `task_template` back;
  *   3. `created`: delete the Tasks the apply made;
  *   4. write back pre-merge state: `fieldValues`, `omitted`, revive `deletedTasks` (048), remove
@@ -534,6 +535,14 @@ export interface UndoRecord {
 	appliedAt: string;
 	previousTaskTemplate: EntityRef | null;
 	claimed: Array<{ taskId: Id; previousTemplateTask: Id | null }>;
+	/** Conflict losers the apply unlinked (`template_task` null, 106): link written back with the claims. */
+	unlinked?: Array<{ taskId: Id; previousTemplateTask: Id | null }>;
+	/**
+	 * Tasks the undo's write of the old template re-syncs (096, 102): linked to it before the apply
+	 * (or to a template of unknown id), still there or revived. Their fields are in `fieldValues`;
+	 * the revert batch leaves out edges it would find already removed (104).
+	 */
+	resyncedOnUndo?: Id[];
 	created: Id[];
 	/** Pre-apply value of every field under policy on every kept and claimed Task (102). */
 	fieldValues: Array<{ taskId: Id; field: FieldName; previous: unknown }>;
@@ -543,11 +552,65 @@ export interface UndoRecord {
 	droppedEdges: Array<Edge & { id: Id }>;
 	/** Dropped edges the run re-created under 'keep': old id -> new id. */
 	recreatedEdges: Array<{ previousId: Id; id: Id }>;
-	/** Removed by DELETE /entity/task_dependencies/<id>: revive by id (095). */
+	/** Removed by DELETE or a batch delete (103): revive by id (095). */
 	deletedEdges: Array<Edge & { id: Id }>;
 	/** Added by the apply (015, 099), template replacements included: delete on undo. */
 	addedEdges: Array<Edge & { id: Id }>;
 	clearedDates: Array<{ taskId: Id; start: string | null; due: string | null }>;
+	/**
+	 * Every TaskDependency row touching the entity's Tasks before the apply. The edge revert's
+	 * target: the old template's re-sync on undo can erase hand-made edges between its Tasks (102).
+	 */
+	edgesBefore?: Array<Edge & { id: Id }>;
+	/** Surviving Tasks whose dates the apply's cascade moved (087, 092, 102). Not undoable. */
+	datesMoved?: Array<{ taskId: Id; before: TaskDates; after: TaskDates }>;
+}
+
+export interface TaskDates {
+	start: string | null;
+	due: string | null;
+}
+
+/** What an undo cannot put back, for the result screen. */
+export type UndoNote =
+	/** Writing old dates pins the Task (087); revive and re-create reschedule from upstream (095). */
+	| { code: 'dates_moved'; taskId: Id; before: TaskDates; after: TaskDates }
+	/** Erased rows (101, 102) come back as new rows: same type and offset, new id. */
+	| { code: 'edges_recreated'; edgeIds: Id[] }
+	/** Event log rows of the apply and the undo stay (096 recipe, 090). */
+	| { code: 'history_kept' };
+
+/** The revert of one entity: `reviveTasks`, then read edges and `batch`, then read edges and `EdgeRevert`. */
+export interface RevertPlan {
+	/**
+	 * `POST /entity/tasks/<id>?revive=1` each, FIRST (103: same id, fields, edges; 096: the old
+	 * template's write would re-create a Task still retired). Not a batch request (103).
+	 */
+	reviveTasks: Id[];
+	/**
+	 * One `_batch`, in 096's order: template_task (claims, then unlinked losers), task_template,
+	 * delete created Tasks, delete added edges the write leaves (104), fields, statuses.
+	 */
+	batch: BatchRequest[];
+	notes: UndoNote[];
+}
+
+/** The edge part of a revert, from the edges read live after `RevertPlan`. Run in this order. */
+export interface EdgeRevert {
+	/** One `_batch` of TaskDependency deletes: added edges, and whatever holds a pair to restore. */
+	remove: BatchRequest[];
+	/** `POST /entity/task_dependencies/<id>?revive=1` each, before any create (095). */
+	revive: Id[];
+	/** One `_batch` of TaskDependency creates for erased rows (086 route 1, 101, 109). */
+	create: BatchRequest[];
+	/** Live edges unknown to the record (the old template's re-sync, someone else): left in place. */
+	left: Array<Edge & { id: Id }>;
+}
+
+/** The downloadable undo file of a run. */
+export interface UndoFile {
+	version: 1;
+	records: UndoRecord[];
 }
 
 // --- run -------------------------------------------------------------------------------------------
