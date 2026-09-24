@@ -38,6 +38,30 @@ export function entityListFilters(projectId: Id, entry: EntryPoint, templateId: 
 	return { logical_operator: 'and', conditions };
 }
 
+/** A pick on the entities list. `name` is the code, when the read carried it. */
+type Pick = { type: string; id: Id; name?: string };
+
+/** `current` with every row of `added` it lacks, in order. Select all matching adds; only Clear empties. */
+export function addToSelection<T extends Pick>(current: readonly T[], added: readonly T[]): T[] {
+	const held = new Set(current.map((ref) => `${ref.type}:${ref.id}`));
+	return [...current, ...added.filter((ref) => !held.has(`${ref.type}:${ref.id}`))];
+}
+
+/** The list filter narrowed to the picked ids: what the list shows of the selection. */
+export function selectedWithin(filters: WireGroup, picked: readonly Pick[]): WireGroup {
+	return { logical_operator: 'and', conditions: [...filters.conditions, ['id', 'in', picked.map((ref) => ref.id)]] };
+}
+
+/** Show selected: the project's picked entities, whatever the list filter says. */
+export function onlySelected(projectId: Id, picked: readonly Pick[]): WireGroup {
+	return selectedWithin({ logical_operator: 'and', conditions: [['project', 'is', { type: 'Project', id: projectId }]] }, picked);
+}
+
+/** "N selected · M hidden by the filter". `shown` is how many picks the filter matches; null until counted. */
+export function selectionLine(selected: number, shown: number | null): { selected: number; hidden: number } {
+	return { selected, hidden: shown === null ? 0 : Math.max(0, selected - shown) };
+}
+
 const byCode = (a: Template, b: Template) => a.code.localeCompare(b.code, undefined, { sensitivity: 'base' }) || a.id - b.id;
 
 /**

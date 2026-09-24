@@ -4,8 +4,12 @@ import {
 	accessSample,
 	chunk,
 	defaultRunOptions,
+	addToSelection,
 	entityListFilters,
+	onlySelected,
 	planBlocker,
+	selectedWithin,
+	selectionLine,
 	planTotals,
 	templatesByType
 } from './entry';
@@ -206,5 +210,33 @@ describe('planBlocker', () => {
 		expect(planBlocker({ ...ok, entityType: null })).toBe('Pick an entity type.');
 		expect(planBlocker({ ...ok, template: null })).toBe('Pick a template.');
 		expect(planBlocker({ ...ok, selected: 0 })).toBe('Select at least one entity.');
+	});
+});
+
+describe('selection across filters', () => {
+	const ref = (id: number, name?: string) => ({ type: 'Shot', id, ...(name ? { name } : {}) });
+
+	it('adds what select all matching found and keeps what was picked before', () => {
+		expect(addToSelection([ref(1, 'a'), ref(2)], [ref(2, 'b'), ref(3, 'c')])).toEqual([ref(1, 'a'), ref(2), ref(3, 'c')]);
+		expect(addToSelection([], [ref(4)])).toEqual([ref(4)]);
+	});
+
+	it('narrows the list filter to the selected ids, to count or to show them', () => {
+		const list = entityListFilters(70, 'no_template', 5, 'sh');
+		expect(selectedWithin(list, [ref(1), ref(2)])).toEqual({
+			logical_operator: 'and',
+			conditions: [...list.conditions, ['id', 'in', [1, 2]]]
+		});
+		expect(onlySelected(70, [ref(3)])).toEqual({
+			logical_operator: 'and',
+			conditions: [['project', 'is', { type: 'Project', id: 70 }], ['id', 'in', [3]]]
+		});
+	});
+
+	it('says how many are selected and how many of them the filter hides', () => {
+		expect(selectionLine(5, 3)).toEqual({ selected: 5, hidden: 2 });
+		expect(selectionLine(5, null)).toEqual({ selected: 5, hidden: 0 });
+		expect(selectionLine(2, 7)).toEqual({ selected: 2, hidden: 0 });
+		expect(selectionLine(0, 0)).toEqual({ selected: 0, hidden: 0 });
 	});
 });
