@@ -210,8 +210,11 @@ describe('planEdges: deleted and replaced', () => {
 				action: 'keep'
 			}
 		]);
-		// The server writes the template's copy in its place.
-		expect(plan.expectedAdded).toHaveLength(1);
+		// The server writes the template's copy in its place; keep deletes it again after the apply.
+		expect(plan.expectedAdded).toEqual([]);
+		expect(plan.transientAdded).toEqual([
+			{ templateEdge: tt2.edges[0], downstream: { existing: 47297 }, upstream: { existing: 47296 }, keptEdge: edges[0].id }
+		]);
 	});
 
 	it('fixture edge-differs: same pair, other type is replaced (101)', () => {
@@ -224,7 +227,34 @@ describe('planEdges: deleted and replaced', () => {
 		const have = e(102, 101, 'start-to-start', 3);
 		const plan = planEdges({ template: template([e(2, 1, 'start-to-start', 2)], [1, 2]), tasks: [t(101), t(102)], edges: [have], mapping: map123 });
 		expect(plan.affected.map((a) => a.cause)).toEqual(['replaced']);
-		expect(plan.expectedAdded).toHaveLength(1);
+		expect(plan.expectedAdded).toEqual([]);
+		expect(plan.transientAdded).toHaveLength(1);
+	});
+
+	it('remove of a replaced edge: the template copy survives, nothing transient', () => {
+		const have = e(102, 101, 'start-to-start', 3);
+		const tpl = e(2, 1, 'start-to-start', 2);
+		const plan = planEdges({
+			template: template([tpl], [1, 2]),
+			tasks: [t(101), t(102)],
+			edges: [have],
+			mapping: map123,
+			edgeActions: { [have.id!]: 'remove' }
+		});
+		expect(plan.expectedAdded).toEqual([{ templateEdge: tpl, downstream: { existing: 102 }, upstream: { existing: 101 } }]);
+		expect(plan.transientAdded).toEqual([]);
+	});
+
+	it('105: offset null on the entity vs 0 on the template is replaced (the server compares strictly)', () => {
+		const have = e(102, 101, 'finish-to-start-next-day', null);
+		const plan = planEdges({ template: template([e(2, 1, 'finish-to-start-next-day', 0)], [1, 2]), tasks: [t(101), t(102)], edges: [have], mapping: map123 });
+		expect(plan.affected.map((a) => [a.existing.id, a.cause])).toEqual([[have.id, 'replaced']]);
+	});
+
+	it('105: offset 0 on the entity vs null on the template is replaced too', () => {
+		const have = e(102, 101, 'finish-to-start-next-day', 0);
+		const plan = planEdges({ template: template([e(2, 1, 'finish-to-start-next-day', null)], [1, 2]), tasks: [t(101), t(102)], edges: [have], mapping: map123 });
+		expect(plan.affected.map((a) => a.cause)).toEqual(['replaced']);
 	});
 
 	it('takes the action from edgeActions by TaskDependency id', () => {
@@ -240,8 +270,69 @@ describe('planEdges: deleted and replaced', () => {
 	});
 });
 
+describe('planEdges: outside upstream (109)', () => {
+	it('an edge where a mapped Task depends on an extra is erased by the apply: affected, keep by default', () => {
+		const up = e(101, 104);
+		const plan = planEdges({ template: template([], [1, 2]), tasks: [t(101), t(102), t(104)], edges: [up], mapping: map123 });
+		expect(plan.affected).toEqual([{ existing: up, cause: 'outside_upstream', replacedBy: null, action: 'keep' }]);
+		expect(plan.toExtras).toEqual([]);
+	});
+
+	it('the upstream end on another entity counts as outside too', () => {
+		const up = e(102, 9999); // 9999: not in the snapshot's Tasks
+		const plan = planEdges({ template: template([e(2, 1)], [1, 2]), tasks: [t(101), t(102)], edges: [up], mapping: map123 });
+		expect(plan.affected.map((a) => [a.existing.id, a.cause])).toEqual([[up.id, 'outside_upstream']]);
+	});
+
+	it('takes remove from edgeActions', () => {
+		const up = e(101, 104);
+		const plan = planEdges({
+			template: template([], [1]),
+			tasks: [t(101), t(104)],
+			edges: [up],
+			mapping: map123,
+			edgeActions: { [up.id!]: 'remove' }
+		});
+		expect(plan.affected[0].action).toBe('remove');
+		expect(plan.mayMove).toEqual([]);
+	});
+
+	it('keep re-creates it after the apply: its downstream may move (092)', () => {
+		const up = e(101, 104);
+		const plan = planEdges({ template: template([], [1]), tasks: [t(101), t(104)], edges: [up], mapping: map123 });
+		expect(plan.mayMove).toEqual([101]);
+	});
+
+	it('106: a conflict loser is unlinked before the apply, so its edges follow the outside rules', () => {
+		// Template task 1 has Tasks 105 and 106 linked; 105 wins. 102 is claimed to template task 2.
+		const rows = [
+			{
+				kind: 'conflict',
+				templateTasks: [{ ...t(1), templateId: 1 }],
+				candidates: [{ task: t(105) }, { task: t(106) }],
+				pick: { 1: 105 }
+			},
+			{ kind: 'claim', task: t(102), templateTask: { ...t(2), templateId: 1 } },
+			{ kind: 'extra', task: t(106), reason: 'conflict_loser' }
+		] as unknown as PlanRow[];
+		const loserUp = e(102, 106); // claimed 102 depends on the loser: erased (109)
+		const loserDown = e(106, 105); // the loser depends on the winner: kept
+		const plan = planEdges({
+			template: template([e(2, 1)], [1, 2]),
+			tasks: [t(105), t(106), t(102)],
+			edges: [loserUp, loserDown],
+			mapping: mapTasks(rows)
+		});
+		expect(plan.affected).toEqual([{ existing: loserUp, cause: 'outside_upstream', replacedBy: null, action: 'keep' }]);
+		expect(plan.toExtras).toEqual([loserDown]);
+		expect(plan.expectedAdded).toEqual([
+			{ templateEdge: expect.objectContaining({ downstream: 2, upstream: 1 }), downstream: { existing: 102 }, upstream: { existing: 105 } }
+		]);
+	});
+});
+
 describe('planEdges: left alone', () => {
-	it('lists an edge between an extra and a mapped Task, never touches it (101 control)', () => {
+	it('lists an edge where an extra depends on a mapped Task, never touches it (101 control, 109)', () => {
 		const ctl = e(104, 101);
 		const plan = planEdges({ template: template([], [1, 2]), tasks: [t(101), t(102), t(104)], edges: [ctl], mapping: map123 });
 		expect(plan.toExtras).toEqual([ctl]);

@@ -8,11 +8,15 @@
  *   - an edge on that pair of another type, offset or direction is erased and T's written in its
  *     place (101, 102);
  *   - an edge between two linked Tasks that T lacks either way is deleted (102);
- *   - an edge with an end on an unlinked Task, or on a Task linked to another template, is kept
- *     (101 control, 102).
- * Deleted and replaced edges carry keep (default) / remove (decisions). Keep re-creates the old edge
- * after the apply, in the same batch; for a replaced edge it first deletes the template's copy,
- * since a pair holds one row and a two-Task loop is a 400 (085).
+ *   - an edge where a linked Task depends on a Task not linked to T (an extra, a conflict loser, a
+ *     Task linked to another template, a Task on another entity) is erased (109);
+ *   - an edge where the Task not linked to T is downstream is kept (101 control, 102, 109).
+ * "Linked" is after the claims: conflict losers are unlinked before the template write (106), so
+ * they are outside Tasks here. Offsets compare strictly: null and 0 differ to the server (105).
+ * Deleted, replaced and outside-upstream edges carry keep (default) / remove (decisions). Keep
+ * re-creates the old edge after the apply, in the same batch; for a replaced edge it first deletes
+ * the template's copy, since a pair holds one row and a two-Task loop is a 400 (085). That copy is
+ * listed in `transientAdded`, not `expectedAdded`, which holds only edges that survive the run.
  *
  * Date impact is graph level. An edge that comes to exist reschedules its unpinned downstream Task
  * at once and the move cascades (092, 087, 100); a pinned Task holds and flags
@@ -78,7 +82,7 @@ interface GraphEdge {
 }
 
 function sameSpec(a: Edge, b: Edge): boolean {
-	// Offsets compare strictly: whether the server treats null and 0 as one is unmeasured.
+	// Offsets compare strictly: null and 0 are different edges to the server (105).
 	return a.type === b.type && a.offsetDays === b.offsetDays;
 }
 
@@ -98,10 +102,18 @@ export function planEdges(input: EdgeInput): EdgePlan {
 		templateOnPair.set(pairKey(nodeOf(down), nodeOf(up)), { edge: te, down, up });
 	}
 
-	const plan: EdgePlan = { expectedAdded: [], affected: [], toExtras: [], mayMove: [], wouldViolate: [], untouched: [] };
+	const plan: EdgePlan = {
+		expectedAdded: [],
+		transientAdded: [],
+		affected: [],
+		toExtras: [],
+		mayMove: [],
+		wouldViolate: [],
+		untouched: []
+	};
 	const standing: GraphEdge[] = []; // existing edges the apply keeps
 	const satisfied = new Set<string>(); // pairs already holding the template's edge
-	const templateCopyDropped = new Set<string>(); // pairs where keep deletes the template's copy
+	const templateCopyDropped = new Map<string, Id>(); // pair -> kept edge whose keep deletes the template's copy
 	const created: GraphEdge[] = []; // edges that come to exist: sources of date impact
 
 	for (const edge of edges) {
@@ -113,9 +125,17 @@ export function planEdges(input: EdgeInput): EdgePlan {
 			standing.push(g);
 			continue;
 		}
-		if (!down || !up) {
+		if (!down) {
+			// The outside Task is downstream: the apply keeps the edge (101, 109).
 			plan.toExtras.push(edge);
 			standing.push(g);
+			continue;
+		}
+		if (!up) {
+			// A linked Task depends on an outside Task: the apply erases the edge (109).
+			const action = (edge.id !== null && actions[edge.id]) || 'keep';
+			plan.affected.push({ existing: edge as Edge & { id: Id }, cause: 'outside_upstream', replacedBy: null, action });
+			if (action === 'keep') created.push(g);
 			continue;
 		}
 		const key = pairKey(g.down, g.up);
@@ -134,16 +154,25 @@ export function planEdges(input: EdgeInput): EdgePlan {
 		});
 		if (action === 'keep') {
 			created.push(g);
-			if (tpl) templateCopyDropped.add(key);
+			if (tpl) templateCopyDropped.set(key, edge.id as Id);
 		}
 	}
 
 	for (const [key, tpl] of templateOnPair) {
 		if (satisfied.has(key)) continue;
-		plan.expectedAdded.push({ templateEdge: tpl.edge, downstream: tpl.down, upstream: tpl.up });
-		if (!templateCopyDropped.has(key)) created.push({ down: nodeOf(tpl.down), up: nodeOf(tpl.up) });
+		const added = { templateEdge: tpl.edge, downstream: tpl.down, upstream: tpl.up };
+		const keptEdge = templateCopyDropped.get(key);
+		if (keptEdge !== undefined) {
+			plan.transientAdded!.push({ ...added, keptEdge });
+			continue;
+		}
+		plan.expectedAdded.push(added);
+		created.push({ down: nodeOf(tpl.down), up: nodeOf(tpl.up) });
 	}
-	plan.expectedAdded.sort((a, b) => template.edges.indexOf(a.templateEdge) - template.edges.indexOf(b.templateEdge));
+	const byTemplateOrder = (a: { templateEdge: Edge }, b: { templateEdge: Edge }) =>
+		template.edges.indexOf(a.templateEdge) - template.edges.indexOf(b.templateEdge);
+	plan.expectedAdded.sort(byTemplateOrder);
+	plan.transientAdded!.sort(byTemplateOrder);
 
 	// Walk down the after-apply graph from each new edge's downstream end.
 	const after = [...standing, ...created];
