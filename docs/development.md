@@ -14,6 +14,8 @@ build ignores those and always signs in.
     pnpm test
     pnpm build
 
+`.github/workflows/gates.yml` runs those three, and the seed planner's `uv run --with pytest pytest tools -q`, on every pull request and on pushes to `dev` and `main`.
+
 ## Deploy
 
 From `main` alone. `vercel.json` names SvelteKit as the framework, enables `main` under

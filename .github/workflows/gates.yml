@@ -1,0 +1,47 @@
+# The gates a branch passes before it merges, on every pull request and on the two branches
+# anything lands on. After sg-widgets' gates.yml; the Python step after sg-groundtruth's.
+
+name: Gates
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: check, test, build and the seed planner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # package.json names no packageManager, so the version is here: the one the lockfile was
+      # written with.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.5.1
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: astral-sh/setup-uv@v7
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm check
+
+      - run: pnpm test
+
+      - run: pnpm build
+
+      # tools/_plan.py, the seed's pure half. No network, no credential.
+      - run: uv run --no-project --python 3.11 --with pytest pytest tools -q
