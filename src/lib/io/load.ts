@@ -23,6 +23,7 @@ import {
 	templatesFromRows
 } from '$lib/pure/read';
 import type { EntityRef, EntitySnapshot, FieldName, Id, ProjectContext, Template } from '$lib/pure/types';
+import { runPool } from './pool';
 
 /** 082: `page[size]` takes 1 to 5000. */
 export const PAGE_SIZE = 5000;
@@ -68,15 +69,12 @@ export async function taskTemplateField(client: SgClient, entityType: string, pr
  */
 export async function loadTemplatableTypes(client: SgClient, projectId: Id): Promise<string[]> {
 	const names = (await client.entityTypes()).map((t) => t.name);
+	const found = await runPool(names, SCHEMA_CONCURRENCY, (name) => taskTemplateField(client, name, projectId));
 	const fieldsByType: Record<string, Record<string, FieldSchema>> = {};
-	for (let i = 0; i < names.length; i += SCHEMA_CONCURRENCY) {
-		const slice = names.slice(i, i + SCHEMA_CONCURRENCY);
-		const found = await Promise.all(slice.map((name) => taskTemplateField(client, name, projectId)));
-		slice.forEach((name, j) => {
-			const field = found[j];
-			if (field) fieldsByType[name] = { task_template: field };
-		});
-	}
+	names.forEach((name, i) => {
+		const field = found[i];
+		if (field) fieldsByType[name] = { task_template: field };
+	});
 	return templatableTypes(fieldsByType);
 }
 
