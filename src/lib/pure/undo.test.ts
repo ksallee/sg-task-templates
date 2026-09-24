@@ -4,6 +4,7 @@ import type { BatchRequest, Edge, EntitySnapshot, EntityTask, Id, UndoRecord } f
 import {
 	buildEdgeRevert,
 	buildRevert,
+	tasksToRevive,
 	buildUndoRecord,
 	parseUndoJson,
 	serializeUndo,
@@ -206,6 +207,9 @@ const createReq = (e: Edge): BatchRequest => ({
 	}
 });
 
+/** The revert batch, built after the Task revives as the flow runs it (110). */
+const revert = (rec: UndoRecord, live: Edge[]) => buildRevert(rec, live, rec.deletedTasks);
+
 const fieldsOf = (rec: UndoRecord, taskId: Id) =>
 	Object.fromEntries(rec.fieldValues.filter((v) => v.taskId === taskId).map((v) => [v.field, v.previous]));
 
@@ -236,9 +240,9 @@ describe('buildUndoRecord', () => {
 
 	it('records every policy field of Tasks the old template re-syncs on undo (096: roto)', () => {
 		const rec = record();
-		expect(fieldsOf(rec, 11)).toEqual(f('hand', 1, 480));
-		expect(fieldsOf(rec, 13)).toEqual({ sg_description: null, sg_sort_order: 99 }); // dated: duration kept (102)
-		expect(fieldsOf(rec, 12)).toEqual({ sg_description: 'hand', sg_sort_order: 2 }); // untouched by B, reset by A
+		expect(fieldsOf(rec, 11)).toEqual({ ...f('hand', 1, 480), content: 'comp' }); // content too: A renames (112)
+		expect(fieldsOf(rec, 13)).toEqual({ sg_description: null, sg_sort_order: 99, content: 'lay' }); // dated: duration kept (102)
+		expect(fieldsOf(rec, 12)).toEqual({ sg_description: 'hand', sg_sort_order: 2, content: 'roto' }); // untouched by B, reset by A
 	});
 
 	it('records only the fields the apply changed on a Task the old template does not hold', () => {
@@ -300,7 +304,7 @@ describe('buildUndoRecord', () => {
 	it('records the fields of a deleted Task linked to the old template: revived, then re-synced (096)', () => {
 		const rec = record(withDeletedA);
 		expect(rec.resyncedOnUndo).toContain(14);
-		expect(fieldsOf(rec, 14)).toEqual({ sg_description: 'old', sg_sort_order: 7, duration: 120 });
+		expect(fieldsOf(rec, 14)).toEqual({ sg_description: 'old', sg_sort_order: 7, duration: 120, content: 'old' });
 	});
 
 	it('records outside-upstream edges the apply erased (109), and the one it re-created', () => {
@@ -328,7 +332,7 @@ describe('buildUndoRecord', () => {
 
 describe('buildRevert', () => {
 	it("writes old template_task first, then the old task_template, then deletes created Tasks (096)", () => {
-		const { batch } = buildRevert(record(), after.edges);
+		const { batch } = revert(record(), after.edges);
 		expect(batch.slice(0, 5)).toEqual([
 			upd('Task', 11, { template_task: { type: 'Task', id: 1001 } }),
 			upd('Task', 13, { template_task: { type: 'Task', id: 1003 } }),
@@ -339,11 +343,11 @@ describe('buildRevert', () => {
 	});
 
 	it('writes the pre-merge fields back after the old template re-syncs them, then the statuses', () => {
-		const { batch } = buildRevert(record(), after.edges);
+		const { batch } = revert(record(), after.edges);
 		expect(batch.slice(5)).toEqual([
-			upd('Task', 11, f('hand', 1, 480)),
-			upd('Task', 12, { sg_description: 'hand', sg_sort_order: 2 }),
-			upd('Task', 13, { sg_description: null, sg_sort_order: 99 }),
+			upd('Task', 11, { ...f('hand', 1, 480), content: 'comp' }),
+			upd('Task', 12, { sg_description: 'hand', sg_sort_order: 2, content: 'roto' }),
+			upd('Task', 13, { sg_description: null, sg_sort_order: 99, content: 'lay' }),
 			upd('Task', 17, { sg_sort_order: 5 }),
 			upd('Task', 15, { sg_status_list: 'ip' })
 		]);
@@ -351,13 +355,13 @@ describe('buildRevert', () => {
 
 	it('writes null when the entity had no template (096: null touches nothing)', () => {
 		const fresh = { ...before, entity: { ...before.entity, taskTemplate: null } };
-		const { batch } = buildRevert(record({ before: fresh }), after.edges);
+		const { batch } = revert(record({ before: fresh }), after.edges);
 		expect(batch).toContainEqual(upd('Shot', 7557, { task_template: null }));
 	});
 
 	it('leaves task_template alone when the entity was already on the template (084: a rewrite re-creates Tasks)', () => {
 		const onB = { ...before, entity: { ...before.entity, taskTemplate: { type: 'TaskTemplate', id: B_ID } } };
-		const { batch } = buildRevert(record({ before: onB }), after.edges);
+		const { batch } = revert(record({ before: onB }), after.edges);
 		expect(batch.some((r) => r.entity === 'Shot')).toBe(false);
 	});
 
@@ -368,12 +372,12 @@ describe('buildRevert', () => {
 				t.id === 11 ? { ...t, fields: { ...t.fields, step: { type: 'Step', id: 4, name: 'Comp' } } } : t
 			)
 		};
-		const { batch } = buildRevert(record({ before: withStep }), after.edges);
-		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), step: { type: 'Step', id: 4 } }));
+		const { batch } = revert(record({ before: withStep }), after.edges);
+		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', step: { type: 'Step', id: 4 } }));
 	});
 
 	it("writes a conflict loser's previous template_task back with the claims, before task_template (106, 096)", () => {
-		const { batch } = buildRevert(record(withLoser), after.edges);
+		const { batch } = revert(record(withLoser), after.edges);
 		expect(batch.slice(0, 5)).toEqual([
 			upd('Task', 11, { template_task: { type: 'Task', id: 1001 } }),
 			upd('Task', 13, { template_task: { type: 'Task', id: 1003 } }),
@@ -385,13 +389,13 @@ describe('buildRevert', () => {
 
 	it('leaves out edges its own task_template write removes: a delete of one 404s the batch (104)', () => {
 		// 601 (lay on comp): both ends go back to A's tasks. 602: paint retires it. 603: a kept edge.
-		const { batch } = buildRevert(record(), after.edges);
+		const { batch } = revert(record(), after.edges);
 		expect(batch.filter((r) => r.entity === 'TaskDependency')).toEqual([]);
 	});
 
 	it("deletes the apply's edges between old Tasks when the entity had no template (104: null removes nothing)", () => {
 		const fresh = { ...before, entity: { ...before.entity, taskTemplate: null } };
-		const { batch } = buildRevert(record({ before: fresh }), after.edges);
+		const { batch } = revert(record({ before: fresh }), after.edges);
 		expect(batch.slice(3, 6)).toEqual([
 			upd('Shot', 7557, { task_template: null }),
 			del('Task', 16),
@@ -401,52 +405,65 @@ describe('buildRevert', () => {
 
 	it('deletes them too when there is no task_template write (entity already on the template)', () => {
 		const onB = { ...before, entity: { ...before.entity, taskTemplate: { type: 'TaskTemplate', id: B_ID } } };
-		const { batch } = buildRevert(record({ before: onB }), after.edges);
+		const { batch } = revert(record({ before: onB }), after.edges);
 		expect(batch).toContainEqual(del('TaskDependency', 601));
 	});
 
 	it('deletes an added edge with no end on the old template; the write leaves it (102, 109)', () => {
 		const rec = record();
 		rec.addedEdges.push(edge(605, 17, 15));
-		const { batch } = buildRevert(rec, [...after.edges, edge(605, 17, 15)]);
+		const { batch } = revert(rec, [...after.edges, edge(605, 17, 15)]);
 		expect(batch.filter((r) => r.entity === 'TaskDependency')).toEqual([del('TaskDependency', 605)]);
 	});
 
-	it('leaves an added edge with one end on the old template to the edge revert (mixed ends: not measured, 104)', () => {
+	it('deletes an added edge whose upstream alone goes back to the old template: the write keeps it (111)', () => {
 		const rec = record();
-		rec.addedEdges.push(edge(606, 17, 13));
+		rec.addedEdges.push(edge(606, 17, 13)); // fx on lay: lay back on A, fx not
 		const live = [...after.edges, edge(606, 17, 13)];
-		expect(buildRevert(rec, live).batch.filter((r) => r.entity === 'TaskDependency')).toEqual([]);
-		expect(buildEdgeRevert(rec, live).remove).toContainEqual(del('TaskDependency', 606));
+		expect(revert(rec, live).batch.filter((r) => r.entity === 'TaskDependency')).toEqual([del('TaskDependency', 606)]);
+	});
+
+	it('leaves out an added edge whose downstream goes back to the old template, whatever the upstream (111: 404)', () => {
+		const rec = record();
+		rec.addedEdges.push(edge(607, 13, 17), edge(608, 12, 9901)); // lay on fx; roto on another Shot's Task
+		const live = [...after.edges, edge(607, 13, 17), edge(608, 12, 9901)];
+		expect(revert(rec, live).batch.filter((r) => r.entity === 'TaskDependency')).toEqual([]);
+		// Still live after the batch (the write kept it after all): the edge revert removes it.
+		expect(buildEdgeRevert(rec, live).remove).toContainEqual(del('TaskDependency', 607));
 	});
 
 	it('deletes only added edges read live before the batch: a gone one would 404 (104)', () => {
 		const fresh = { ...before, entity: { ...before.entity, taskTemplate: null } };
 		const live = after.edges.filter((e) => e.id !== 601);
-		expect(buildRevert(record({ before: fresh }), live).batch.some((r) => r.entity === 'TaskDependency')).toBe(false);
+		expect(revert(record({ before: fresh }), live).batch.some((r) => r.entity === 'TaskDependency')).toBe(false);
 	});
 
 	it('never deletes an edge the apply re-created under keep: it stands for the old row (109)', () => {
 		const fresh = { ...before, entity: { ...before.entity, taskTemplate: null } };
 		const rec = record({ ...withOutside, before: { ...withOutside.before, entity: fresh.entity } });
-		const { batch } = buildRevert(rec, withOutside.after.edges);
+		const { batch } = revert(rec, withOutside.after.edges);
 		expect(batch).not.toContainEqual(del('TaskDependency', 603));
 		expect(batch).not.toContainEqual(del('TaskDependency', 604));
 	});
 
-	it('revives deleted Tasks one call each, before the batch (103: a batch delete retires; 096)', () => {
-		expect(buildRevert(record(), after.edges).reviveTasks).toEqual([14]);
+	it('revives deleted Tasks one call each, before the batch (103: a batch delete retires; 110)', () => {
+		expect(tasksToRevive(record())).toEqual([14]);
+	});
+
+	it('refuses to build the batch before every deleted Task is revived (110: the write would re-create it)', () => {
+		expect(() => buildRevert(record(), after.edges, [])).toThrow(/revive/i);
+		expect(() => buildRevert(record(withDeletedA), after.edges, [99])).toThrow(/14/);
+		expect(() => buildRevert(record(), after.edges, [14])).not.toThrow();
 	});
 
 	it('notes what undo cannot restore', () => {
-		const { notes } = buildRevert(record(), after.edges);
+		const { notes } = revert(record(), after.edges);
 		expect(notes).toContainEqual({
 			code: 'dates_moved',
 			taskId: 13,
 			before: { start: '2026-03-02', due: '2026-03-03' },
 			after: { start: '2026-03-04', due: '2026-03-05' }
 		});
-		expect(notes).toContainEqual({ code: 'edges_recreated', edgeIds: [504, 506] });
 		expect(notes).toContainEqual({ code: 'history_kept' });
 	});
 
@@ -460,8 +477,8 @@ describe('buildRevert', () => {
 			after: { tasks: onB.tasks, edges: onB.edges },
 			batch: []
 		});
-		expect(buildRevert(rec, onB.edges).batch).toEqual([]);
-		expect(buildRevert(rec, onB.edges).reviveTasks).toEqual([]);
+		expect(revert(rec, onB.edges).batch).toEqual([]);
+		expect(tasksToRevive(rec)).toEqual([]);
 	});
 });
 
@@ -558,9 +575,148 @@ describe('buildEdgeRevert', () => {
 		expect(r.create).toContainEqual(createReq(edge(509, 12, 15)));
 	});
 
+	it("matches A's own edge by pair when the write re-created it under a new id (111)", () => {
+		const reborn = [edge(4615, 12, 11), ...live.filter((e) => e.id !== 501)];
+		const r = buildEdgeRevert(record(), reborn);
+		expect(r.create.map((c) => downOf(c))).not.toContain(12);
+		expect(r.remove).not.toContainEqual(del('TaskDependency', 4615));
+		expect(r.left).not.toContainEqual(edge(4615, 12, 11));
+		expect(r.notes).toContainEqual({ code: 'edges_recreated', edgeIds: [501, 504, 506] });
+	});
+
+	it("re-creates a pre-merge edge between the old template's Tasks that its write erased (111: roto on lay)", () => {
+		const rec = record({ before: { ...before, edges: [...before.edges, edge(510, 12, 13, 'start-to-start', 0)] } });
+		const r = buildEdgeRevert(rec, live);
+		expect(r.create).toContainEqual(createReq(edge(510, 12, 13, 'start-to-start', 0)));
+	});
+
+	it('does not count a different type or offset on the pair as the old edge: frees the pair, re-creates (111)', () => {
+		const r = buildEdgeRevert(record(), [...live.filter((e) => e.id !== 501), edge(4616, 12, 11, 'start-to-start', 0)]);
+		expect(r.remove).toContainEqual(del('TaskDependency', 4616));
+		expect(r.create).toContainEqual(createReq(edge(501, 12, 11)));
+	});
+
+	it('notes the edges that come back under a new id and the Tasks whose dates may move (095, 092)', () => {
+		const r = buildEdgeRevert(record(), live);
+		// 504 re-created here; 506 stands as 603 since the apply. 505 is revived: same id.
+		expect(r.notes).toEqual([
+			{ code: 'edges_recreated', edgeIds: [504, 506] },
+			{ code: 'dates_may_move', taskIds: [11, 15] }
+		]);
+	});
+
 	it('does nothing when the live edges are the edges before', () => {
 		const r = buildEdgeRevert(record(), before.edges);
-		expect(r).toEqual({ remove: [], revive: [], create: [], left: [] });
+		expect(r).toEqual({ remove: [], revive: [], create: [], left: [], notes: [] });
+	});
+});
+
+// Probe 112's shape. A (101): w 1100, x 1101, y 1102; x on w, y on x. B (202): x 2101, z 2102.
+// xa (21) and xb (22) both on A.x before; xa held A's edges. The merge unlinked xb, claimed xa.
+describe('buildRevert, two Tasks linked to one old template task (112)', () => {
+	const A_LINK = (id: Id) => ({ id, templateId: 101 });
+	const xFields = (content: string, desc: string, order: number) => ({ content, sg_description: desc, sg_sort_order: order });
+	const w = task(20, 'w', { link: A_LINK(1100), fields: xFields('w', 'w', 10) });
+	const xa = task(21, 'x', { link: A_LINK(1101), fields: xFields('x', 'hand-a', 55) });
+	const xb = task(22, 'x_hand', { link: A_LINK(1101), fields: { sg_description: 'hand-b', sg_sort_order: 99 } });
+	const y = task(23, 'y', { link: A_LINK(1102), fields: xFields('y', 'y', 30) });
+	const z = task(24, 'z', { link: { id: 2102, templateId: B_ID } });
+	const shotA = { ...before.entity, taskTemplate: A };
+
+	function twice(o: { edges?: Edge[]; batch?: BatchRequest[] } = {}): UndoRecord {
+		const edges = o.edges ?? [edge(901, 21, 20), edge(902, 23, 21)];
+		return buildUndoRecord({
+			runId: 'run-112',
+			templateId: B_ID,
+			appliedAt: '2026-09-24T12:00:00Z',
+			before: { ...before, entity: shotA, tasks: [w, xa, xb, y], edges },
+			after: {
+				tasks: [
+					w,
+					{ ...xa, templateTask: { id: 2101, templateId: B_ID }, fields: xFields('x', 'B.x', 120) },
+					{ ...xb, templateTask: null },
+					y,
+					z
+				],
+				edges: [...edges.filter((e) => e.id !== 901), edge(903, 24, 21)]
+			},
+			batch: o.batch ?? [
+				upd('Task', 22, { template_task: null }),
+				upd('Task', 21, { template_task: { type: 'Task', id: 2101 } }),
+				upd('Shot', 7557, { task_template: null }),
+				upd('Shot', 7557, { task_template: { type: 'TaskTemplate', id: B_ID } })
+			]
+		});
+	}
+	const links = (batch: BatchRequest[]) =>
+		batch.filter((r) => r.request_type === 'update' && ('template_task' in r.data || 'task_template' in r.data));
+	const linkA = (id: Id) => upd('Task', id, { template_task: { type: 'Task', id: 1101 } });
+	const shotToA = upd('Shot', 7557, { task_template: { type: 'TaskTemplate', id: 101 } });
+
+	it('relinks the Task that held the edges before the task_template write, the other after it', () => {
+		const { batch, notes } = revert(twice(), [edge(902, 23, 21), edge(903, 24, 21)]);
+		expect(links(batch)).toEqual([linkA(21), shotToA, linkA(22)]);
+		const at = (r: BatchRequest) => batch.findIndex((x) => JSON.stringify(x) === JSON.stringify(r));
+		expect(at(linkA(22))).toBeGreaterThan(at(shotToA));
+		expect(at(linkA(22))).toBeLessThan(at(del('Task', 24)));
+		expect(notes.some((n) => n.code === 'linked_twice_unmeasured')).toBe(false);
+	});
+
+	it('relinks the other one first when it is the one that held the edges', () => {
+		const rec = twice({ edges: [edge(901, 22, 20), edge(902, 23, 22)] });
+		expect(links(revert(rec, []).batch)).toEqual([linkA(22), shotToA, linkA(21)]);
+	});
+
+	it('warns, without a measured order, when both Tasks held edges', () => {
+		const rec = twice({ edges: [edge(901, 21, 20), edge(902, 23, 21), edge(904, 22, 20)] });
+		const { batch, notes } = revert(rec, []);
+		expect(links(batch)).toEqual([linkA(21), shotToA, linkA(22)]);
+		expect(notes).toContainEqual({ code: 'linked_twice_unmeasured', templateTask: 1101, taskIds: [21, 22] });
+	});
+
+	it('relinks a claimed Task after the write when a Task left on that template task held the edges', () => {
+		// xb stayed on A.x through the merge (a loser linked elsewhere is left alone) and held the edges.
+		const rec = twice({
+			edges: [edge(901, 22, 20), edge(902, 23, 22)],
+			batch: [
+				upd('Task', 21, { template_task: { type: 'Task', id: 2101 } }),
+				upd('Shot', 7557, { task_template: null }),
+				upd('Shot', 7557, { task_template: { type: 'TaskTemplate', id: B_ID } })
+			]
+		});
+		const { batch, notes } = revert(rec, []);
+		expect(links(batch)).toEqual([shotToA, linkA(21)]);
+		expect(notes.some((n) => n.code === 'linked_twice_unmeasured')).toBe(false);
+	});
+
+	it('warns when the relinked Task held the edges and the one left linked did not (unmeasured)', () => {
+		const rec = twice({
+			batch: [
+				upd('Task', 21, { template_task: { type: 'Task', id: 2101 } }),
+				upd('Shot', 7557, { task_template: null }),
+				upd('Shot', 7557, { task_template: { type: 'TaskTemplate', id: B_ID } })
+			]
+		});
+		const { batch, notes } = revert(rec, []);
+		expect(links(batch)).toEqual([linkA(21), shotToA]);
+		expect(notes).toContainEqual({ code: 'linked_twice_unmeasured', templateTask: 1101, taskIds: [21, 22] });
+	});
+
+	it("writes content back with the other fields: A's re-sync renames the Task it wires (112)", () => {
+		const { batch } = revert(twice(), []);
+		expect(batch).toContainEqual(upd('Task', 22, { content: 'x_hand', sg_description: 'hand-b', sg_sort_order: 99 }));
+		expect(batch).toContainEqual(upd('Task', 21, xFields('x', 'hand-a', 55)));
+	});
+});
+
+describe('buildRevert, field write-back', () => {
+	it('writes a step read as an id (read.ts) back as a Step link', () => {
+		const withStep = {
+			...before,
+			tasks: before.tasks.map((t) => (t.id === 11 ? { ...t, fields: { ...t.fields, step: 4 } } : t))
+		};
+		const { batch } = revert(record({ before: withStep }), after.edges);
+		expect(batch).toContainEqual(upd('Task', 11, { ...f('hand', 1, 480), content: 'comp', step: { type: 'Step', id: 4 } }));
 	});
 });
 
