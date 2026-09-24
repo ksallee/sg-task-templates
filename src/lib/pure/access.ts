@@ -1,19 +1,24 @@
 /**
  * Access preflight: pure request-building and response classification for probe 094 (recipe
- * 0XX_check_permission_before_writing). Learns, before any write, whether the signed-in caller may
- * update a Task, update the entity, create a Task and delete a Task — with calls the server refuses
- * before they land: no-op PUT of the current value (update), a POST with a bad status (create), a
- * `_batch` of [delete, update of a missing id] that rolls back (delete). Permission is checked
- * first; an allowed caller gets a different error and nothing is written either way (094).
+ * 017_check_permission_before_writing). Learns, before any write, whether the signed-in caller may
+ * update a Task, update the entity, create a Task and delete a Task, with calls the server refuses
+ * before they land: a plain no-op PUT of the current value (update), a plain POST with a bad status
+ * (create), a `_batch` of [delete, update of a missing id] that rolls back (delete). Permission is
+ * checked first; an allowed caller gets a different error and nothing is written either way (094).
  *
- * The I/O that sends these requests, reads `GET /schema/<Type>/fields?project_id=` and parses the
- * HTTP responses into `AccessResponse` is not in scope here: this module only builds what to send
- * and classifies what comes back.
+ * The I/O that sends these requests, reads the schema and parses the HTTP responses into
+ * `AccessResponse` is not in scope here: this module only builds what to send and classifies what
+ * comes back. That I/O must:
+ * - read `GET /schema/<Type>/fields?project_id=<id>` with the project, as 017's `editable_fields`
+ *   does: `editable` is per caller there (094). sg-widgets' schema service (schema-service.ts:9)
+ *   reads fields at site scope, so it cannot serve this read.
+ * - before the delete check, confirm `GET /entity/tasks/999999999` is a 404, as 017's `_rolled_back`
+ *   does, and not run the check otherwise.
  *
- * 094's caveat carries through: the refused branch was measured via `sudo_as_login`, not a signed-in
- * App Session Launcher session (052), so a response this module does not recognize classifies as
- * `unknown`, never `refused` or `allowed`. `summarizeAccess` never lets an unknown make the write
- * look short.
+ * 094's caveat carries through: the refused branch was measured via `sudo_as_login`. This app checks
+ * with the person's App Session Launcher session (052), which was not measured as a refused caller,
+ * so a response this module does not recognize classifies as `unknown`, never `refused` or
+ * `allowed`. `summarizeAccess` never lets an unknown make the write look short.
  */
 
 import type {
@@ -35,13 +40,12 @@ import type {
 } from './types';
 import type { FieldSchema } from 'sg-widgets-core';
 
-/** A Task id that does not exist, so the delete check's batch always rolls back (094, recipe 0XX). */
+/** A Task id that does not exist, so the delete check's batch always rolls back (094, 017). */
 export const ACCESS_DELETE_SENTINEL_ID = 999999999;
 
-/** Always invalid: refused on validation, never on value, whoever the caller is (094). */
 export const ACCESS_INVALID_STATUS = 'zz_not_a_status';
 
-/** The create check's `content`, so a landed row (the rare late-bump case, 094) reads as a probe. */
+/** The create check's `content`, as 017's `can_create_task` sends it. */
 export const ACCESS_CREATE_CONTENT = 'permission check';
 
 const CAPABILITY_LABEL: Record<AccessCapability, string> = {
@@ -204,7 +208,8 @@ export function buildAccessWarning(summary: AccessSummary): PlanWarning | null {
 	if (refusedCapabilities.length > 0) parts.push(`cannot ${refusedCapabilities.join(', ')}`);
 	if (refusedFields.length > 0) parts.push(`cannot write ${refusedFields.join(', ')}`);
 	const detail =
-		`Write access looks short: ${parts.join('; ')}. Checked via sudo_as, not this launcher ` +
-		`session (094); a response this run does not recognize is left unknown, not assumed refused.`;
+		`Write access looks short: ${parts.join('; ')}. The corpus measured these refusals via sudo_as ` +
+		`(094); this check ran with the launcher session, a case that is unmeasured, so a response ` +
+		`this run does not recognize is left unknown, not assumed refused.`;
 	return { code: 'access_short', detail, checks: summary.checks, fields: summary.fields };
 }
