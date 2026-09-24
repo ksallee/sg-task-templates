@@ -113,28 +113,47 @@ export function writeSummary(plans: EntityPlan[], opts: RunOptions): WriteSummar
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** What will be written, one sentence per non-zero item, in batch order. */
-export function summaryLines(s: WriteSummary): string[] {
-	const out: string[] = [];
-	const add = (n: number, text: string) => n > 0 && out.push(text);
-	add(s.templateWrites, `task_template written on ${plural(s.templateWrites, 'entity', 'entities')}, one atomic batch each.`);
-	add(s.nothingToWrite, `${plural(s.nothingToWrite, 'entity already matches', 'entities already match')} the template: skipped.`);
-	add(s.claims, `${plural(s.claims, 'existing Task', 'existing Tasks')} linked to the template (claimed), status, assignees and publishes kept.`);
-	add(s.creates, `${plural(s.creates, 'Task', 'Tasks')} created by the template.`);
-	add(s.renames, `${plural(s.renames, 'Task', 'Tasks')} renamed to the template's name.`);
-	add(s.overwrites, `${plural(s.overwrites, 'field', 'fields')} overwritten with the template's value.`);
-	add(s.writeBacks, `${plural(s.writeBacks, 'field', 'fields')} the template would overwrite, written back unchanged.`);
-	add(s.fillIfEmpty, `${plural(s.fillIfEmpty, 'field', 'fields')} filled where empty.`);
-	add(s.omits, `${plural(s.omits, 'extra Task', 'extra Tasks')} set to the omit status.`);
-	add(s.deletes, `${plural(s.deletes, 'extra Task', 'extra Tasks')} deleted${s.deletesWithUsage ? `, ${s.deletesWithUsage} with Versions or PublishedFiles` : ''}.`);
-	add(s.leaves, `${plural(s.leaves, 'extra Task', 'extra Tasks')} left untouched.`);
-	add(s.edgesAdded, `${plural(s.edgesAdded, 'dependency', 'dependencies')} added from the template.`);
-	add(s.edgesRecreated, `${plural(s.edgesRecreated, 'dependency', 'dependencies')} the apply erases, re-created as kept (new ids).`);
-	add(s.edgesRemoved, `${plural(s.edgesRemoved, 'dependency', 'dependencies')} removed.`);
-	add(s.datesCleared, `${plural(s.datesCleared, 'created Task has', 'created Tasks have')} the template's dates cleared.`);
-	add(s.mayMove, `${plural(s.mayMove, 'unpinned Task', 'unpinned Tasks')} may be rescheduled by the new dependencies.`);
-	add(s.wouldViolate, `${plural(s.wouldViolate, 'pinned Task', 'pinned Tasks')} will be flagged dependency_violation.`);
-	return out;
+export interface SummaryGroup {
+	title: string;
+	lines: string[];
+}
+
+/** What will be written, one sentence per non-zero item, grouped (entities, Tasks, fields, dependencies) in batch order. */
+export function summaryGroups(s: WriteSummary): SummaryGroup[] {
+	const groups: SummaryGroup[] = [];
+	let lines: string[] = [];
+	const group = (title: string, fill: () => void) => {
+		lines = [];
+		fill();
+		if (lines.length) groups.push({ title, lines });
+	};
+	const add = (n: number, text: string) => n > 0 && lines.push(text);
+	group('Entities', () => {
+		add(s.templateWrites, `The template is set on ${plural(s.templateWrites, 'entity', 'entities')}, ${s.templateWrites === 1 ? 'in one atomic batch' : 'one atomic batch each'}.`);
+		add(s.nothingToWrite, `${plural(s.nothingToWrite, 'entity already matches', 'entities already match')} the template: skipped.`);
+	});
+	group('Tasks', () => {
+		add(s.claims, `${plural(s.claims, 'existing Task', 'existing Tasks')} linked to ${s.claims === 1 ? 'its template task' : 'their template tasks'} (claimed); ${s.claims === 1 ? 'its' : 'their'} status, assignees and publishes stay.`);
+		add(s.creates, `${plural(s.creates, 'Task', 'Tasks')} created from the template.`);
+		add(s.renames, `${plural(s.renames, 'Task', 'Tasks')} renamed to the template's name.`);
+		add(s.omits, `${plural(s.omits, 'extra Task', 'extra Tasks')} set to the omit status.`);
+		add(s.deletes, `${plural(s.deletes, 'extra Task', 'extra Tasks')} deleted${s.deletesWithUsage ? `, ${s.deletesWithUsage} with Versions or PublishedFiles` : ''}.`);
+		add(s.leaves, `${plural(s.leaves, 'extra Task', 'extra Tasks')} left untouched.`);
+	});
+	group('Fields', () => {
+		add(s.overwrites, `${plural(s.overwrites, 'field', 'fields')} overwritten with the template's value.`);
+		add(s.writeBacks, `${plural(s.writeBacks, 'field', 'fields')} the template would overwrite, written back unchanged.`);
+		add(s.fillIfEmpty, `${plural(s.fillIfEmpty, 'field', 'fields')} filled where empty.`);
+		add(s.datesCleared, `${plural(s.datesCleared, 'created Task has', 'created Tasks have')} the template's dates cleared.`);
+	});
+	group('Dependencies and dates', () => {
+		add(s.edgesAdded, `${plural(s.edgesAdded, 'dependency', 'dependencies')} added from the template.`);
+		add(s.edgesRecreated, `${plural(s.edgesRecreated, 'dependency', 'dependencies')} the apply erases, re-created as kept (new ids).`);
+		add(s.edgesRemoved, `${plural(s.edgesRemoved, 'dependency', 'dependencies')} removed.`);
+		add(s.mayMove, `${plural(s.mayMove, 'unpinned Task', 'unpinned Tasks')} may be rescheduled by the new dependencies.`);
+		add(s.wouldViolate, `${plural(s.wouldViolate, 'pinned Task', 'pinned Tasks')} will be flagged as violating a dependency.`);
+	});
+	return groups;
 }
 
 /** Why the run cannot start, in the order the plan screen fixes them; empty when it can. */

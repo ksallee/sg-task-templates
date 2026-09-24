@@ -3,11 +3,14 @@ import { matchKey } from './matching';
 import {
 	describeDifference,
 	describeNote,
+	groupRows,
 	mergeNotes,
 	nameBook,
 	resultRows,
 	undoFileName,
-	undoPreviewNotes
+	undoPreviewNotes,
+	type ResultKind,
+	type ResultRow
 } from './result-view';
 import type { EntityPlan, EntityRef, EntityTask, Run, TemplateTask, UndoRecord } from './types';
 
@@ -233,6 +236,33 @@ describe('resultRows', () => {
 			['sh6', 'landed', [], null, true, false],
 			['sh7', 'failed', [], 'Interrupted', true, false]
 		]);
+	});
+});
+
+describe('groupRows', () => {
+	it('groups rows by outcome, what needs a look first, empty groups left out, run order kept inside', () => {
+		const row = (n: number, kind: ResultKind): ResultRow => ({
+			key: `Shot:${n}`,
+			entity: shot(n),
+			label: `sh${n}`,
+			kind,
+			differences: [],
+			error: null,
+			record: null,
+			canUndo: false,
+			canRetry: false
+		});
+		const rows = [row(1, 'clean'), row(2, 'failed'), row(3, 'differences'), row(4, 'clean'), row(5, 'landed'), row(6, 'undone'), row(7, 'not_applied'), row(8, 'landing')];
+		expect(groupRows(rows).map((g) => [g.kind, g.title, g.rows.map((r) => r.label)])).toEqual([
+			['failed', 'Failed', ['sh2']],
+			['differences', 'Landed with differences', ['sh3']],
+			['landing', 'Landing', ['sh8']],
+			['clean', 'Landed clean', ['sh1', 'sh4']],
+			['landed', 'Landed earlier', ['sh5']],
+			['undone', 'Undone', ['sh6']],
+			['not_applied', 'Not applied', ['sh7']]
+		]);
+		expect(groupRows([])).toEqual([]);
 	});
 });
 
