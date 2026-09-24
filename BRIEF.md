@@ -56,6 +56,7 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
 | `probe/79-100` (probe branch, #79, not yet on dev) | Writing `duration` on a dependent Task does not pin it; it recomputes dates from upstream and cascades downstream. |
 | `probe/79-101` (probe branch, #79, not yet on dev) | On apply, a template edge replaces an existing edge of another type or the reverse edge; the old edge is erased, not revivable, so undo must re-create it from the recorded type and offset. Edges to Tasks outside the template are kept. |
 | `probe/79-102` (probe branch, #79, not yet on dev) | Writing `task_template`=T re-syncs every Task already linked to T, claimed-this-run included. Overwritten when T's value is non-empty: `content`, `step`, `est_in_mins`, `sg_description`, `sg_sort_order`, `task_reviewers`, `milestone`, custom fields (seen: `sg_priority_1`); `duration` only on a Task with no dates. Kept: `sg_status_list` always; `start_date`/`due_date` kept when set, filled and cascaded when empty. Filled only if empty: `task_assignees`. An empty template value never clears. Edges between T-linked Tasks: missing template edge added, wrong type/offset edge deleted and re-created as T's, non-template edge deleted; edges to Tasks outside the template kept. Writing `null` or another template touches no T-linked Task. Corrects 084 and recipe 015. |
+| `probe/79-094` (probe branch, #79, not yet on dev) | A harmless access pre-check: `GET /schema/<Type>/fields?project_id=` gives `editable` per field (`false` is a refusal, `true` only maybe); confirmed by a no-op PUT of a Task's current value (refused: 400 "not editable for this user"), a create with a deliberately bad `sg_status_list` (refused: "cannot be created by this user", vs. a plain invalid-status 400 if allowed), and a delete run as one `_batch` [delete, update of a missing id] (refused: "can not be deleted by this user"; allowed: 404 and rollback, nothing written either way). Recipe `0XX_check_permission_before_writing`. Measured via `sudo_as`, not a real launcher session (partial). |
 
 ## Decided
 
@@ -141,8 +142,10 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
      a fresh read, then continue or undo.
 7. **Who uses it**
    - Anyone, writing as themselves. No level gate: permission rules are not readable (027).
-   - Before the plan, a few harmless calls test write access and warn if it looks short. Failed writes
-     are reported per entity.
+   - Before the plan, an access pre-check (recipe `0XX_check_permission_before_writing`, probe 094):
+     `GET /schema/<Type>/fields?project_id=` for `editable`, backed by a no-op PUT, a deliberately bad
+     create and a delete run as one `_batch`, all refusable without writing anything. Warns if it looks
+     short. Failed writes are reported per entity.
    - A template whose `entity_type` differs from the entity: warning in the plan, allowed.
 8. **Output**: the plan as CSV, for review before applying; the result as the undo record JSON.
 9. **Views**
@@ -157,8 +160,8 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
 ## Corpus gaps
 
 sg-groundtruth [#79](https://github.com/ksallee/sg-groundtruth/issues/79) (probe branches
-`probe/79-NNN`, not yet on `dev`): answered — 092, 093, 095, 096, 097, 098, 099, 100, 101, 102.
-Pending: 094, the access check.
+`probe/79-NNN`, not yet on `dev`): answered — 092, 093, 094, 095, 096, 097, 098, 099, 100, 101, 102.
+094 partial: measured via `sudo_as` as an Artist, not a real App Session Launcher session.
 
 ## Client gaps (sg-widgets)
 
