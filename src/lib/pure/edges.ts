@@ -17,6 +17,8 @@
  * re-creates the old edge after the apply, in the same batch; for a replaced edge it first deletes
  * the template's copy, since a pair holds one row and a two-Task loop is a 400 (085). That copy is
  * listed in `transientAdded`, not `expectedAdded`, which holds only edges that survive the run.
+ * A kept edge whose re-creation would close a loop of any length is refused by the server (085,
+ * 107) and rolls the whole batch back: it is marked `closesLoop` and defaults to remove.
  *
  * Date impact is graph level. An edge that comes to exist reschedules its unpinned downstream Task
  * at once and the move cascades (092, 087, 100); a pinned Task holds and flags
@@ -26,6 +28,7 @@
  */
 
 import type {
+	AffectedEdge,
 	Edge,
 	EdgeAction,
 	EdgePlan,
@@ -113,8 +116,9 @@ export function planEdges(input: EdgeInput): EdgePlan {
 	};
 	const standing: GraphEdge[] = []; // existing edges the apply keeps
 	const satisfied = new Set<string>(); // pairs already holding the template's edge
-	const templateCopyDropped = new Map<string, Id>(); // pair -> kept edge whose keep deletes the template's copy
 	const created: GraphEdge[] = []; // edges that come to exist: sources of date impact
+	// Affected edges with what the loop check needs: graph edge, replaced pair, explicit action.
+	const pending: Array<{ a: AffectedEdge; g: GraphEdge; pair: string | null; explicit: boolean }> = [];
 
 	for (const edge of edges) {
 		const down = mappedExisting.has(edge.downstream);
@@ -131,11 +135,13 @@ export function planEdges(input: EdgeInput): EdgePlan {
 			standing.push(g);
 			continue;
 		}
+		const explicit = edge.id !== null ? actions[edge.id] : undefined;
+		const action = explicit ?? 'keep';
+		const existing = edge as Edge & { id: Id };
 		if (!up) {
 			// A linked Task depends on an outside Task: the apply erases the edge (109).
-			const action = (edge.id !== null && actions[edge.id]) || 'keep';
-			plan.affected.push({ existing: edge as Edge & { id: Id }, cause: 'outside_upstream', replacedBy: null, action });
-			if (action === 'keep') created.push(g);
+			const a: AffectedEdge = { existing, cause: 'outside_upstream', replacedBy: null, action };
+			pending.push({ a, g, pair: null, explicit: explicit !== undefined });
 			continue;
 		}
 		const key = pairKey(g.down, g.up);
@@ -145,17 +151,56 @@ export function planEdges(input: EdgeInput): EdgePlan {
 			standing.push(g);
 			continue;
 		}
-		const action = (edge.id !== null && actions[edge.id]) || 'keep';
-		plan.affected.push({
-			existing: edge as Edge & { id: Id },
+		const a: AffectedEdge = {
+			existing,
 			cause: tpl ? 'replaced' : 'not_in_template',
 			replacedBy: tpl ? { ...tpl.edge, id: null, downstream: idOf(tpl.down), upstream: idOf(tpl.up) } : null,
 			action
-		});
-		if (action === 'keep') {
-			created.push(g);
-			if (tpl) templateCopyDropped.set(key, edge.id as Id);
+		};
+		pending.push({ a, g, pair: tpl ? key : null, explicit: explicit !== undefined });
+	}
+
+	// Loop check over the after-apply graph (085: 2 Tasks, 107: 3+ Tasks; either is a 400 that rolls
+	// the batch back). Base: edges the apply keeps, plus T's copies that survive the apply's own
+	// writes. Kept edges are then re-created in plan order; one that would close a loop is marked and
+	// defaults to remove. A replaced edge that falls back to remove lets T's copy stand.
+	const keptPair = new Set(pending.filter((p) => p.pair && p.a.action === 'keep').map((p) => p.pair!));
+	const graph = new Map<Node, Set<Node>>(); // up -> downs
+	const link = (g: GraphEdge) => graph.set(g.up, (graph.get(g.up) ?? new Set()).add(g.down));
+	const reaches = (from: Node, to: Node) => {
+		const seen = new Set<Node>();
+		const stack = [from];
+		while (stack.length > 0) {
+			const n = stack.pop()!;
+			if (n === to) return true;
+			if (seen.has(n)) continue;
+			seen.add(n);
+			stack.push(...(graph.get(n) ?? []));
 		}
+		return false;
+	};
+	const tplGraph = (pair: string): GraphEdge => {
+		const tpl = templateOnPair.get(pair)!;
+		return { down: nodeOf(tpl.down), up: nodeOf(tpl.up) };
+	};
+	standing.forEach(link);
+	for (const pair of templateOnPair.keys()) if (!satisfied.has(pair) && !keptPair.has(pair)) link(tplGraph(pair));
+	for (const p of pending) {
+		if (p.a.action !== 'keep') continue;
+		if (reaches(p.g.down, p.g.up)) {
+			p.a.closesLoop = true;
+			if (!p.explicit) p.a.action = 'remove';
+		}
+		if (p.a.action === 'keep') link(p.g);
+		else if (p.pair) link(tplGraph(p.pair));
+	}
+
+	const templateCopyDropped = new Map<string, Id>(); // pair -> kept edge whose keep deletes the template's copy
+	for (const p of pending) {
+		plan.affected.push(p.a);
+		if (p.a.action !== 'keep') continue;
+		created.push(p.g);
+		if (p.pair) templateCopyDropped.set(p.pair, p.a.existing.id);
 	}
 
 	for (const [key, tpl] of templateOnPair) {

@@ -331,6 +331,78 @@ describe('planEdges: outside upstream (109)', () => {
 	});
 });
 
+describe('planEdges: kept edges that would close a loop (085, 107)', () => {
+	it('a not-in-template edge closing a 3-Task loop with the added template edges: closesLoop, remove by default', () => {
+		// template: 102 on 101, 103 on 102. Site: 101 on 103. Re-created, it closes 101 -> 102 -> 103 -> 101.
+		const back = e(101, 103);
+		const plan = planEdges({
+			template: template([e(2, 1), e(3, 2)], [1, 2, 3]),
+			tasks: [t(101), t(102), t(103)],
+			edges: [back],
+			mapping: map123
+		});
+		expect(plan.affected).toEqual([{ existing: back, cause: 'not_in_template', replacedBy: null, closesLoop: true, action: 'remove' }]);
+		expect(plan.expectedAdded).toHaveLength(2);
+		expect(plan.mayMove).toEqual([102, 103]); // not re-created: 101 does not move
+	});
+
+	it('an explicit keep is honored, still marked', () => {
+		const back = e(101, 103);
+		const plan = planEdges({
+			template: template([e(2, 1), e(3, 2)], [1, 2, 3]),
+			tasks: [t(101), t(102), t(103)],
+			edges: [back],
+			mapping: map123,
+			edgeActions: { [back.id!]: 'keep' }
+		});
+		expect(plan.affected[0]).toMatchObject({ closesLoop: true, action: 'keep' });
+	});
+
+	it('an outside-upstream edge closing a loop through a kept outside-downstream edge (109)', () => {
+		// template: 102 on 101. Site: 104 on 102 (kept by the apply), 101 on 104 (erased, re-created closes the loop).
+		const up = e(101, 104);
+		const plan = planEdges({
+			template: template([e(2, 1)], [1, 2]),
+			tasks: [t(101), t(102), t(104)],
+			edges: [e(104, 102), up],
+			mapping: map123
+		});
+		expect(plan.affected).toEqual([{ existing: up, cause: 'outside_upstream', replacedBy: null, closesLoop: true, action: 'remove' }]);
+	});
+
+	it('a replaced edge closing a loop falls back to remove: the template copy survives', () => {
+		// template: 102 on 101, 103 on 101, 102 on 103. Site: 101 on 102 (reverse, replaced).
+		// Re-created: 101 -> 103 -> 102 -> 101.
+		const rev = e(101, 102);
+		const tpl = e(2, 1);
+		const plan = planEdges({
+			template: template([tpl, e(3, 1), e(2, 3)], [1, 2, 3]),
+			tasks: [t(101), t(102), t(103)],
+			edges: [rev],
+			mapping: map123
+		});
+		expect(plan.affected[0]).toMatchObject({ cause: 'replaced', closesLoop: true, action: 'remove' });
+		expect(plan.transientAdded).toEqual([]);
+		expect(plan.expectedAdded.map((a) => a.templateEdge)).toContain(tpl);
+	});
+
+	it('two kept edges that loop only together: the first stays kept, the second is marked', () => {
+		// template: 102 on 101. Site: 103 on 102, 101 on 103 (both not in template).
+		const a = e(103, 102);
+		const b = e(101, 103);
+		const plan = planEdges({
+			template: template([e(2, 1)], [1, 2, 3]),
+			tasks: [t(101), t(102), t(103)],
+			edges: [a, b],
+			mapping: map123
+		});
+		expect(plan.affected.map((x) => [x.existing.id, x.closesLoop ?? false, x.action])).toEqual([
+			[a.id, false, 'keep'],
+			[b.id, true, 'remove']
+		]);
+	});
+});
+
 describe('planEdges: left alone', () => {
 	it('lists an edge where an extra depends on a mapped Task, never touches it (101 control, 109)', () => {
 		const ctl = e(104, 101);
