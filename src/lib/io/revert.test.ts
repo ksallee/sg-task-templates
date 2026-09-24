@@ -89,6 +89,14 @@ describe('revertEntity', () => {
 		expect(rows.find((r) => r.id === omitted.id)?.sg_status_list).toBe('ip');
 	});
 
+	it('counts a Task already live as revived on a rerun (revive answers false)', async () => {
+		const s = spy({ batch: async () => [], revive: async () => false });
+		const rec = record({ type: 'Shot', id: 1 }, { deletedTasks: [10], omitted: [{ taskId: 11, previousStatus: 'ip' }] });
+		const out = await revertEntity(rec, { client: s.client, read: async (e) => snap(e) });
+		expect(out.kind).toBe('ok');
+		expect(s.log).toEqual(['revive Task 10', 'batch update Task 11']);
+	});
+
 	it('reverts edges from a fresh read: remove, then revive (095), then create', async () => {
 		const s = spy({ batch: async () => [], revive: async () => true });
 		// Before: e1 (a DELETE the apply sent, revivable) and e2 (erased by the apply, 101).

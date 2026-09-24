@@ -11,7 +11,7 @@
  */
 
 import type { SgClient } from 'sg-widgets-core';
-import { buildEdgeRevert, buildRevert } from '$lib/pure/undo';
+import { buildEdgeRevert, buildRevert, tasksToRevive } from '$lib/pure/undo';
 import { errorOf } from '$lib/pure/run';
 import type { Edge, EntityRef, Id, UndoNote, UndoRecord } from '$lib/pure/types';
 import { DEFAULT_CONCURRENCY, runPool } from './pool';
@@ -47,10 +47,15 @@ export async function revertEntity(rec: UndoRecord, deps: RevertDeps): Promise<R
 	const entity = rec.entity;
 	let stage: RevertStage = 'revive_tasks';
 	try {
-		for (const id of rec.deletedTasks) await client.revive('Task', id);
+		// `false` = already live (a rerun): revived all the same.
+		const revived: Id[] = [];
+		for (const id of tasksToRevive(rec)) {
+			await client.revive('Task', id);
+			revived.push(id);
+		}
 
 		stage = 'read';
-		const plan = buildRevert(rec, await liveEdges(read, entity));
+		const plan = buildRevert(rec, await liveEdges(read, entity), revived);
 		stage = 'batch';
 		if (plan.batch.length) await client.batch(plan.batch);
 
