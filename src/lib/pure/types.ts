@@ -394,7 +394,14 @@ export interface AffectedEdge {
 	 */
 	cause: 'not_in_template' | 'replaced' | 'outside_upstream';
 	replacedBy: Edge | null; // the template edge, for `replaced`
-	action: EdgeAction; // default 'keep'
+	/**
+	 * Re-creating it after the apply would close a dependency loop (any length) in the after-apply
+	 * graph: the server refuses it (085: 2 Tasks; 107: 3+ Tasks, 400) and the whole batch rolls back.
+	 * Its action then defaults to 'remove' and the entity carries an `edge_closes_loop` warning.
+	 * Absent = no loop.
+	 */
+	closesLoop?: true;
+	action: EdgeAction; // default 'keep'; 'remove' when `closesLoop`
 }
 
 export interface EdgePlan {
@@ -428,7 +435,9 @@ export type PlanWarning =
 	| { code: 'delete_with_usage'; taskId: Id; usage: TaskUsage }
 	| { code: 'rename'; taskId: Id; from: string | null; to: string | null; handRenamed: boolean }
 	| { code: 'access_short'; detail: string } // 094 pending
-	| { code: 'unresolved_conflict'; templateTaskIds: Id[] };
+	| { code: 'unresolved_conflict'; templateTaskIds: Id[] }
+	/** A kept edge would close a loop after the apply (085, 107): removed by default. */
+	| { code: 'edge_closes_loop'; edgeId: Id; action: EdgeAction };
 
 export interface EntityPlan {
 	entity: EntitySnapshot['entity'];
