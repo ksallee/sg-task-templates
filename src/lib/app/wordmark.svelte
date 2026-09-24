@@ -1,8 +1,8 @@
 <!--
 	The app's mark and lockup, a sibling of sg-widgets' and sg-notes' (sg-widgets
-	`docs/design-rules.md` rule 10): two tiles, the accent once on the back one, the quiet ink in
-	front, lifted off by a gap in the colour of the surface under the mark. What makes it this
-	app's is the front tile: a template, three task lines cut into it.
+	`docs/design-rules.md` rule 10) in its type and its two inks: the accent once, the quiet ink
+	for the rest. The mark is its own: a rubber stamp over its imprint, one template pressed onto
+	many entities. The imprint is the accent; the stamp is `currentColor` at 30% over the ground.
 	`src/lib/assets/favicon.svg` is this drawing with the default palette's values pinned.
 -->
 <script lang="ts">
@@ -12,12 +12,11 @@
 </script>
 
 <span class="wordmark" translate="no">
-	<svg class="mark" style="width:{size};height:{size}" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-		<rect class="tile accent" x="2" y="2" width="22" height="22" />
-		<rect class="tile front" x="13" y="13" width="25" height="25" />
-		<rect class="line" x="18" y="19" width="15" height="2.4" rx="1.2" />
-		<rect class="line" x="18" y="24.8" width="11" height="2.4" rx="1.2" />
-		<rect class="line" x="18" y="30.6" width="13" height="2.4" rx="1.2" />
+	<svg class="mark" style="width:{size};height:{size}" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+		<circle class="quiet" cx="16" cy="6.5" r="4.5" />
+		<path class="quiet" d="M13.2 10.5h5.6l1.4 5h-8.4z" />
+		<rect class="quiet" x="4" y="15.5" width="24" height="7" rx="2" />
+		<rect class="accent" x="5" y="25" width="22" height="4.5" rx="1.5" />
 	</svg>
 	<span class="type"><span class="head">{head}</span> <span class="tail">{tail}</span></span>
 </span>
@@ -37,29 +36,15 @@
 	.mark {
 		display: block;
 		flex: none;
-		--tile-radius: calc(var(--radius) * 0.5);
 		--ground: var(--mark-ground, var(--background));
-	}
-
-	.tile {
-		rx: var(--tile-radius);
-		ry: var(--tile-radius);
 	}
 
 	.accent {
 		fill: var(--primary);
 	}
 
-	/* The gap that lifts the front tile off the accent one: the stroke is drawn under the fill. */
-	.front {
+	.quiet {
 		fill: color-mix(in oklab, currentColor 30%, var(--ground));
-		stroke: var(--ground);
-		stroke-width: 2.2;
-		paint-order: stroke;
-	}
-
-	.line {
-		fill: var(--ground);
 	}
 
 	.type {
