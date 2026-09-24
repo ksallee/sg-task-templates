@@ -13,10 +13,12 @@
 	import { liveContext } from '$lib/live';
 	import { run, type EntryPoint } from '$lib/app/run.svelte';
 	import { entityListFilters, planBlocker } from '$lib/pure/entry';
+	import { columnsKeyFor, defaultColumns, taskCount } from '$lib/pure/columns';
 	import PageHeader from '$lib/app/page-header.svelte';
 	import PageState from '$lib/app/page-state.svelte';
 	import Notice from '$lib/app/notice.svelte';
 	import EntityTable from '$lib/components/entity-table.svelte';
+	import FieldValue from '$lib/components/field-value.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
@@ -56,16 +58,18 @@
 		void started.then(async () => {
 			if (run.problem || !entityType || projectId === null) return;
 			const context = liveContext();
+			// The type's defaults, keeping the fields its schema has; the user's pick replaces them.
+			const specs = defaultColumns(entityType, await context.schema.fields(entityType));
 			source = createEntitySource({
 				client: context.client,
 				entityType,
-				fields: ['code', 'task_template'],
+				fields: [...new Set(['code', 'task_template', ...specs.map((spec) => spec.path)])],
 				filters: untrack(() => filters),
 				sort: [{ path: 'code', descending: false }],
 				pageSize: 100,
 				mode: 'infinite'
 			});
-			columns = await resolveColumns(context.schema, entityType, ['code', 'task_template']);
+			columns = await resolveColumns(context.schema, entityType, specs);
 			// "Every entity using it" means every one: selected on arrival, across every page.
 			if (run.entryPoint === 'template_first' && run.selected.length === 0 && run.templateId !== null) void selectAll();
 		});
@@ -175,11 +179,22 @@
 					selectable
 					selection={run.selected}
 					onSelectionChange={(rows) => run.setSelected(rows)}
+					onSelectAllMatching={selectAll}
+					columnPicker
+					columnsKey={columnsKeyFor(run.project.id, entityType)}
 					paging="scroll"
 					maxHeight="100%"
 					density="compact"
 					class="min-h-0 flex-1"
-				/>
+				>
+					{#snippet cell({ column, value })}
+						{#if column.path === 'tasks'}
+							<span class="font-mono text-xs tabular-nums">{taskCount(value) ?? ''}</span>
+						{:else}
+							<FieldValue {value} dataType={column.dataType} field={column.field} context={liveContext()} density="compact" />
+						{/if}
+					{/snippet}
+				</EntityTable>
 			{/if}
 		</div>
 	{/if}
