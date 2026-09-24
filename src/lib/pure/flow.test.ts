@@ -72,6 +72,12 @@ describe('flowSteps', () => {
 		expect(flowSteps('/live/x', NONE).some((s) => s.state === 'current')).toBe(false);
 	});
 
+	it('home and how it works are outside the flow: no step is current', () => {
+		for (const path of ['/', '/how']) {
+			expect(flowSteps(path, { ...NONE, connected: true }).some((s) => s.state === 'current')).toBe(false);
+		}
+	});
+
 	it('result is open once connected: undo from a file needs only a site', () => {
 		expect(flowSteps('/connect', { ...NONE, connected: true })[5].state).toBe('open');
 	});
