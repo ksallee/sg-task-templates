@@ -14,6 +14,7 @@
  */
 
 import { keyParts, normalizeContent } from './matching';
+import { dependencyPhrase, offsetLabel } from './outline';
 import { fieldsUnderPolicy, policyFor, withEntityConflictPick } from './planner';
 import type {
 	AccessSummary,
@@ -34,6 +35,7 @@ import type {
 	KeepRow,
 	MappedTask,
 	MatchKey,
+	PickReason,
 	PlanKind,
 	PlanRow,
 	PlanWarning,
@@ -122,18 +124,66 @@ const normalized = normalizeContent;
 export interface PolicyFieldView {
 	field: FieldName;
 	policy: FieldPolicy;
-	/** keep / overwrite, plus fill-if-empty unless the template's value is a boolean (Q-F). */
+	/** keep / overwrite, plus fill-if-empty unless the field is a boolean (Q-F), the name or the step (never empty). */
 	choices: FieldPolicy[];
 }
+
+/** Fields that are never empty on a Task: fill-if-empty would never fill. */
+const NEVER_EMPTY = new Set<FieldName>(['content', 'step']);
 
 /** Every field under policy for this template (102), with its policy in this run. */
 export function policyFieldViews(template: Template, opts: RunOptions): PolicyFieldView[] {
 	return fieldsUnderPolicy(template).map((field) => {
 		const boolean = field === 'milestone' || template.tasks.some((t) => typeof t.fields[field] === 'boolean');
-		const choices: FieldPolicy[] = boolean ? ['keep', 'overwrite'] : ['keep', 'overwrite', 'fill_if_empty'];
+		const choices: FieldPolicy[] = boolean || NEVER_EMPTY.has(field) ? ['keep', 'overwrite'] : ['keep', 'overwrite', 'fill_if_empty'];
 		return { field, policy: policyFor(field, opts.fieldPolicies), choices };
 	});
 }
+
+/** A policy in words, as the run options show it: overwrite takes the template's value, its name for `content`. */
+export function policyLabel(field: FieldName, policy: FieldPolicy): string {
+	if (policy === 'overwrite') return field === 'content' ? 'template name' : 'template';
+	return policy === 'keep' ? 'keep' : 'fill if empty';
+}
+
+/**
+ * The run options in one line, for the collapsed section: the policy most fields take, then each
+ * field that differs, e.g. `7 fields: keep · content: template name`. A tie goes to keep, then
+ * overwrite.
+ */
+export function policySummary(views: Array<Pick<PolicyFieldView, 'field' | 'policy'>>): string {
+	if (views.length === 0) return 'No field under policy';
+	const order: FieldPolicy[] = ['keep', 'overwrite', 'fill_if_empty'];
+	const count = (p: FieldPolicy) => views.filter((v) => v.policy === p).length;
+	const common = order.reduce((best, p) => (count(p) > count(best) ? p : best), order[0]);
+	const head = `${views.length} field${views.length === 1 ? '' : 's'}`;
+	if (views.length === 1) return `${head}: ${views[0].field}: ${policyLabel(views[0].field, views[0].policy)}`;
+	const odd = views.filter((v) => v.policy !== common).map((v) => `${v.field}: ${policyLabel(v.field, v.policy)}`);
+	return [`${head}: ${policyLabel('', common)}`, ...odd].join(' · ');
+}
+
+/** The bulk extra actions in one line: how many names, leave by default, then each name set otherwise. */
+export function extrasSummary(names: Array<{ name: string; count: number }>, opts: RunOptions): string {
+	if (names.length === 0) return 'No extras';
+	const odd = names.filter((n) => (opts.extraByName[n.name] ?? 'leave') !== 'leave').map((n) => `${n.name || '(no name)'}: ${opts.extraByName[n.name]}`);
+	return [`${names.length} extra name${names.length === 1 ? '' : 's'}: leave`, ...odd].join(' · ');
+}
+
+/** Why the pre-pick chose its Task (matching.ts `prePick`), in words. */
+export const PICK_REASON: Record<PickReason, string> = {
+	only: 'the only candidate',
+	usage: 'it has Versions or PublishedFiles',
+	status: 'its status moved on from the default',
+	oldest: 'the oldest',
+	id: 'the lowest id'
+};
+
+/** Why a Task is an extra, in words. */
+export const EXTRA_REASON: Record<ExtraRow['reason'], string> = {
+	not_in_template: 'not in the template',
+	link_wins: 'same key, another Task is linked',
+	conflict_loser: 'conflict loser: unlinked (106)'
+};
 
 /** The stock Omit code (entry.ts). The screen asks for a status only when the project lacks it. */
 const STOCK_OMIT = 'omt';
@@ -349,6 +399,10 @@ export interface AddedEdgeView {
 	downstream: EdgeEnd;
 	type: DependencyType;
 	offsetDays: number | null;
+	/** The template outline's words, from the downstream side: "after", "starts with"… (outline.ts). */
+	phrase: string;
+	/** "+2 wd", or null for no offset (105). */
+	offset: string | null;
 }
 
 export interface AffectedEdgeView {
@@ -357,8 +411,10 @@ export interface AffectedEdgeView {
 	downstream: EdgeEnd;
 	type: DependencyType;
 	offsetDays: number | null;
+	phrase: string;
+	offset: string | null;
 	cause: AffectedEdge['cause'];
-	replacedBy: { type: DependencyType; offsetDays: number | null; reversed: boolean } | null;
+	replacedBy: { type: DependencyType; offsetDays: number | null; reversed: boolean; phrase: string; offset: string | null } | null;
 	action: EdgeAction;
 	/** Why keep is not offered: re-creating it would close a loop (085, 107). */
 	keepDisabled: string | null;
@@ -380,6 +436,7 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 	for (const r of plan.rows) if ('task' in r) byId.set(r.task.id, `${r.task.content ?? '(no name)'} #${r.task.id}`);
 	const tplName = new Map(template.tasks.map((t) => [t.id, t.content ?? `template task #${t.id}`]));
 	const existing = (id: Id): EdgeEnd => ({ label: byId.get(id) ?? `Task #${id}`, created: false });
+	const words = (type: DependencyType, offsetDays: number | null) => ({ phrase: dependencyPhrase(type), offset: offsetLabel(offsetDays) });
 	const mapped = (m: MappedTask): EdgeEnd =>
 		'existing' in m ? existing(m.existing) : { label: tplName.get(m.created) ?? `template task #${m.created}`, created: true };
 
@@ -388,7 +445,8 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 			upstream: mapped(a.upstream),
 			downstream: mapped(a.downstream),
 			type: a.templateEdge.type,
-			offsetDays: a.templateEdge.offsetDays
+			offsetDays: a.templateEdge.offsetDays,
+			...words(a.templateEdge.type, a.templateEdge.offsetDays)
 		})),
 		affected: plan.edges.affected.map((a) => ({
 			id: a.existing.id,
@@ -396,9 +454,15 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 			downstream: existing(a.existing.downstream),
 			type: a.existing.type,
 			offsetDays: a.existing.offsetDays,
+			...words(a.existing.type, a.existing.offsetDays),
 			cause: a.cause,
 			replacedBy: a.replacedBy
-				? { type: a.replacedBy.type, offsetDays: a.replacedBy.offsetDays, reversed: a.replacedBy.downstream !== a.existing.downstream }
+				? {
+						type: a.replacedBy.type,
+						offsetDays: a.replacedBy.offsetDays,
+						reversed: a.replacedBy.downstream !== a.existing.downstream,
+						...words(a.replacedBy.type, a.replacedBy.offsetDays)
+					}
 				: null,
 			action: a.action,
 			keepDisabled: a.closesLoop ? 'Keeping it would close a dependency loop: the server refuses it and the batch rolls back (085, 107).' : null
@@ -407,7 +471,8 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 			upstream: existing(e.upstream),
 			downstream: existing(e.downstream),
 			type: e.type,
-			offsetDays: e.offsetDays
+			offsetDays: e.offsetDays,
+			...words(e.type, e.offsetDays)
 		})),
 		mayMove: plan.edges.mayMove.map((id) => existing(id).label),
 		wouldViolate: plan.edges.wouldViolate.map((id) => existing(id).label)

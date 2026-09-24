@@ -1,10 +1,14 @@
 <!--
-	The plan's left pane: one row per entity, its five counts and a warnings badge. Selecting a row
-	shows its detail. Filtering happens in `plan-view.ts` (filterPlans); this only draws.
+	The plan's left rail: one row per entity, its five counts as compact CountChips and its warnings.
+	Selecting a row shows its detail. Filtering happens in `plan-view.ts` (filterPlans); this only draws.
 -->
 <script lang="ts">
 	import type { EntityPlan, Id, RunOptions } from '$lib/pure/types';
-	import { PLAN_KINDS, entityWarnings } from '$lib/pure/plan-view';
+	import { entityWarnings } from '$lib/pure/plan-view';
+	import CountChips from '$lib/app/count-chips.svelte';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import CircleAlert from '@lucide/svelte/icons/circle-alert';
+	import { cn } from '$lib/utils.js';
 
 	type Props = {
 		plans: EntityPlan[];
@@ -13,57 +17,47 @@
 		onSelect: (id: Id) => void;
 	};
 	let { plans, options, selected, onSelect }: Props = $props();
-
-	const ABBR: Record<string, string> = { keep: 'kp', claim: 'cl', create: 'cr', extra: 'ex', conflict: 'cf' };
-	const TONE: Record<string, string> = {
-		keep: 'text-muted-foreground',
-		claim: 'text-info',
-		create: 'text-success',
-		extra: 'text-warning',
-		conflict: 'text-destructive'
-	};
 </script>
 
-<ul class="flex flex-col" data-slot="plan-entity-list">
+<ul class="flex flex-col py-1" data-slot="plan-entity-list">
 	{#each plans as plan (plan.entity.id)}
 		{@const warnings = entityWarnings(plan, options)}
 		{@const blocking = warnings.some((w) => w.level === 'block')}
-		<li>
+		{@const on = selected === plan.entity.id}
+		<li class="px-2">
 			<button
 				type="button"
-				class={[
-					'border-border flex w-full flex-col gap-1 border-b px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
-					selected === plan.entity.id ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
-				].join(' ')}
-				aria-current={selected === plan.entity.id ? 'true' : undefined}
+				class={cn(
+					'flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+					on ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
+				)}
+				aria-current={on ? 'true' : undefined}
 				onclick={() => onSelect(plan.entity.id)}
 				data-slot="plan-entity"
 			>
-				<span class="flex items-center gap-2">
-					<span class="truncate text-sm font-medium">{plan.entity.name ?? `${plan.entity.type} #${plan.entity.id}`}</span>
+				<span class="flex min-w-0 items-center gap-2">
+					<span class={cn('truncate text-sm', on && 'font-medium')}>{plan.entity.name ?? `${plan.entity.type} #${plan.entity.id}`}</span>
 					{#if plan.noop}<span class="text-muted-foreground text-xs">no-op</span>{/if}
 					<span class="mr-auto"></span>
 					{#if warnings.length > 0}
 						<span
-							class={[
-								'rounded-full px-1.5 text-xs tabular-nums',
-								blocking ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning'
-							].join(' ')}
+							class={cn(
+								'inline-flex h-5 shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs font-medium tabular-nums',
+								blocking ? 'border-destructive/60 text-destructive' : 'border-warning/60 text-warning'
+							)}
 							title={warnings.map((w) => w.text).join('\n')}
-							data-slot="plan-entity-warnings">{warnings.length} ⚠</span
+							aria-label={`${warnings.length} warning${warnings.length === 1 ? '' : 's'}`}
+							data-slot="plan-entity-warnings"
 						>
+							{#if blocking}<CircleAlert class="size-3" aria-hidden="true" />{:else}<TriangleAlert class="size-3" aria-hidden="true" />{/if}
+							{warnings.length}
+						</span>
 					{/if}
 				</span>
-				<span class="flex gap-3 font-mono text-xs tabular-nums">
-					{#each PLAN_KINDS as kind (kind)}
-						<span class={plan.counts[kind] > 0 ? TONE[kind] : 'text-muted-foreground/50'} title={kind}>
-							{ABBR[kind]}&nbsp;{plan.counts[kind]}
-						</span>
-					{/each}
-				</span>
+				<CountChips counts={plan.counts} compact size="xs" class="gap-1" />
 			</button>
 		</li>
 	{:else}
-		<li class="text-muted-foreground p-3 text-sm">No entity matches the filter.</li>
+		<li class="text-muted-foreground px-4 py-3 text-sm">No entity matches the filter.</li>
 	{/each}
 </ul>

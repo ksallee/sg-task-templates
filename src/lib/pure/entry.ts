@@ -1,7 +1,6 @@
 /**
  * Entry: what the first screens decide before a plan exists. Which entities a list shows, which
- * templates a type offers, the template's edges as the template screen names them, the run's
- * starting options, and the sample the access check runs on. Pure, no I/O.
+ * templates a type offers, the run's starting options, and the sample the access check runs on. Pure, no I/O.
  */
 
 import type { WireGroup } from 'sg-widgets-core';
@@ -52,27 +51,6 @@ export function templatesByType(templates: Template[], entityType: string | null
 	const matching = shown.filter((t) => entityType !== null && t.entityType === entityType).sort(byCode);
 	const others = shown.filter((t) => entityType === null || t.entityType !== entityType).sort(byCode);
 	return { matching, others };
-}
-
-export interface TemplateEdgeRow {
-	id: Id | null;
-	upstream: string;
-	downstream: string;
-	type: DependencyType;
-	offsetDays: number | null;
-}
-
-/** The template's edges, each end named by its task's `content` (085: `task` downstream, `dependent_task` upstream). */
-export function templateEdgeRows(template: Template): TemplateEdgeRow[] {
-	const names = new Map(template.tasks.map((t) => [t.id, t.content ?? `Task ${t.id}`]));
-	const name = (id: Id) => names.get(id) ?? `Task ${id}`;
-	return template.edges.map((e) => ({
-		id: e.id,
-		upstream: name(e.upstream),
-		downstream: name(e.downstream),
-		type: e.type,
-		offsetDays: e.offsetDays
-	}));
 }
 
 /** `items` in runs of `size`, in order. */

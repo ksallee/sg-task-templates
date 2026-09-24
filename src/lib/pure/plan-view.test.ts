@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultRunOptions } from './entry';
 import { matchKey } from './matching';
 import { planEntity } from './planner';
+import { dependencyPhrase, offsetLabel } from './outline';
 import {
 	NO_FILTER,
 	acceptPicks,
@@ -19,6 +20,8 @@ import {
 	pendingDeletes,
 	planCsvName,
 	policyFieldViews,
+	policySummary,
+	extrasSummary,
 	previousLinkLabel,
 	unresolvedConflicts,
 	valueLabel,
@@ -180,6 +183,36 @@ describe('policyFieldViews', () => {
 		expect(by.sg_description).toEqual({ field: 'sg_description', policy: 'keep', choices: ['keep', 'overwrite', 'fill_if_empty'] });
 		expect(by.milestone.choices).toEqual(['keep', 'overwrite']);
 	});
+
+	it('offers no fill-if-empty on content and step: a name and a step are never empty', () => {
+		const by = Object.fromEntries(policyFieldViews(template, opts0()).map((v) => [v.field, v]));
+		expect(by.content.choices).toEqual(['keep', 'overwrite']);
+		if (by.step) expect(by.step.choices).toEqual(['keep', 'overwrite']);
+	});
+});
+
+describe('policySummary', () => {
+	const v = (field: string, policy: 'keep' | 'overwrite' | 'fill_if_empty') => ({ field, policy, choices: [] });
+	it('names the common policy, then each field that differs', () => {
+		expect(policySummary([v('content', 'overwrite'), v('step', 'keep'), v('duration', 'keep')])).toBe('3 fields: keep · content: template name');
+		expect(policySummary([v('content', 'keep'), v('step', 'overwrite'), v('duration', 'fill_if_empty'), v('est_in_mins', 'fill_if_empty')])).toBe(
+			'4 fields: fill if empty · content: keep · step: template'
+		);
+	});
+	it('says so when there is no field, and uses one field in the singular', () => {
+		expect(policySummary([])).toBe('No field under policy');
+		expect(policySummary([v('content', 'overwrite')])).toBe('1 field: content: template name');
+	});
+});
+
+describe('extrasSummary', () => {
+	it('counts the extra names, leave by default, then each name set otherwise', () => {
+		const names = [{ name: 'retime', count: 5 }, { name: 'paint', count: 2 }, { name: 'roto', count: 1 }];
+		expect(extrasSummary(names, opts0())).toBe('3 extra names: leave');
+		expect(extrasSummary(names, { ...opts0(), extraByName: { retime: 'delete', paint: 'leave' } })).toBe('3 extra names: leave · retime: delete');
+		expect(extrasSummary([{ name: '', count: 1 }], { ...opts0(), extraByName: { '': 'omit' } })).toBe('1 extra name: leave · (no name): omit');
+		expect(extrasSummary([], opts0())).toBe('No extras');
+	});
 });
 
 describe('omitChoice', () => {
@@ -265,6 +298,13 @@ describe('edgeView', () => {
 		expect(v.affected[0]).toMatchObject({ id: 950, upstream: { label: 'Paint #11' }, cause: 'outside_upstream', action: 'keep', keepDisabled: null });
 		expect(v.outsideDownstream.map((e) => e.downstream.label)).toEqual(['Grade #13']);
 		expect(v.mayMove).toContain('Anim #10');
+	});
+
+	it('phrases each edge as the template outline does, from the downstream side', () => {
+		const v = edgeView(plan(extraSnap), template, extraSnap.tasks);
+		expect(v.added[0]).toMatchObject({ phrase: 'after', offset: null });
+		expect(v.affected[0].phrase).toBe(dependencyPhrase(v.affected[0].type));
+		expect(v.affected[0].offset).toBe(offsetLabel(v.affected[0].offsetDays));
 	});
 
 	it('disables keep with the reason on an edge that closes a loop (085, 107)', () => {

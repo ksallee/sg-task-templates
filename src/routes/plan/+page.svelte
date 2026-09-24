@@ -1,20 +1,31 @@
 <!--
-	The plan, always shown before a write (brief 9): bulk actions on top, the entity list with its five
-	counts on the left, the selected entity's Tasks and edges on the right. Every choice re-plans
+	The plan, always shown before a write (brief 9): the header with Apply and what blocks it, the run
+	options (collapsed to one line), the entity list with its five counts on the left, the selected
+	entity's Tasks and edges on the right. Every choice re-plans
 	through `run.setOptions`; the logic is in `$lib/pure/plan-view.ts`. Nothing here writes. Apply
 	opens /apply once nothing blocks it.
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { run } from '$lib/app/run.svelte';
-	import BulkBar from '$lib/app/plan/bulk-bar.svelte';
+	import RunOptions from '$lib/app/plan/run-options.svelte';
+	import CountChips from '$lib/app/count-chips.svelte';
+	import { KINDS, KIND_DOT, KIND_LABEL } from '$lib/app/count-chip.svelte';
+	import Notice from '$lib/app/notice.svelte';
+	import PageHeader from '$lib/app/page-header.svelte';
+	import PageState from '$lib/app/page-state.svelte';
+	import Segmented from '$lib/app/segmented.svelte';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Download from '@lucide/svelte/icons/download';
+	import Search from '@lucide/svelte/icons/search';
+	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import { cn } from '$lib/utils.js';
 	import EntityDetail from '$lib/app/plan/entity-detail.svelte';
 	import EntityList from '$lib/app/plan/entity-list.svelte';
 	import { planToCsv } from '$lib/pure/csv';
 	import { planTotals } from '$lib/pure/entry';
 	import {
 		NO_FILTER,
-		PLAN_KINDS,
 		acceptPicks,
 		accessWarningText,
 		applyBlockers,
@@ -24,16 +35,15 @@
 		withDeleteConfirmed,
 		type EntityFilter
 	} from '$lib/pure/plan-view';
-	import type { Id, PlanKind, RunOptions } from '$lib/pure/types';
+	import type { Id, RunOptions as Options } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
-	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 
 	let filter = $state<EntityFilter>({ ...NO_FILTER });
 	let selectedId = $state<Id | null>(null);
 	let confirming = $state(false);
-	let bulkOpen = $state(true);
+	let optionsOpen = $state(false);
 
 	const options = $derived(run.options);
 	const totals = $derived(planTotals(run.plans));
@@ -46,8 +56,10 @@
 	const deletes = $derived(pendingDeletes(run.plans));
 	const templates = $derived(run.templates.state === 'ready' ? run.templates.value : []);
 	const conflictsOpen = $derived(blockers.some((b) => b.includes('conflict')));
+	const entityNoun = $derived(totals.entities === 1 ? (run.entityType ?? 'entity') : run.entityType ? `${run.entityType}s` : 'entities');
+	const filtered = $derived(filter.kinds.length > 0 || filter.warnings || filter.noop !== 'all' || filter.text.trim() !== '');
 
-	function setOptions(next: RunOptions): void {
+	function setOptions(next: Options): void {
 		run.setOptions(next);
 	}
 
@@ -66,95 +78,126 @@
 <svelte:head><title>Plan · SG Task Templates</title></svelte:head>
 
 {#if run.plans.length === 0 || !options || !run.template || !run.ctx}
-	<div class="flex flex-col items-start gap-2 p-6">
-		<p class="text-muted-foreground text-sm">No plan yet. Choose the entities, then Next.</p>
-		<Button size="sm" href="/entities">Entities</Button>
-	</div>
+	<PageState state="empty" title="No plan yet" line="Choose the entities, then Plan.">
+		{#snippet action()}<Button href="/entities">Entities</Button>{/snippet}
+	</PageState>
 {:else}
 	<div class="flex min-h-0 flex-1 flex-col">
-		<div class="border-border flex shrink-0 flex-col gap-2 border-b px-4 py-2" data-slot="plan-top">
-			<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-				<p class="text-sm">
-					<span class="font-medium">{run.template.code}</span>
-					<span class="text-muted-foreground">on {totals.entities} {totals.entities === 1 ? 'entity' : 'entities'}, {totals.noop} no-op</span>
-				</p>
-				<dl class="flex gap-3 font-mono text-xs tabular-nums" data-slot="plan-totals">
-					{#each PLAN_KINDS as kind (kind)}
-						<div class="flex gap-1"><dt class="text-muted-foreground">{kind}</dt><dd data-slot={`count-${kind}`}>{totals[kind]}</dd></div>
-					{/each}
-				</dl>
-				<span class="mr-auto"></span>
-				<Button size="sm" variant="ghost" onclick={() => (bulkOpen = !bulkOpen)}>{bulkOpen ? 'Hide' : 'Show'} bulk actions</Button>
-				<Button size="sm" variant="outline" onclick={download}>Download CSV</Button>
-				{#if conflictsOpen}
-					<Button size="sm" variant="outline" onclick={() => setOptions(acceptPicks(options, run.plans))}>Accept all pre-picks</Button>
-				{/if}
-				{#if deletes.length > 0 && !options.deleteConfirmed}
-					<Button size="sm" variant="destructive" onclick={() => (confirming = true)}>Confirm {deletes.length} delete{deletes.length === 1 ? '' : 's'}</Button>
-				{/if}
-				<Button size="sm" disabled={blockers.length > 0} onclick={() => void goto('/apply')} title={blockers.join(' ') || undefined}>Apply</Button>
-			</div>
-
-			{#if bulkOpen}<BulkBar template={run.template} plans={run.plans} ctx={run.ctx} {options} onOptions={setOptions} />{/if}
-
-			<div class="flex flex-col gap-1 text-xs" data-slot="plan-warnings">
-				{#if run.access.state === 'loading'}
-					<p class="text-muted-foreground">Checking write access…</p>
-				{:else if run.access.state === 'error'}
-					<p class="text-warning">The access check failed: {run.access.message}</p>
-				{:else if run.access.state === 'ready' && access && !access.looksShort}
-					<p class="text-muted-foreground" data-slot="access-ok">Write access: no refusal seen (094 checks).</p>
-				{/if}
-				{#if accessText}
-					<p class="border-destructive/40 bg-destructive/10 text-destructive rounded-md border px-2 py-1" data-slot="access-short">{accessText}</p>
-				{/if}
+		<PageHeader title="Plan">
+			{#snippet context()}
+				<span>{run.project?.name ?? `Project ${run.project?.id}`}</span>
+				<span aria-hidden="true">·</span>
+				<a href="/template" class="text-foreground font-medium underline-offset-4 hover:underline">{run.template?.code}</a>
+				<ArrowRight class="size-3.5" aria-label="onto" />
+				<a href="/entities" class="text-foreground font-medium underline-offset-4 hover:underline" data-slot="plan-entities"
+					>{totals.entities} {entityNoun}</a
+				>
+				{#if totals.noop > 0}<span>· {totals.noop} no-op</span>{/if}
+			{/snippet}
+			{#snippet actions()}
 				{#if blockers.length > 0}
-					<p class="text-destructive" data-slot="apply-blockers">Apply waits: {blockers.join(' ')}</p>
+					<span class="text-muted-foreground max-w-64 truncate text-sm" title={blockers.join(' ')} data-slot="apply-reason">{blockers[0]}</span>
 				{/if}
+				<Button variant="outline" onclick={download}><Download data-icon="inline-start" />Download CSV</Button>
+				<Button disabled={blockers.length > 0} onclick={() => void goto('/apply')} title={blockers.join(' ') || undefined}>
+					Apply<ArrowRight data-icon="inline-end" />
+				</Button>
+			{/snippet}
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-2" data-slot="plan-totals">
+				<CountChips counts={totals} />
+				<span class="text-muted-foreground text-xs">over every entity</span>
 			</div>
-		</div>
+			{#if blockers.length > 0}
+				<Notice tone="destructive" title="Apply waits on:" data-slot="apply-blockers">
+					{#each blockers as b, i (b)}{i > 0 ? ' · ' : ' '}{b}{/each}
+					{#snippet action()}
+						{#if conflictsOpen}
+							<Button size="sm" variant="outline" onclick={() => setOptions(acceptPicks(options, run.plans))}>Accept all pre-picks</Button>
+						{/if}
+						{#if deletes.length > 0 && !options.deleteConfirmed}
+							<Button size="sm" variant="destructive" onclick={() => (confirming = true)}>Confirm {deletes.length} delete{deletes.length === 1 ? '' : 's'}</Button>
+						{/if}
+					{/snippet}
+				</Notice>
+			{/if}
+			{#if accessText}
+				<Notice tone="destructive" data-slot="access-short">{accessText}</Notice>
+			{:else if run.access.state === 'error'}
+				<Notice tone="warning" title="The access check failed: " data-slot="access-error">{run.access.message}</Notice>
+			{/if}
+		</PageHeader>
+
+		<RunOptions
+			template={run.template}
+			plans={run.plans}
+			ctx={run.ctx}
+			{options}
+			onOptions={setOptions}
+			open={optionsOpen}
+			onToggle={() => (optionsOpen = !optionsOpen)}
+		>
+			{#snippet footer()}
+				<p class="text-muted-foreground text-xs" data-slot="plan-warnings">
+					{#if run.access.state === 'loading'}Checking write access…
+					{:else if access && !access.looksShort}<span data-slot="access-ok">Write access: no refusal seen (094 checks).</span>
+					{/if}
+				</p>
+			{/snippet}
+		</RunOptions>
 
 		<div class="flex min-h-0 flex-1">
-			<aside class="border-border flex w-80 shrink-0 flex-col border-r" data-slot="plan-left">
-				<div class="border-border flex flex-col gap-2 border-b p-2">
-					<Input class="h-8" type="search" placeholder="Filter by code" bind:value={filter.text} aria-label="Filter by code" />
-					<ToggleGroup.Root
-						type="multiple"
-						size="sm"
-						variant="outline"
-						value={filter.kinds}
-						onValueChange={(v) => (filter.kinds = v as PlanKind[])}
-						aria-label="Show entities with"
-					>
-						{#each PLAN_KINDS as kind (kind)}
-							<ToggleGroup.Item value={kind} class="px-1.5 text-xs">{kind}</ToggleGroup.Item>
-						{/each}
-					</ToggleGroup.Root>
-					<div class="flex items-center gap-2">
-						<ToggleGroup.Root
-							type="single"
-							size="sm"
-							variant="outline"
-							value={filter.noop}
-							onValueChange={(v) => v && (filter.noop = v as EntityFilter['noop'])}
-							aria-label="No-op entities"
-						>
-							<ToggleGroup.Item value="all" class="px-1.5 text-xs">all</ToggleGroup.Item>
-							<ToggleGroup.Item value="hide" class="px-1.5 text-xs">hide no-op</ToggleGroup.Item>
-							<ToggleGroup.Item value="only" class="px-1.5 text-xs">no-op only</ToggleGroup.Item>
-						</ToggleGroup.Root>
-						<ToggleGroup.Root
-							type="multiple"
-							size="sm"
-							variant="outline"
-							value={filter.warnings ? ['warnings'] : []}
-							onValueChange={(v) => (filter.warnings = v.includes('warnings'))}
-							aria-label="Warnings only"
-						>
-							<ToggleGroup.Item value="warnings" class="px-1.5 text-xs">⚠ only</ToggleGroup.Item>
-						</ToggleGroup.Root>
+			<aside class="border-border flex w-80 shrink-0 flex-col border-r" data-slot="plan-left" aria-label="Entities">
+				<div class="border-border flex flex-col gap-2 border-b px-3 py-3" data-slot="plan-filters">
+					<div class="relative">
+						<Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" aria-hidden="true" />
+						<Input class="h-8 pl-8" type="search" placeholder="Filter by code" bind:value={filter.text} aria-label="Filter by code" />
 					</div>
-					<p class="text-muted-foreground text-xs tabular-nums">{visible.length} of {run.plans.length}</p>
+					<div class="flex items-center gap-1" role="group" aria-label="Show entities with">
+						{#each KINDS as kind (kind)}
+							{@const on = filter.kinds.includes(kind)}
+							<button
+								type="button"
+								aria-pressed={on}
+								title={`Entities with ${KIND_LABEL[kind].toLowerCase()} rows`}
+								class={cn(
+									'inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+									on ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'
+								)}
+								onclick={() => (filter.kinds = on ? filter.kinds.filter((k) => k !== kind) : [...filter.kinds, kind])}
+							>
+								<span class={cn('size-1.5 rounded-full', KIND_DOT[kind])} aria-hidden="true"></span>{KIND_LABEL[kind]}
+							</button>
+						{/each}
+					</div>
+					<div class="flex items-center gap-2">
+						<Segmented
+							label="No-op entities"
+							value={filter.noop}
+							options={[
+								{ value: 'all', label: 'All' },
+								{ value: 'hide', label: 'Hide no-op' },
+								{ value: 'only', label: 'Only no-op' }
+							]}
+							onChange={(v) => (filter.noop = v as EntityFilter['noop'])}
+						/>
+						<button
+							type="button"
+							aria-pressed={filter.warnings}
+							class={cn(
+								'ml-auto inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+								filter.warnings ? 'border-warning/60 bg-warning/10 text-foreground' : 'border-border text-muted-foreground hover:text-foreground'
+							)}
+							onclick={() => (filter.warnings = !filter.warnings)}
+						>
+							<TriangleAlert class="text-warning size-3.5" aria-hidden="true" />Warnings
+						</button>
+					</div>
+					<div class="flex items-center gap-2">
+						<p class="text-muted-foreground text-xs tabular-nums">{visible.length} of {run.plans.length} entities</p>
+						{#if filtered}
+							<Button size="xs" variant="ghost" class="ml-auto" onclick={() => (filter = { ...NO_FILTER, kinds: [] })}>Clear filters</Button>
+						{/if}
+					</div>
 				</div>
 				<div class="min-h-0 flex-1 overflow-y-auto">
 					<EntityList plans={visible} {options} selected={selected?.entity.id ?? null} onSelect={(id) => (selectedId = id)} />
