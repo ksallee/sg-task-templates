@@ -435,6 +435,8 @@ export interface EdgePlan {
 	mayMove: Id[];
 	/** Pinned Tasks downstream of an added edge whose dates break it: flag dependency_violation (092). */
 	wouldViolate: Id[];
+	/** Edges with no end linked to the template after apply: the apply leaves them alone (102). */
+	untouched?: Edge[];
 }
 
 export type PlanWarning =
