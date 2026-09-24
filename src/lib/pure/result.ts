@@ -26,6 +26,7 @@ import type {
 
 /** Pair each `_batch` response row with the request at its position (recipe 002: rows are ordered, not keyed). */
 export function pairResults(reqs: BatchRequest[], rows: BatchResultRow[]): Array<{ req: BatchRequest; id: Id }> {
+	if (rows.length !== reqs.length) throw new Error(`pairResults: ${rows.length} rows for ${reqs.length} requests`);
 	return reqs.map((req, i) => {
 		const row = rows[i];
 		const id = 'data' in row ? (row.data as EntityRow).id : row.id;
@@ -49,6 +50,11 @@ function byId(tasks: EntityTask[], id: Id): EntityTask | undefined {
 
 function sameEdgeEnds(e: Edge, downstream: Id, upstream: Id): boolean {
 	return e.downstream === downstream && e.upstream === upstream;
+}
+
+/** Ends, type and offset: offset null and 0 are different edges to the server (105). */
+function sameEdgeSpec(e: Edge, spec: Edge): boolean {
+	return sameEdgeEnds(e, spec.downstream, spec.upstream) && e.type === spec.type && e.offsetDays === spec.offsetDays;
 }
 
 function resolveEnd(end: MappedTask, createdByTemplateTaskId: Map<Id, Id>): Id | null {
@@ -111,6 +117,15 @@ export function diffEntity(
 
 		if (row.kind === 'extra' && row.action === 'delete') {
 			if (byId(after.tasks, row.task.id)) differences.push({ code: 'delete_missing', taskId: row.task.id });
+			continue;
+		}
+
+		// 106: a loser left linked to T's task makes the server pick which Task it re-syncs.
+		if (row.kind === 'extra' && row.reason === 'conflict_loser') {
+			const link = byId(after.tasks, row.task.id)?.templateTask;
+			if (link && link.templateId === plan.templateId) {
+				differences.push({ code: 'unlink_missing', taskId: row.task.id, templateTaskId: link.id });
+			}
 		}
 	}
 
@@ -140,10 +155,12 @@ export function diffEntity(
 		else differences.push({ code: 'edge_expected_missing', downstream: downstream ?? -1, upstream: upstream ?? -1 });
 	}
 
+	// Edges the apply erases (101, 102, 107, 109), deleted or replaced by T's: under keep the batch
+	// re-creates the old spec (new id), under remove it stays gone. A replaced edge's template
+	// successor is checked above, through `expectedAdded`.
 	for (const affected of plan.edges.affected) {
-		if (affected.cause !== 'not_in_template') continue; // covered via expectedAdded (102: the template's edge replaces it)
 		const { downstream, upstream } = affected.existing;
-		const stillThere = after.edges.find((e) => sameEdgeEnds(e, downstream, upstream));
+		const stillThere = after.edges.find((e) => sameEdgeSpec(e, affected.existing));
 		if (affected.action === 'keep' && !stillThere) {
 			differences.push({ code: 'edge_recreate_missing', previousId: affected.existing.id, downstream, upstream });
 		} else if (affected.action === 'remove' && stillThere) {

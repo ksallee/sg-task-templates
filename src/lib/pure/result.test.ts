@@ -336,6 +336,116 @@ describe('diffEntity: affected edges (stale, not in the template)', () => {
 	});
 });
 
+describe('diffEntity: affected edges, matched on type and offset (105)', () => {
+	const existing = { id: 701, downstream: 602, upstream: 601, type: 'finish-to-finish' as const, offsetDays: 5 };
+	const templateEdge = { id: null, downstream: 602, upstream: 601, type: 'start-to-start' as const, offsetDays: 2 };
+
+	function plan(cause: 'not_in_template' | 'replaced', action: 'keep' | 'remove'): EntityPlan {
+		const affected: AffectedEdge = { existing, cause, replacedBy: cause === 'replaced' ? templateEdge : null, action };
+		return {
+			entity: { type: 'Shot', id: 1, name: 'sh', entityType: 'Shot', taskTemplate: null },
+			templateId: 1,
+			rows: [],
+			edges: { expectedAdded: [], affected: [affected], toExtras: [], mayMove: [], wouldViolate: [] },
+			counts: { keep: 0, claim: 0, create: 0, extra: 0, conflict: 0 },
+			warnings: [],
+			needsClearFirst: false,
+			noop: false
+		};
+	}
+	const snap = (edges: unknown[]) => ({ tasks: [], edges }) as unknown as EntitySnapshot;
+	// 102: c1 on b1 finish-to-finish 5 deleted, a new start-to-start 2 made in its place.
+	const afterApply = { id: 800, downstream: 602, upstream: 601, type: 'start-to-start', offsetDays: 2 };
+	const recreated = { ...existing, id: 801 };
+
+	it('flags a kept edge whose pair holds only an edge of another type', () => {
+		expect(diffEntity(plan('not_in_template', 'keep'), snap([existing]), snap([afterApply])).differences).toContainEqual({
+			code: 'edge_recreate_missing',
+			previousId: 701,
+			downstream: 602,
+			upstream: 601
+		});
+	});
+
+	it('flags a kept edge re-created with offset null where it had 0 (105: they differ)', () => {
+		const zero = { ...existing, offsetDays: 0 };
+		const p = plan('not_in_template', 'keep');
+		p.edges.affected[0].existing = zero;
+		expect(diffEntity(p, snap([zero]), snap([{ ...zero, id: 801, offsetDays: null }])).differences).toHaveLength(1);
+	});
+
+	it('flags a replaced edge under keep that was not re-created', () => {
+		expect(diffEntity(plan('replaced', 'keep'), snap([existing]), snap([afterApply])).differences).toContainEqual({
+			code: 'edge_recreate_missing',
+			previousId: 701,
+			downstream: 602,
+			upstream: 601
+		});
+	});
+
+	it('is satisfied when a replaced edge under keep is back next to the template edge', () => {
+		expect(diffEntity(plan('replaced', 'keep'), snap([existing]), snap([afterApply, recreated])).differences).toEqual([]);
+	});
+
+	it('flags a replaced edge under remove still present', () => {
+		expect(diffEntity(plan('replaced', 'remove'), snap([existing]), snap([afterApply, recreated])).differences).toContainEqual({
+			code: 'edge_still_present',
+			edgeId: 801
+		});
+	});
+
+	it('is satisfied when a replaced edge under remove left only the template edge', () => {
+		expect(diffEntity(plan('replaced', 'remove'), snap([existing]), snap([afterApply])).differences).toEqual([]);
+	});
+});
+
+describe('diffEntity: conflict losers (106)', () => {
+	// 106: two Tasks linked to one template task; the batch unlinks the loser before the write.
+	const loserRow = (templateTask: EntityRef | null): EntityRow => ({
+		type: 'Task',
+		id: 605,
+		attributes: { content: 'x' },
+		relationships: {
+			entity: { data: { id: 1, name: 'sh', type: 'Shot' } },
+			template_task: { data: templateTask }
+		}
+	});
+	const linked = { id: 500, name: 'x', type: 'Task' };
+
+	function planWithLoser(): EntityPlan {
+		const extra: ExtraRow = {
+			kind: 'extra',
+			task: taskFromRow(loserRow(linked), () => 900),
+			action: 'leave',
+			usage: { versions: 0, publishedFiles: 0 },
+			reason: 'conflict_loser'
+		};
+		return {
+			entity: { type: 'Shot', id: 1, name: 'sh', entityType: 'Shot', taskTemplate: null },
+			templateId: 900,
+			rows: [extra],
+			edges: { expectedAdded: [], affected: [], toExtras: [], mayMove: [], wouldViolate: [] },
+			counts: { keep: 0, claim: 0, create: 0, extra: 1, conflict: 0 },
+			warnings: [],
+			needsClearFirst: false,
+			noop: false
+		};
+	}
+	const snap = (row: EntityRow) => ({ tasks: [taskFromRow(row, () => 900)], edges: [] }) as unknown as EntitySnapshot;
+
+	it('flags a loser still linked to the template', () => {
+		expect(diffEntity(planWithLoser(), snap(loserRow(linked)), snap(loserRow(linked))).differences).toContainEqual({
+			code: 'unlink_missing',
+			taskId: 605,
+			templateTaskId: 500
+		});
+	});
+
+	it('is satisfied when the loser reads template_task null', () => {
+		expect(diffEntity(planWithLoser(), snap(loserRow(linked)), snap(loserRow(null))).differences).toEqual([]);
+	});
+});
+
 describe('pairResults', () => {
 	const reqs: BatchRequest[] = [
 		{ request_type: 'create', entity: 'Task', data: {} },
@@ -357,16 +467,21 @@ describe('pairResults', () => {
 	it('reads the id of a flat delete row', () => {
 		expect(pairResults(reqs, rows)[2]).toEqual({ req: reqs[2], id: 47295 });
 	});
+
+	it('throws when the rows are not one per request (recipe 002)', () => {
+		expect(() => pairResults(reqs, rows.slice(0, 2))).toThrow();
+	});
 });
 
 describe('failedEntityResult', () => {
-	it('becomes a failure entry with the client error title', () => {
+	it('becomes a failure entry with the client error title, verbatim', () => {
+		// 107: a batch closing a loop answers 400 with this title and rolls back.
+		const title = "Create failed for [TaskDependency]: Can't create this dependency as it causes a loop.";
 		const entity = { type: 'Shot', id: 7557, name: 'sh010' };
-		const result = failedEntityResult(entity, { status: 400, message: "Update failed for [Task.content]: 'x' is not valid." });
-		expect(result).toEqual({
+		expect(failedEntityResult(entity, { status: 400, message: title })).toEqual({
 			kind: 'failed',
 			entity,
-			error: { status: 400, message: "Update failed for [Task.content]: 'x' is not valid." }
+			error: { status: 400, message: title }
 		});
 	});
 });

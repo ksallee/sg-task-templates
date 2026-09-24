@@ -486,6 +486,7 @@ export type ResultDifference =
 	| { code: 'claim_missing'; taskId: Id; templateTaskId: Id }
 	| { code: 'writeback_missing'; taskId: Id; field: FieldName; expected: unknown; actual: unknown }
 	| { code: 'delete_missing'; taskId: Id }
+	| { code: 'unlink_missing'; taskId: Id; templateTaskId: Id } // conflict loser still linked (106)
 	| { code: 'edge_expected_missing'; downstream: Id; upstream: Id }
 	| { code: 'edge_recreate_missing'; previousId: Id; downstream: Id; upstream: Id }
 	| { code: 'edge_still_present'; edgeId: Id };
