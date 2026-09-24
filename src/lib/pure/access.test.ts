@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	ACCESS_CREATE_CONTENT,
-	ACCESS_DELETE_SENTINEL_ID,
-	ACCESS_INVALID_STATUS,
 	buildAccessProbeRequests,
 	buildAccessWarning,
 	classifyAccessResponse,
@@ -117,25 +114,30 @@ describe('buildAccessProbeRequests', () => {
 	});
 });
 
+// Every string below is copied from 094 or 017. Where the corpus elides text with "...", the test
+// keeps the "..." as recorded. `detail` is null wherever the corpus records none.
+
 describe('classifyAccessResponse: update_task and update_entity', () => {
-	it('is allowed on 200', () => {
-		const r: AccessResponse = { status: 200, title: null };
+	it('is allowed on 200, which has no error body (017 first_error: None)', () => {
+		const r: AccessResponse = { status: 200, title: null, detail: null };
 		expect(classifyAccessResponse('update_task', r, 'Task')).toBe('allowed');
 		expect(classifyAccessResponse('update_entity', r, 'Shot')).toBe('allowed');
 	});
 
-	it('is refused on the exact "field is not editable" title', () => {
+	it('is refused on the exact "field is not editable" title (017 can_update tasks content)', () => {
 		const r: AccessResponse = {
 			status: 400,
-			title: 'The field is not editable for this user: [Task.content].'
+			title: 'The field is not editable for this user: [Task.content].',
+			detail: null
 		};
 		expect(classifyAccessResponse('update_task', r, 'Task')).toBe('refused');
 	});
 
-	it('reads the entity type into the refusal, for a field the app never tested by name', () => {
+	it('reads the entity type into the refusal (017 can_update shots code)', () => {
 		const r: AccessResponse = {
 			status: 400,
-			title: 'The field is not editable for this user: [Shot.task_template].'
+			title: 'The field is not editable for this user: [Shot.code].',
+			detail: null
 		};
 		expect(classifyAccessResponse('update_entity', r, 'Shot')).toBe('refused');
 	});
@@ -149,13 +151,18 @@ describe('classifyAccessResponse: update_task and update_entity', () => {
 			title:
 				'The field is not editable for this user: ' +
 				'[Task.sg_status_list]. Rule: Artist -- PermissionRule 2615: update_field_condition ... RULE: ' +
-				'{"logical_operator":"and","conditions": [... task_assignees is logged_in_user_token, task_reviewers is ...]}'
+				'{"logical_operator":"and","conditions": [... task_assignees is logged_in_user_token, task_reviewers is ...]}',
+			detail: null
 		};
 		expect(classifyAccessResponse('update_task', r, 'Task')).toBe('refused');
 	});
 
-	it('is unknown on an unrecognized 400', () => {
-		const r: AccessResponse = { status: 400, title: 'Something else entirely.' };
+	it('is unknown on a 400 that tests nothing (094 candidate 7)', () => {
+		const r: AccessResponse = {
+			status: 400,
+			title: "API create() Task.zz_no_such_field doesn't exist.",
+			detail: null
+		};
 		expect(classifyAccessResponse('update_task', r, 'Task')).toBe('unknown');
 	});
 
@@ -165,42 +172,68 @@ describe('classifyAccessResponse: update_task and update_entity', () => {
 });
 
 describe('classifyAccessResponse: create_task', () => {
-	it('is allowed when the refusal is the deliberately-invalid status', () => {
+	it('is allowed when the title names the deliberately-invalid status (017 can_create_task)', () => {
 		const r: AccessResponse = {
 			status: 400,
 			title:
-				"Invalid field value, update failed [5 - Status 'zz_not_a_status' is not a valid status. Valid statuses: 'wtg', 'ip', 'fin']"
+				"Invalid field value, update failed [5 - ... 'zz_not_a_status' is not a valid status. Valid statuses: 'wtg', 'ip', ...]",
+			detail: null
 		};
 		expect(classifyAccessResponse('create_task', r, 'Task')).toBe('allowed');
 	});
 
 	it('is refused on the exact "cannot be created" title', () => {
-		const r: AccessResponse = { status: 400, title: 'Entity of type Task cannot be created by this user.' };
+		const r: AccessResponse = {
+			status: 400,
+			title: 'Entity of type Task cannot be created by this user.',
+			detail: null
+		};
 		expect(classifyAccessResponse('create_task', r, 'Task')).toBe('refused');
 	});
 
-	it('is unknown on anything else', () => {
-		const r: AccessResponse = { status: 500, title: null };
+	it('is unknown on a 400 that tests nothing (094 candidate 7)', () => {
+		const r: AccessResponse = {
+			status: 400,
+			title: "API create() Task.zz_no_such_field doesn't exist.",
+			detail: null
+		};
 		expect(classifyAccessResponse('create_task', r, 'Task')).toBe('unknown');
 	});
 });
 
 describe('classifyAccessResponse: delete_task', () => {
-	it('is allowed when the batch rolls back on the sentinel', () => {
+	// 017 reads the sentinel from `detail` (substring "id=999999999 does not exist") and the refusal
+	// from `title`. The detail text is 094 row 8's message for a missing Task id; 017 records the
+	// rolled-back batch's title as "Not Found".
+	it('is allowed when detail names the sentinel, title "Not Found" (017 can_delete)', () => {
 		const r: AccessResponse = {
 			status: 404,
-			title: `Entity of type [Task] with id=${ACCESS_DELETE_SENTINEL_ID} does not exist.`
+			title: 'Not Found',
+			detail: 'Entity of type [Task] with id=999999999 does not exist.'
 		};
 		expect(classifyAccessResponse('delete_task', r, 'Task')).toBe('allowed');
 	});
 
 	it('is refused on the exact "can not be deleted" title', () => {
-		const r: AccessResponse = { status: 400, title: 'Entity of type Task can not be deleted by this user.' };
+		const r: AccessResponse = {
+			status: 400,
+			title: 'Entity of type Task can not be deleted by this user.',
+			detail: null
+		};
 		expect(classifyAccessResponse('delete_task', r, 'Task')).toBe('refused');
 	});
 
-	it('does not confuse the generic 404 reason phrase with the sentinel detail', () => {
-		const r: AccessResponse = { status: 404, title: 'Not Found' };
+	it('is unknown on "Not Found" with no sentinel detail', () => {
+		const r: AccessResponse = { status: 404, title: 'Not Found', detail: null };
+		expect(classifyAccessResponse('delete_task', r, 'Task')).toBe('unknown');
+	});
+
+	it('reads the sentinel from detail only, never from title', () => {
+		const r: AccessResponse = {
+			status: 404,
+			title: 'Entity of type [Task] with id=999999999 does not exist.',
+			detail: null
+		};
 		expect(classifyAccessResponse('delete_task', r, 'Task')).toBe('unknown');
 	});
 });
@@ -220,11 +253,11 @@ describe('schemaFieldAccess', () => {
 });
 
 describe('summarizeAccess', () => {
-	const allowed: AccessCheck = { capability: 'update_task', result: 'allowed', response: { status: 200, title: null } };
+	const allowed: AccessCheck = { capability: 'update_task', result: 'allowed', response: { status: 200, title: null, detail: null } };
 	const refused: AccessCheck = {
 		capability: 'delete_task',
 		result: 'refused',
-		response: { status: 400, title: 'Entity of type Task can not be deleted by this user.' }
+		response: { status: 400, title: 'Entity of type Task can not be deleted by this user.', detail: null }
 	};
 	const unknown: AccessCheck = { capability: 'create_task', result: 'unknown', response: null };
 
@@ -248,7 +281,7 @@ describe('summarizeAccess', () => {
 describe('buildAccessWarning', () => {
 	it('returns null when nothing looks short', () => {
 		const summary = summarizeAccess(
-			[{ capability: 'update_task', result: 'allowed', response: { status: 200, title: null } }],
+			[{ capability: 'update_task', result: 'allowed', response: { status: 200, title: null, detail: null } }],
 			{ content: 'maybe' }
 		);
 		expect(buildAccessWarning(summary)).toBeNull();
@@ -258,7 +291,7 @@ describe('buildAccessWarning', () => {
 		const refused: AccessCheck = {
 			capability: 'delete_task',
 			result: 'refused',
-			response: { status: 400, title: 'Entity of type Task can not be deleted by this user.' }
+			response: { status: 400, title: 'Entity of type Task can not be deleted by this user.', detail: null }
 		};
 		const summary = summarizeAccess([refused], { sg_status_list: 'refused' });
 		const warning = buildAccessWarning(summary);

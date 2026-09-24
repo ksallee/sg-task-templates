@@ -11,7 +11,7 @@
  * probe/79-NNN) and #81 (103..109, probe/81-NNN). Comments name the entry each shape rests on.
  */
 
-import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
+import type { EntityRef, EntityRow } from 'sg-widgets-core';
 
 // ---------------------------------------------------------------------------------------------
 // 1. Wire
@@ -534,16 +534,16 @@ export type AccessCapability = 'update_task' | 'update_entity' | 'create_task' |
 export type AccessResult = 'allowed' | 'refused' | 'unknown';
 
 /**
- * What the I/O layer hands back for one probe call. `title` is whichever JSON:API field carries
- * the discriminating text for that capability: `title` itself for the no-op update PUT and the
- * invalid-status create; `detail` for the delete check's rolled-back `_batch` (094, recipe
- * 0XX_check_permission_before_writing: a 404 there answers `title: "Not Found"`, so the
- * classification reads `detail`). `null` on a 2xx, which has no error body. `status` is the HTTP
- * status.
+ * What the I/O layer hands back for one probe call: the HTTP status and the first JSON:API error's
+ * `title` and `detail`, kept apart as 017 reads them. `title` carries the update, create and delete
+ * refusals and the create check's invalid status (017 `first_error`); `detail` carries the delete
+ * check's sentinel (017 `_rolled_back`: a rolled-back `_batch` answers `title` "Not Found"). Both
+ * `null` on a 2xx, which has no error body, and `detail` `null` when the error has none.
  */
 export interface AccessResponse {
 	status: number;
 	title: string | null;
+	detail: string | null;
 }
 
 /** A plain `PUT /entity/<slug>/<id>` (017 `can_update`). `entity` is the schema name; the I/O layer maps the slug. */

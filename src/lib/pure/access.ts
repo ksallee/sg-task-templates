@@ -131,8 +131,9 @@ function isCannotBeDeletedRefusal(type: string, title: string): boolean {
 	return title === `Entity of type ${type} can not be deleted by this user.`;
 }
 
-function isSentinelNotFound(type: string, title: string): boolean {
-	return title === `Entity of type [${type}] with id=${ACCESS_DELETE_SENTINEL_ID} does not exist.`;
+/** 017 `_rolled_back`: `f"id={SENTINEL_ID} does not exist" in detail`. */
+function isSentinelNotFound(detail: string): boolean {
+	return detail.includes(`id=${ACCESS_DELETE_SENTINEL_ID} does not exist`);
 }
 
 function isInvalidStatusValidation(title: string): boolean {
@@ -141,9 +142,9 @@ function isInvalidStatusValidation(title: string): boolean {
 
 /**
  * `response` to `allowed` / `refused` / `unknown`, by status and the exact text the corpus records
- * (094): `title` for the update checks and the create check, `detail` read into `title` by the I/O
- * layer for the delete check (a rolled-back 404's own `title` is the generic "Not Found"). `entityType`
- * is `'Task'` for every capability but `update_entity`, where it is the entity's own type.
+ * (094, 017). `title` for every refusal and for the create check's invalid status; `detail` for the
+ * delete check's sentinel, as 017 reads it. `entityType` is `'Task'` for every capability but
+ * `update_entity`, where it is the entity's own type.
  */
 export function classifyAccessResponse(
 	capability: AccessCapability,
@@ -151,7 +152,7 @@ export function classifyAccessResponse(
 	entityType: string
 ): AccessResult {
 	if (response === null) return 'unknown';
-	const { status, title } = response;
+	const { status, title, detail } = response;
 	switch (capability) {
 		case 'update_task':
 		case 'update_entity':
@@ -163,7 +164,7 @@ export function classifyAccessResponse(
 			if (status === 400 && title !== null && isCannotBeCreatedRefusal(entityType, title)) return 'refused';
 			return 'unknown';
 		case 'delete_task':
-			if (status === 404 && title !== null && isSentinelNotFound(entityType, title)) return 'allowed';
+			if (status === 404 && detail !== null && isSentinelNotFound(detail)) return 'allowed';
 			if (status === 400 && title !== null && isCannotBeDeletedRefusal(entityType, title)) return 'refused';
 			return 'unknown';
 		default:
