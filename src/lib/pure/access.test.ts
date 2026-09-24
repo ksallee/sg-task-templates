@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+	accessResponseFrom,
 	buildAccessProbeRequests,
 	buildAccessWarning,
 	classifyAccessResponse,
+	runFieldAccess,
 	schemaFieldAccess,
 	summarizeAccess
 } from './access';
@@ -303,5 +305,46 @@ describe('buildAccessWarning', () => {
 		expect(warning.detail).toMatch(/launcher session/);
 		expect(warning.detail).toMatch(/unmeasured/);
 		expect(warning.detail).toMatch(/delete/i);
+	});
+});
+
+describe('runFieldAccess', () => {
+	const f = (name: string, editable: boolean, entityType = 'Task'): FieldSchema => ({
+		name,
+		displayName: name,
+		entityType,
+		dataType: 'text',
+		editable,
+		mandatory: false,
+		unique: false
+	});
+	const taskSchema = {
+		content: f('content', true),
+		sg_description: f('sg_description', false),
+		time_logs_sum: f('time_logs_sum', false)
+	};
+
+	it('keeps only the fields the run writes, plus the entity task_template by type', () => {
+		expect(runFieldAccess(taskSchema, ['content', 'sg_description'], 'Shot', f('task_template', true, 'Shot'))).toEqual({
+			content: 'maybe',
+			sg_description: 'refused',
+			'Shot.task_template': 'maybe'
+		});
+	});
+
+	it('skips a field the schema does not name, and a missing entity field', () => {
+		expect(runFieldAccess(taskSchema, ['sg_gone'], 'Shot', null)).toEqual({});
+	});
+});
+
+describe('accessResponseFrom', () => {
+	it('takes the first error title and detail', () => {
+		const body = { errors: [{ status: 404, title: 'Not Found', detail: 'id=999999999 does not exist' }] };
+		expect(accessResponseFrom(404, body)).toEqual({ status: 404, title: 'Not Found', detail: 'id=999999999 does not exist' });
+	});
+
+	it('reads a body without errors as nulls', () => {
+		expect(accessResponseFrom(200, null)).toEqual({ status: 200, title: null, detail: null });
+		expect(accessResponseFrom(500, 'oops')).toEqual({ status: 500, title: null, detail: null });
 	});
 });
