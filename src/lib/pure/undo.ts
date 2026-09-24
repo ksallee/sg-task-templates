@@ -2,17 +2,21 @@
  * Undo: the record of what one entity's apply changed, the revert that puts it back, and the
  * downloadable file of a run's records. Pure, no I/O.
  *
- * The revert runs in probe 096's order (recipe 0XX_undo_task_template_merge, Kevin's Q-C):
- *   1. `buildRevert(rec).batch`, one `_batch` (requests see earlier ones, 098):
- *      old `template_task` on each claimed Task FIRST (entity first makes the old template
- *      re-create them, 096), then the entity's old `task_template` (its re-sync overwrites its
- *      Tasks' fields, 096/102), then delete the created Tasks, then write the pre-merge fields
- *      back, then the omitted statuses.
- *   2. `reviveTasks`: `POST ?revive=1` per Task (048), not a batch request; brings back their
- *      edges too (089).
+ * The revert runs in probe 096's order (Kevin's Q-C), as one `_batch` (recipe
+ * 0XX_undo_task_template_merge_in_one_batch, probe 104):
+ *   1. `reviveTasks`: `POST ?revive=1` per Task the apply deleted, not a batch request (103). A
+ *      batch delete retires like DELETE, so revive restores the same id, fields, edges and
+ *      `Version.sg_task` (103, 089). Before the batch: the old template's write creates a Task for
+ *      each of its tasks no Task points at (096), so a deleted Task linked to it comes back first.
+ *   2. Read the edges live, then `buildRevert(rec, live).batch` (requests see earlier ones, 098):
+ *      old `template_task` on each claimed Task and each unlinked conflict loser FIRST (entity
+ *      first makes the old template re-create them, 096; 106), then the entity's old
+ *      `task_template` (its re-sync overwrites its Tasks' fields and edges, 096/102/109), then
+ *      delete the created Tasks (their edges retire, 089/104), then the apply's edges that write
+ *      leaves (104), then the pre-merge fields, then the omitted statuses.
  *   3. Read the edges live, then `buildEdgeRevert(rec, live)`: remove batch, revive each edge
- *      (095), then the create batch for erased rows (101). Revive before any create on a pair:
- *      the other way is a 400 (095).
+ *      (095), then the create batch for erased rows (101, 109). Revive before any create on a
+ *      pair: the other way is a 400 (095).
  * Dates are not restored: writing them pins (087), and revive/re-create reschedule from upstream
  * now (095). `notes` carry that to the result screen.
  */
@@ -61,6 +65,7 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 	const beforeEdgeIds = new Set(beforeEdges.map((e) => e.id));
 
 	const claimed: UndoRecord['claimed'] = [];
+	const unlinked: NonNullable<UndoRecord['unlinked']> = [];
 	const omitted: UndoRecord['omitted'] = [];
 	const deletedTasks: Id[] = [];
 	const deletedEdges: RowEdge[] = [];
@@ -68,8 +73,10 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 		if (r.request_type === 'update' && r.entity === 'Task') {
 			const t = beforeTask.get(r.record_id);
 			if (!t) continue;
-			if ('template_task' in r.data && !claimed.some((c) => c.taskId === t.id))
-				claimed.push({ taskId: t.id, previousTemplateTask: t.templateTask?.id ?? null });
+			// A write of null unlinks a conflict loser (106); any other value is a claim.
+			const links = r.data.template_task === null ? unlinked : claimed;
+			if ('template_task' in r.data && !links.some((c) => c.taskId === t.id))
+				links.push({ taskId: t.id, previousTemplateTask: t.templateTask?.id ?? null });
 			if ('sg_status_list' in r.data && !omitted.some((o) => o.taskId === t.id))
 				omitted.push({ taskId: t.id, previousStatus: t.status });
 		} else if (r.request_type === 'delete' && r.entity === 'Task') {
@@ -87,15 +94,25 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 	const previousTaskTemplate = before.entity.taskTemplate;
 	const oldTemplate = previousTaskTemplate && previousTaskTemplate.id !== templateId ? previousTaskTemplate.id : null;
 
+	// The undo's write of the old template re-syncs every Task linked to it (096: roto), revived
+	// ones included (they come back before it). A link of unknown template counts as linked.
+	const resyncedOnUndo = before.tasks
+		.filter(
+			(t) =>
+				oldTemplate !== null &&
+				(afterTask.has(t.id) || deleted.has(t.id)) &&
+				t.templateTask !== null &&
+				(t.templateTask.templateId === oldTemplate || t.templateTask.templateId === null)
+		)
+		.map((t) => t.id);
+	const resyncedSet = new Set(resyncedOnUndo);
+
 	const fieldValues: UndoRecord['fieldValues'] = [];
-	for (const t of surviving) {
-		const now = afterTask.get(t.id)!;
-		const onTemplate = now.templateTask?.templateId === templateId;
-		// The undo's write of the old template re-syncs every Task linked to it (096: roto).
-		const resynced =
-			oldTemplate !== null &&
-			t.templateTask !== null &&
-			(t.templateTask.templateId === oldTemplate || t.templateTask.templateId === null);
+	for (const t of before.tasks) {
+		const now = afterTask.get(t.id) ?? (deleted.has(t.id) ? t : undefined);
+		if (!now) continue;
+		const onTemplate = !deleted.has(t.id) && now.templateTask?.templateId === templateId;
+		const resynced = resyncedSet.has(t.id);
 		if (!onTemplate && !resynced) continue;
 		const dated = t.startDate !== null && t.dueDate !== null;
 		for (const field of Object.keys(t.fields)) {
@@ -140,6 +157,8 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 		appliedAt: input.appliedAt,
 		previousTaskTemplate,
 		claimed,
+		unlinked,
+		resyncedOnUndo,
 		created,
 		fieldValues,
 		omitted,
@@ -156,13 +175,22 @@ export function buildUndoRecord(input: UndoInput): UndoRecord {
 
 // --- revert -------------------------------------------------------------------------------------
 
-export function buildRevert(rec: UndoRecord): RevertPlan {
+/**
+ * `live`: the TaskDependency rows touching the entity's Tasks, read after the Task revives and
+ * right before the batch. The batch deletes only rows it read (104: a gone one 404s the batch).
+ */
+export function buildRevert(rec: UndoRecord, live: Edge[]): RevertPlan {
 	const batch: BatchRequest[] = [];
 	const update = (entity: string, record_id: Id, data: Record<string, unknown>) =>
 		batch.push({ request_type: 'update', entity, record_id, data });
 
 	// 1. Tasks first (096).
 	for (const c of rec.claimed)
+		update('Task', c.taskId, {
+			template_task: c.previousTemplateTask === null ? null : { type: 'Task', id: c.previousTemplateTask }
+		});
+	// Conflict losers the apply unlinked (106), before the entity like the claims (096).
+	for (const c of rec.unlinked ?? [])
 		update('Task', c.taskId, {
 			template_task: c.previousTemplateTask === null ? null : { type: 'Task', id: c.previousTemplateTask }
 		});
@@ -173,8 +201,10 @@ export function buildRevert(rec: UndoRecord): RevertPlan {
 	if (prev === null || prev.id !== rec.templateId)
 		update(rec.entity.type, rec.entity.id, { task_template: prev === null ? null : wireValue(prev) });
 
-	// 3. What the apply made. A Task delete retires its edges (089).
+	// 3. What the apply made. A Task delete retires its edges (089, 104).
 	for (const id of rec.created) batch.push({ request_type: 'delete', entity: 'Task', record_id: id });
+	for (const id of batchEdgeDeletes(rec, live))
+		batch.push({ request_type: 'delete', entity: 'TaskDependency', record_id: id });
 
 	// 4. The fields both applies overwrote (096 step 4), then the statuses (kept by both, 102).
 	const byTask = new Map<Id, Record<FieldName, unknown>>();
@@ -191,6 +221,32 @@ export function buildRevert(rec: UndoRecord): RevertPlan {
 	notes.push({ code: 'history_kept' });
 
 	return { batch, reviveTasks: [...rec.deletedTasks], notes };
+}
+
+/**
+ * The apply's added edges the revert batch deletes (104). Left out:
+ *   - edges on a created Task: they retire with it (089, 104);
+ *   - under a write of a non-null old template, edges with both ends back on its tasks: that write
+ *     removes them first, and a DELETE of a gone row 404s and rolls back the batch (104);
+ *   - under that write, edges with one end back on its tasks: mixed ends are not measured in the
+ *     undo batch (104). 109 says the write erases the edge when that end is downstream; either way
+ *     `buildEdgeRevert` removes what is still live after the batch.
+ * With no such write (old template null, or already this template), nothing removes them: all go
+ * (104). Edges re-created under keep are not "added": they stand for the old rows (109).
+ */
+function batchEdgeDeletes(rec: UndoRecord, live: Edge[]): Id[] {
+	const prev = rec.previousTaskTemplate;
+	const resyncs = prev !== null && prev.id !== rec.templateId;
+	// An older record without the list: leave every edge to the edge revert rather than risk a 404.
+	if (resyncs && rec.resyncedOnUndo === undefined) return [];
+	const resynced = new Set(rec.resyncedOnUndo ?? []);
+	const created = new Set(rec.created);
+	const liveIds = new Set(live.filter(hasId).map((e) => e.id));
+	return rec.addedEdges
+		.filter((e) => liveIds.has(e.id))
+		.filter((e) => !created.has(e.downstream) && !created.has(e.upstream))
+		.filter((e) => !resyncs || (!resynced.has(e.downstream) && !resynced.has(e.upstream)))
+		.map((e) => e.id);
 }
 
 /**
