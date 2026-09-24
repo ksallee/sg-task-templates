@@ -11,13 +11,21 @@
  * probe/79-NNN) and #81 (103..109, probe/81-NNN). Comments name the entry each shape rests on.
  */
 
-import type { EntityRef, EntityRow } from 'sg-widgets-core';
+import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
 
 // ---------------------------------------------------------------------------------------------
 // 1. Wire
 // ---------------------------------------------------------------------------------------------
 
 export type { EntityRef, EntityRow };
+
+/**
+ * Normalized field schema (`GET /schema/<Type>/fields`, already through the client's
+ * `normalizeField`/`normalizeFields`; read.ts never sees the raw `{value, editable}` wrapping).
+ * `validValues` minus `hiddenValues` is a project's usable set (field_types/status_list); the
+ * client's own `usableStatuses` does that subtraction.
+ */
+export type { FieldSchema };
 
 /**
  * Element of `Task.upstream_tasks` / `downstream_tasks`: `template_task_id` next to id, name,
@@ -468,6 +476,39 @@ export interface EntityWrite {
 	/** Template task ids whose created Task gets its dates cleared after read-back (097). */
 	clearDatesFor: Id[];
 }
+
+// --- result ----------------------------------------------------------------------------------------
+
+/** One thing the read-back after apply did not match the plan (result.ts, `diffEntity`). */
+export type ResultDifference =
+	| { code: 'create_missing'; templateTaskId: Id }
+	| { code: 'create_unexpected'; taskId: Id; templateTaskId: Id }
+	| { code: 'claim_missing'; taskId: Id; templateTaskId: Id }
+	| { code: 'writeback_missing'; taskId: Id; field: FieldName; expected: unknown; actual: unknown }
+	| { code: 'delete_missing'; taskId: Id }
+	| { code: 'edge_expected_missing'; downstream: Id; upstream: Id }
+	| { code: 'edge_recreate_missing'; previousId: Id; downstream: Id; upstream: Id }
+	| { code: 'edge_still_present'; edgeId: Id };
+
+/** One entity's read-back, matched against its plan. */
+export interface EntityResultOk {
+	kind: 'ok';
+	entity: EntityRef;
+	/** Task ids the server created, matched to their template task by `template_task` (083). */
+	created: Id[];
+	/** Edges the apply added, matched by their mapped ends (015, 099). */
+	addedEdges: Array<Edge & { id: Id }>;
+	differences: ResultDifference[];
+}
+
+/** One entity whose batch the client rejected: nothing in it landed (recipe 002, atomic). */
+export interface EntityResultFailed {
+	kind: 'failed';
+	entity: EntityRef;
+	error: { status: number | null; message: string };
+}
+
+export type EntityResult = EntityResultOk | EntityResultFailed;
 
 // --- undo ------------------------------------------------------------------------------------------
 
