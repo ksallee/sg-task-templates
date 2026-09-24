@@ -145,7 +145,7 @@ describe('describeNote', () => {
 	const names = nameBook([plan]);
 	it('reads each undo note honestly', () => {
 		expect(describeNote({ code: 'edges_recreated', edgeIds: [3, 4] }, names)).toBe(
-			'2 dependencies come back as new rows: same ends, type and offset, new ids.'
+			'2 dependencies are re-created: same Tasks, type and offset, new ids.'
 		);
 		expect(describeNote({ code: 'dates_may_move', taskIds: [10] }, names)).toBe(
 			'Dates may move on comp: unpinned Tasks downstream of a revived or re-created dependency reschedule.'
@@ -154,14 +154,14 @@ describe('describeNote', () => {
 			describeNote({ code: 'dates_moved', taskId: 10, before: { start: '2026-11-01', due: '2026-11-02' }, after: { start: '2026-11-03', due: null } }, names)
 		).toBe('comp: the apply moved its dates (2026-11-01 to 2026-11-02, now 2026-11-03 to none). Undo does not write them back: that would pin it.');
 		expect(describeNote({ code: 'linked_twice_unmeasured', templateTask: 500, taskIds: [10, 11] }, names)).toBe(
-			'comp and Task 11 were both linked to Comp: which one the old template wires is the server\'s pick, not measured.'
+			'comp and Task 11 were both linked to Comp: Flow PT picks which one the old template links again.'
 		);
 		expect(describeNote({ code: 'history_kept' }, names)).toBe('The event log keeps the apply and the undo.');
 		expect(
 			describeNote({ code: 'dates_moved', taskId: 10, before: { start: null, due: null }, after: { start: '2026-11-03', due: '2026-11-04' } }, names)
 		).toBe('comp: the apply filled its dates from the template (now 2026-11-03 to 2026-11-04). Undo does not clear them: a null start date pins a Task with an upstream dependency.');
 		expect(describeNote({ code: 'violation_may_change', taskIds: [10, 11] }, names)).toBe(
-			'The dependency violation flag may differ from before on comp and Task 11: pinned Tasks keep their dates while what they depend on changed.'
+			'The dependency violation flag may differ from before on comp and Task 11: pinned Tasks keep their dates while their upstream Tasks changed.'
 		);
 	});
 });
@@ -255,10 +255,10 @@ describe('groupRows', () => {
 		const rows = [row(1, 'clean'), row(2, 'failed'), row(3, 'differences'), row(4, 'clean'), row(5, 'landed'), row(6, 'undone'), row(7, 'not_applied'), row(8, 'landing')];
 		expect(groupRows(rows).map((g) => [g.kind, g.title, g.rows.map((r) => r.label)])).toEqual([
 			['failed', 'Failed', ['sh2']],
-			['differences', 'Landed with differences', ['sh3']],
-			['landing', 'Landing', ['sh8']],
-			['clean', 'Landed clean', ['sh1', 'sh4']],
-			['landed', 'Landed earlier', ['sh5']],
+			['differences', 'Applied with differences', ['sh3']],
+			['landing', 'Applying', ['sh8']],
+			['clean', 'Applied', ['sh1', 'sh4']],
+			['landed', 'Applied earlier', ['sh5']],
 			['undone', 'Undone', ['sh6']],
 			['not_applied', 'Not applied', ['sh7']]
 		]);

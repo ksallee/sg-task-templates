@@ -257,7 +257,7 @@ describe('applyBlockers', () => {
 	it('blocks a kept edge that closes a loop', () => {
 		const p = plan(extraSnap);
 		const loop = { ...p, edges: { ...p.edges, affected: p.edges.affected.map((a) => ({ ...a, closesLoop: true as const, action: 'keep' as const })) } };
-		expect(applyBlockers([loop], opts0(), ctx(), null)).toContain('1 kept edge would close a loop: remove it.');
+		expect(applyBlockers([loop], opts0(), ctx(), null)).toContain('1 kept dependency would close a loop: remove it.');
 	});
 });
 
@@ -321,7 +321,7 @@ describe('edgeView', () => {
 describe('labels', () => {
 	it('keyLabel shows the normalized content and the step', () => {
 		expect(keyLabel(matchKey('  Comp  Final ', 11), STEP)).toBe('comp final @ Anim');
-		expect(keyLabel(matchKey('x', null), null)).toBe('x @ no step');
+		expect(keyLabel(matchKey('x', null), null)).toBe('x @ no Step');
 	});
 
 	it('valueLabel prints refs by name and empties plainly', () => {
@@ -349,14 +349,14 @@ describe('labels', () => {
 		expect(planCsvName('TT Seed · Shot v2', new Date('2026-09-24T10:00:00Z'))).toBe('plan-tt-seed-shot-v2-2026-09-24.csv');
 	});
 
-	it('accessWarningText names the refusals and carries 094 caveat', () => {
+	it('accessWarningText names the refusals and says the check is partial', () => {
 		const text = accessWarningText({
 			checks: [{ capability: 'delete_task', result: 'refused', response: null }],
 			fields: { sg_description: 'refused' },
 			looksShort: true
 		});
 		expect(text).toMatch(/cannot delete Tasks; cannot write sg_description/);
-		expect(text).toMatch(/094/);
+		expect(text).toMatch(/The check is partial/);
 		expect(accessWarningText({ checks: [], fields: {}, looksShort: false })).toBeNull();
 	});
 });

@@ -40,7 +40,7 @@
 						data-state={step.state}
 					>
 						{@render body()}
-						<span class="sr-only">(waits: {step.hint})</span>
+						<span class="sr-only">(blocked: {step.hint})</span>
 					</span>
 				{:else}
 					<a

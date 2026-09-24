@@ -14,7 +14,7 @@
 		['Template', 'Pick the project, the entity type and the Task Template.'],
 		['Entities', 'Those on the Task Template, any you pick, or those with none.'],
 		['Plan', 'See each entity’s Tasks. Pick where several match. Set fields and Tasks not in the template.'],
-		['Apply', 'One entity at a time. A failure stops that entity only.'],
+		['Apply', 'Each entity separately. A failure stops that entity only.'],
 		['Result', 'What was written. Undo is kept per run.']
 	];
 
@@ -84,7 +84,7 @@
 					{/each}
 				</ul>
 				<p class="text-muted-foreground pt-2 text-sm">
-					Every rule, one by one: <a class={link} href="/how">How it works</a>.
+					The rules: <a class={link} href="/how">How it works</a>.
 				</p>
 			</section>
 		</div>

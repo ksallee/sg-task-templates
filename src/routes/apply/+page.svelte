@@ -44,21 +44,21 @@
 
 {#snippet downloadOnly()}
 	<Notice tone="warning" title="Undo is download-only in this browser. " data-slot="undo-download-only">
-		It cannot store the undo record: it lives in this tab only. Download it as entities land, and before you close the tab.
+		Download the undo record as entities are applied, and before you close the tab.
 		{#snippet action()}
 			<Button size="sm" variant="outline" onclick={() => session.download()} disabled={!hasRecords}>
 				<Download data-icon="inline-start" />
-				{hasRecords ? 'Download undo record' : 'Download once an entity lands'}
+				{hasRecords ? 'Download undo record' : 'Nothing to download yet'}
 			</Button>
 		{/snippet}
 	</Notice>
 {/snippet}
 
 {#await started}
-	<PageState state="loading" title="Reaching the site…" />
+	<PageState state="loading" title="Connecting to the site…" />
 {:then}
 	{#if run.problem}
-		<PageState state="error" title="Cannot reach the site" line={run.problem}>
+		<PageState state="error" title="Cannot connect to the site" line={run.problem}>
 			{#snippet action()}<Button size="sm" href="/connect">Connect</Button>{/snippet}
 		</PageState>
 	{:else if showRun && session.current}
@@ -133,7 +133,7 @@
 				<span aria-hidden="true">·</span>
 				<a href="/template" class="text-foreground font-medium underline-offset-4 hover:underline">{run.template?.code ?? `Template ${run.templateId}`}</a>
 				<span aria-hidden="true">·</span>
-				<span>the last look before anything is written</span>
+				<span>nothing written yet</span>
 			{/snippet}
 			{#snippet actions()}
 				<Button variant="ghost" href="/plan">Back to the plan</Button>

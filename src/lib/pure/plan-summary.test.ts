@@ -135,7 +135,7 @@ describe('taskLines: one outcome per Task', () => {
 		const p = plan(extraSnap);
 		const anim = byTask(taskLines(p, input([p])), 10);
 		expect(anim.details.map((d) => d.text)).toContain('Linked before: Anim in TT Seed · Shot v1.');
-		expect(anim.details[0].text).toBe('Same name and step (anim @ Anim): linked to Anim in TT Seed · Shot v2.');
+		expect(anim.details[0].text).toBe('Same name and Step (anim @ Anim): linked to Anim in TT Seed · Shot v2.');
 	});
 
 	it('marks filled dates, and a Task downstream of a new dependency whose dates may move (092)', () => {
@@ -161,7 +161,7 @@ describe('taskLines: one outcome per Task', () => {
 		const o = { ...opts0(), clearCreatedDates: true };
 		const q = plan(extraSnap, o);
 		const cleared = taskLines(q, input([q], o)).find((l) => l.name === 'Review')!;
-		expect(cleared.details.map((d) => d.text)).toContain('Template dates cleared: it starts with no dates.');
+		expect(cleared.details.map((d) => d.text)).toContain('Template dates cleared.');
 	});
 
 	it('omit and delete label the extra, deletes with publishes loudly (089)', () => {
@@ -186,7 +186,7 @@ describe('taskLines: one outcome per Task', () => {
 		const hand = byTask(lines, 21);
 		expect(hand.outcome).toBe('updated');
 		expect(hand.markers).toContainEqual({ key: 'renamed', label: 'renamed back', tone: 'warning' });
-		expect(hand.details.map((d) => d.text)).toContain('Renamed by hand: gets the template name back, Layout v2 to Layout.');
+		expect(hand.details.map((d) => d.text)).toContain("Renamed by hand. Renamed back to the template's name: Layout v2 to Layout.");
 	});
 
 	it('a claim that takes the template name is linked + renamed', () => {
@@ -222,7 +222,7 @@ describe('taskLines: conflicts', () => {
 		expect(choice[0].conflict?.candidates.map((c) => c.task.id)).toEqual([2, 1]);
 		expect(choice[0].name).toBe('Comp');
 		expect(choice[0].details.map((d) => d.text)).toEqual([
-			'2 Tasks match comp @ Anim: pick the one the template task takes, or create a new one.',
+			'2 Tasks match comp @ Anim: pick the Task to link, or create a new one.',
 			'Pre-pick: comp #2, it has Versions or PublishedFiles.'
 		]);
 		expect(lines.some((l) => l.taskId === 1 || l.taskId === 2)).toBe(false);

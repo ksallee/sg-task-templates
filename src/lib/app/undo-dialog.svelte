@@ -35,12 +35,12 @@
 		<Dialog.Header>
 			<Dialog.Title>{title}</Dialog.Title>
 			<Dialog.Description>
-				Puts {records.length === 1 ? 'this entity' : `${records.length} entities`} back as {records.length === 1 ? 'it was' : 'they were'} before the apply. Each entity is its own undo: one can fail while the others land.
+				Restores {records.length === 1 ? 'this entity' : `${records.length} entities`} to {records.length === 1 ? 'its' : 'their'} state before the apply. Each entity is undone separately: one can fail while the others succeed.
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
 			<div class="flex flex-col gap-1.5">
-				<p class="flex items-center gap-2 text-sm font-medium"><CircleCheck class="text-success size-4" aria-hidden="true" /> What it puts back</p>
+				<p class="flex items-center gap-2 text-sm font-medium"><CircleCheck class="text-success size-4" aria-hidden="true" /> What undo restores</p>
 				<ul class="marker:text-muted-foreground flex list-disc flex-col gap-1 pl-5 text-sm">
 					{#each PUTS_BACK as text, i (i)}<li>{text}</li>{/each}
 				</ul>
@@ -48,7 +48,7 @@
 			{#if notes.length}
 				<div class="flex flex-col gap-1.5">
 					<p class="flex items-center gap-2 text-sm font-medium">
-						<TriangleAlert class="text-warning size-4" aria-hidden="true" /> What it cannot put back exactly
+						<TriangleAlert class="text-warning size-4" aria-hidden="true" /> What undo cannot restore exactly
 					</p>
 					<ul class="text-muted-foreground marker:text-muted-foreground flex list-disc flex-col gap-1 pl-5 text-sm" data-slot="undo-notes">
 						{#each notes as note, i (i)}<li>{note}</li>{/each}
@@ -57,7 +57,7 @@
 			{/if}
 		</div>
 		<Dialog.Footer>
-			<Button variant="ghost" onclick={() => (open = false)}>Keep it</Button>
+			<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
 			<Button
 				variant="destructive"
 				onclick={() => {

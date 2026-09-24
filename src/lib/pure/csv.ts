@@ -14,6 +14,7 @@
 
 import { KIND_LABEL, KINDS } from './kinds';
 import { keyParts } from './matching';
+import { EXTRA_REASON, PICK_REASON } from './plan-view';
 import type {
 	AffectedEdge,
 	ConflictRow,
@@ -50,6 +51,42 @@ export const PLAN_CSV_COLUMNS = [
 ] as const;
 
 type Column = (typeof PLAN_CSV_COLUMNS)[number];
+
+/** The header row, in the app's words. */
+export const PLAN_CSV_HEADERS: Record<Column, string> = {
+	entity: 'Entity',
+	action: 'Outcome',
+	task: 'Task',
+	template_task: 'Template task',
+	key: 'Name @ Step',
+	reason: 'Reason',
+	field_changes: 'Field changes',
+	decision: 'Choice',
+	usage: 'Versions and published files',
+	edge_upstream: 'Upstream Task',
+	edge_downstream: 'Downstream Task',
+	edge_spec: 'Dependency type and offset',
+	dates: 'Dates',
+	warnings: 'Warnings'
+};
+
+/** Outcome cells: the entity row, then each dependency row. Task rows use `KIND_LABEL`. */
+const ACTION_LABEL: Record<string, string> = {
+	apply: 'Apply',
+	noop: 'Nothing to write',
+	'edge-add': 'Dependency added',
+	'edge-replace': 'Dependency replaced',
+	'edge-delete': 'Dependency removed',
+	'edge-outside': 'Dependency on a Task outside the template'
+};
+
+const POLICY_WORD: Record<FieldChange['policy'], string> = {
+	keep: 'kept',
+	overwrite: 'overwritten',
+	fill_if_empty: 'filled if empty'
+};
+
+const EDGE_ACTION_WORD: Record<AffectedEdge['action'], string> = { keep: 're-created', remove: 'removed' };
 type Row = Record<Column, string>;
 type StepRef = { name?: string } | null;
 
@@ -76,7 +113,7 @@ const newLabel = (tt: TemplateTask | undefined) => `${tt?.content ?? '(no name)'
 
 function keyLabel(key: MatchKey, step: StepRef): string {
 	const { content, stepId } = keyParts(key);
-	const stepName = step?.name ?? (stepId === null ? 'no step' : `step #${stepId}`);
+	const stepName = step?.name ?? (stepId === null ? 'no Step' : `Step #${stepId}`);
 	return `${content || '(empty)'} @ ${stepName}`;
 }
 
@@ -102,8 +139,8 @@ function fieldChangesLabel(changes: FieldChange[] | undefined, skipContent: bool
 		.filter((c) => !(skipContent && c.field === 'content'))
 		.map((c) =>
 			c.result === c.current
-				? `${fieldName(c.field, labels)}: keeps ${value(c.current)}, template ${value(c.template)} (${c.policy})`
-				: `${fieldName(c.field, labels)}: ${value(c.current)} -> ${value(c.result)} (${c.policy})`
+				? `${fieldName(c.field, labels)}: ${value(c.current)} kept (template: ${value(c.template)})`
+				: `${fieldName(c.field, labels)}: ${value(c.current)} -> ${value(c.result)} (${POLICY_WORD[c.policy]})`
 		)
 		.join('; ');
 }
@@ -115,7 +152,7 @@ function warningLabel(w: PlanWarning, stepOf: (key: MatchKey) => StepRef): strin
 		case 'template_entity_type_mismatch':
 			return `template is for ${w.templateType}, entity is ${w.entityType}`;
 		case 'template_duplicate_key':
-			return `template has ${w.templateTaskIds.length} tasks of key ${keyLabel(w.key, stepOf(w.key))}`;
+			return `template has ${w.templateTaskIds.length} tasks named ${keyLabel(w.key, stepOf(w.key))}`;
 		case 'delete_with_usage':
 			return `delete with ${usageCounts(w.usage)}`;
 		case 'rename':
@@ -125,7 +162,7 @@ function warningLabel(w: PlanWarning, stepOf: (key: MatchKey) => StepRef): strin
 		case 'unresolved_conflict':
 			return `pick not valid on template tasks ${w.templateTaskIds.map((id) => `#${id}`).join(', ')}: pre-pick used`;
 		case 'edge_closes_loop':
-			return `edge #${w.edgeId} would close a loop: ${w.action} (107)`;
+			return `dependency #${w.edgeId} would close a loop: ${EDGE_ACTION_WORD[w.action]}`;
 	}
 }
 
@@ -138,7 +175,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 		const r = {} as Row;
 		for (const c of PLAN_CSV_COLUMNS) r[c] = '';
 		r.entity = entity;
-		r.action = action;
+		r.action = ACTION_LABEL[action] ?? KIND_LABEL[action as keyof typeof KIND_LABEL] ?? action;
 		return r;
 	};
 
@@ -174,9 +211,9 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 	const wouldViolate = new Set(plan.edges.wouldViolate);
 	const datesOf = (taskId: Id) =>
 		wouldViolate.has(taskId)
-			? 'pinned: would flag dependency_violation (092)'
+			? 'pinned: would flag a dependency violation'
 			: mayMove.has(taskId)
-				? 'may move (092)'
+				? 'may move'
 				: '';
 
 	// 1. The entity row.
@@ -186,7 +223,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 	head.reason = plan.noop
 		? `already on ${template.code}: nothing to write`
 		: KINDS.map((k) => `${KIND_LABEL[k]} ${c[k]}`).join(', ') +
-			(plan.needsClearFirst ? `; already on ${template.code}: cleared then set (084)` : '');
+			(plan.needsClearFirst ? `; already on ${template.code}: cleared then set` : '');
 	const rows: Row[] = [head];
 
 	// 2. Task rows.
@@ -199,13 +236,13 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 				r.template_task = taskLabel(row.templateTask);
 				r.key = keyLabel(row.templateTask.key, row.templateTask.step);
 				if (row.kind === 'keep') {
-					r.reason = row.keyMismatch ? 'linked; key differs (renamed or step moved)' : 'linked';
+					r.reason = row.keyMismatch ? 'linked; name or Step differs' : 'linked';
 				} else {
 					const prev = row.previousTemplateTask;
 					r.reason = prev
 						? `was linked to #${prev.id}${prev.name ? ` ${prev.name}` : ''}` +
 							(prev.templateId !== null ? ` (template ${prev.templateId})` : '')
-						: 'unlinked, same key';
+						: 'not linked before, same name and Step';
 				}
 				// A rename prints once, as a warning, not again as a content change.
 				r.field_changes = fieldChangesLabel(row.fieldChanges, row.rename !== null, labels);
@@ -218,19 +255,19 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 				r.task = newLabel(tt);
 				r.template_task = taskLabel(tt);
 				r.key = keyLabel(tt.key, tt.step);
-				r.reason = 'no Task with this key';
+				r.reason = 'no Task with this name and Step';
 				const { start, due } = row.templateDates;
 				r.dates =
 					(start === null && due === null
 						? 'no template dates'
-						: `template dates ${start ?? '∅'} .. ${due ?? '∅'}`) +
-					(row.datesClearable ? '; clearable' : '; not clearable (upstream edge)');
+						: `template dates ${start ?? '∅'} to ${due ?? '∅'}`) +
+					(row.datesClearable ? '; can be cleared' : '; cannot be cleared (upstream dependency)');
 				break;
 			}
 			case 'extra': {
 				r.task = taskLabel(row.task);
 				r.key = keyLabel(row.task.key, row.task.step);
-				r.reason = row.reason;
+				r.reason = EXTRA_REASON[row.reason];
 				r.decision = row.action;
 				r.usage = usageLabel(row.usage);
 				r.field_changes = fieldChangesLabel(row.fieldChanges, false, labels);
@@ -249,12 +286,12 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 			r.task = row.candidates.map((x) => taskLabel(x.task)).join(', ');
 			r.template_task = taskLabel(tt);
 			r.key = keyLabel(row.key, tt.step);
-			r.reason = `pre-pick by ${row.reason}`;
+			r.reason = `pre-pick: ${PICK_REASON[row.reason]}`;
 			const pick = row.pick[tt.id] ?? null;
 			const pre = row.prePick[tt.id] ?? null;
 			r.decision =
 				pick === pre
-					? `pick = pre-pick: ${choice(pick)}`
+					? `pick (the pre-pick): ${choice(pick)}`
 					: `pick: ${choice(pick)}; pre-pick: ${choice(pre)}`;
 			r.usage = row.candidates.map((x) => `#${x.task.id}: ${usageLabel(x.usage)}`).join('; ');
 			take(r, aboutTemplateTask(tt.id));
@@ -282,7 +319,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 		r.edge_upstream = endLabel(add.upstream);
 		r.edge_downstream = endLabel(add.downstream);
 		r.edge_spec = specLabel(add.templateEdge);
-		r.reason = 'template edge (099)';
+		r.reason = 'from the template';
 		rows.push(r);
 	}
 
@@ -306,22 +343,22 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 			outside_upstream: 'edge-outside'
 		}[aff.cause];
 		const r = edgeRow(action, e);
-		r.decision = aff.action;
+		r.decision = EDGE_ACTION_WORD[aff.action];
 		if (aff.cause === 'replaced') {
 			const t = aff.replacedBy;
 			if (t) r.edge_spec = `${specLabel(e)} -> ${specLabel(t)}`;
 			const reversed = t !== null && t.downstream !== e.downstream;
-			r.reason = `replaced by the template edge${reversed ? ', reversed' : ''} (101)`;
+			r.reason = `replaced by the template's dependency${reversed ? ', reversed' : ''}`;
 		} else if (aff.cause === 'not_in_template') {
-			r.reason = 'not in the template: the apply deletes it (102)';
+			r.reason = 'not in the template: the apply removes it';
 		} else {
 			const gone = deletedEnd(e);
 			if (gone !== undefined) {
-				r.reason = `deleted with the Task not in the template ${idLabel(gone)} (103)`;
+				r.reason = `deleted with the Task not in the template ${idLabel(gone)}`;
 				r.decision = '';
-			} else r.reason = 'outside Task upstream: erased by the apply (109)';
+			} else r.reason = 'upstream Task outside the template: the apply removes it';
 		}
-		if (aff.closesLoop) r.reason += '; keeping it would close a loop (107)';
+		if (aff.closesLoop) r.reason += '; keeping it would close a loop';
 		take(r, (w) => w.code === 'edge_closes_loop' && w.edgeId === e.id);
 		return r;
 	};
@@ -331,7 +368,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 		const r = edgeRow('edge-outside', e);
 		const gone = deletedEnd(e);
 		r.reason =
-			gone !== undefined ? `deleted with the Task not in the template ${idLabel(gone)} (103)` : 'outside Task downstream: kept';
+			gone !== undefined ? `deleted with the Task not in the template ${idLabel(gone)}` : 'downstream Task outside the template: kept';
 		rows.push(r);
 	}
 
@@ -340,8 +377,8 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 	const moves = unlisted(plan.edges.mayMove);
 	const flags = unlisted(plan.edges.wouldViolate);
 	head.dates = [
-		moves.length ? `outside Tasks may move: ${moves.join(', ')}` : '',
-		flags.length ? `outside pinned Tasks would flag: ${flags.join(', ')}` : ''
+		moves.length ? `Tasks on other entities may move: ${moves.join(', ')}` : '',
+		flags.length ? `pinned Tasks on other entities would flag a dependency violation: ${flags.join(', ')}` : ''
 	]
 		.filter(Boolean)
 		.join('; ');
@@ -357,7 +394,7 @@ const line = (cells: readonly string[]) => cells.map(cell).join(',');
 
 /** `labels`: Task field display names by code name; fields print as "Description (sg_description)". */
 export function planToCsv(plans: EntityPlan[], template: Template, labels?: Record<FieldName, string>): string {
-	const out = [line(PLAN_CSV_COLUMNS)];
+	const out = [line(PLAN_CSV_COLUMNS.map((c) => PLAN_CSV_HEADERS[c]))];
 	for (const plan of plans) {
 		for (const r of entityRows(plan, template, labels)) out.push(line(PLAN_CSV_COLUMNS.map((c) => r[c])));
 	}

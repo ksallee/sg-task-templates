@@ -97,8 +97,8 @@
 				<div class="flex flex-col gap-0.5">
 					<p class="text-xs font-medium">Fields the template rewrites</p>
 					<p class="text-muted-foreground text-xs">
-						Applying the template overwrites these fields on your existing Tasks, only those the template has a value for. For each:
-						keep yours, or take the template's?
+						The apply overwrites these fields on existing Tasks where the template has a value. For each, keep yours or take the
+						template's.
 					</p>
 				</div>
 				<div class="grid grid-cols-[repeat(auto-fill,24rem)] gap-x-6 gap-y-1.5">
@@ -121,7 +121,7 @@
 				</p>
 				<p class="text-muted-foreground text-xs" data-slot="policy-note">
 					Not listed: Flow Production Tracking always fills empty assignees and dates from the template (undo empties them again; dates
-					only on Tasks with no dependency upstream). Status is never touched.
+					only on Tasks with no dependency upstream). Status is not changed.
 				</p>
 			</div>
 
@@ -156,7 +156,7 @@
 				{#if clearable > 0}
 					<label class="flex items-center gap-2 text-xs" data-slot="clear-dates">
 						<Switch checked={options.clearCreatedDates} onCheckedChange={(on) => onOptions(withClearCreatedDates(options, on))} />
-						Clear template dates on {clearable} created Task{clearable === 1 ? '' : 's'} with no upstream (097)
+						Clear template dates on {clearable} created Task{clearable === 1 ? '' : 's'} with no upstream dependency
 					</label>
 				{/if}
 			</div>

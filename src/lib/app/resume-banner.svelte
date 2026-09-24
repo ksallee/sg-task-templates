@@ -39,7 +39,7 @@
 		{#each runs as { run: r, counts } (r.id)}
 			<Notice tone="warning" title="An apply did not finish. ">
 				<span class="font-medium">{r.template.code}</span>, started {r.startedAt.slice(0, 16).replace('T', ' ')}:
-				<span class="tabular-nums">{counts.landed} landed, {counts.landing} in flight when it stopped, {counts.failed} failed, {counts.pending} not started.</span>
+				<span class="tabular-nums">{counts.landed} applied, {counts.landing} applying when it stopped, {counts.failed} failed, {counts.pending} not started.</span>
 				{#snippet action()}
 					<Button size="sm" variant="ghost" onclick={() => void session.close(r.id)} disabled={busy !== null}>Close</Button>
 					<Button size="sm" variant="outline" href={`/result?run=${r.id}`}>Review and undo</Button>

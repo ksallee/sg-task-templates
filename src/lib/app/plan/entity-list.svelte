@@ -44,7 +44,7 @@
 					{#if warnings.length > 0}
 						<span class="shrink-0" title={warnings.map((w) => w.text).join('\n')} data-slot="plan-entity-warnings">
 							{#if blocking}
-								<CircleAlert class="text-destructive size-3.5" aria-label="needs you" />
+								<CircleAlert class="text-destructive size-3.5" aria-label="needs a choice" />
 							{:else}
 								<TriangleAlert class="text-warning size-3.5" aria-label={`${warnings.length} warning${warnings.length === 1 ? '' : 's'}`} />
 							{/if}

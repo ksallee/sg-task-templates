@@ -171,7 +171,7 @@ function fieldDetails(changes: FieldChange[] | undefined, labels: SummaryInput['
 
 const CAUSE_WORDS: Record<AffectedEdge['cause'], string> = {
 	not_in_template: 'the template does not have it',
-	replaced: "the template's own edge takes its place",
+	replaced: 'the template has a different dependency between these Tasks',
 	outside_upstream: 'its upstream is not in the template'
 };
 
@@ -195,9 +195,9 @@ function edgeDetails(plan: EntityPlan, template: Template, tasks: EntityTask[]) 
 			...(a.closesLoop ? { tone: 'warning' as const } : {})
 		});
 	});
-	for (const id of plan.edges.mayMove) add(`t${id}`, { text: 'Dates may move: a new dependency upstream reschedules it (092).' });
+	for (const id of plan.edges.mayMove) add(`t${id}`, { text: 'Dates may move: a new upstream dependency reschedules it.' });
 	for (const id of plan.edges.wouldViolate)
-		add(`t${id}`, { text: 'Pinned: it keeps its dates and flags a dependency violation (092).', tone: 'warning' });
+		add(`t${id}`, { text: 'Pinned: it keeps its dates and flags a dependency violation.', tone: 'warning' });
 	return byNode;
 }
 
@@ -251,7 +251,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 				status: null,
 				markers: [],
 				details: [
-					{ text: `${row.candidates.length} Tasks match ${key}${twice}: pick the one the template task takes, or create a new one.` },
+					{ text: `${row.candidates.length} Tasks match ${key}${twice}: pick the Task to link, or create a new one.` },
 					...(pre ? [{ text: `Pre-pick: ${nameOf(pre.task)} #${pre.task.id}, ${PICK_REASON[row.reason]}.` }] : [])
 				],
 				row,
@@ -269,7 +269,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			let outcome: TaskOutcome;
 			if (row.kind === 'claim') {
 				outcome = row.rename ? 'linked_renamed' : 'linked';
-				details.push({ text: `Same name and step (${keyLabel(row.task.key, row.task.step)}): linked to ${nameOf(row.templateTask)} in ${template.code}.` });
+				details.push({ text: `Same name and Step (${keyLabel(row.task.key, row.task.step)}): linked to ${nameOf(row.templateTask)} in ${template.code}.` });
 				details.push({
 					text: row.previousTemplateTask ? `Linked before: ${previousLinkLabel(row.previousTemplateTask, templates)}.` : 'Not linked to a template before.'
 				});
@@ -278,11 +278,11 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 				outcome = row.rename || fields || row.fills?.length ? 'updated' : 'unchanged';
 				details.push({ text: `Already linked to ${nameOf(row.templateTask)} in ${template.code}.` });
 				if (row.keyMismatch)
-					details.push({ text: `Its name or step no longer match the template task (${keyLabel(row.task.key, row.task.step)}); it stays linked.` });
+					details.push({ text: `Its name or Step no longer matches the template task (${keyLabel(row.task.key, row.task.step)}); it stays linked.` });
 				if (row.rename) {
 					markers.push({ key: 'renamed', label: 'renamed back', tone: 'warning' });
 					details.push({
-						text: `Renamed by hand: gets the template name back, ${nameOf({ content: row.rename.from })} to ${nameOf({ content: row.rename.to })}.`,
+						text: `Renamed by hand. Renamed back to the template's name: ${nameOf({ content: row.rename.from })} to ${nameOf({ content: row.rename.to })}.`,
 						tone: 'warning'
 					});
 				}
@@ -306,7 +306,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			const { start, due } = row.templateDates;
 			const details: Detail[] = [{ text: `New Task from the template's ${nameOf(row.templateTask)}, with its fields.` }];
 			if (start !== null || due !== null) {
-				if (row.datesClearable && opts.clearCreatedDates) details.push({ text: 'Template dates cleared: it starts with no dates.' });
+				if (row.datesClearable && opts.clearCreatedDates) details.push({ text: 'Template dates cleared.' });
 				else
 					details.push({
 						text: `Template dates: ${start ?? '(none)'} to ${due ?? '(none)'}.${row.datesClearable ? '' : ' Its upstream dependency may move them.'}`
@@ -332,12 +332,12 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 				row.reason === 'conflict_loser' && !!row.task.templateTask && !!conflict?.templateTasks.some((tt) => tt.id === row.task.templateTask?.id);
 			const details: Detail[] = [];
 			if (row.reason === 'not_in_template') details.push({ text: 'Not in the template.' });
-			else if (row.reason === 'link_wins') details.push({ text: `Same name and step as a template task: ${EXTRA_REASON.link_wins}.` });
+			else if (row.reason === 'link_wins') details.push({ text: `Same name and Step as a template task: ${EXTRA_REASON.link_wins}.` });
 			else
 				details.push({
-					text: unlinked ? 'Not picked. Unlinked from the template task so only the picked Task is linked (106).' : 'Not picked.'
+					text: unlinked ? 'Not picked. Unlinked from the template task so only the picked Task is linked.' : 'Not picked.'
 				});
-			if (outcome === 'left') details.push({ text: 'Left as it is.' });
+			if (outcome === 'left') details.push({ text: 'Not changed.' });
 			if (outcome === 'omitted') details.push({ text: `Status ${row.task.status ?? '(none)'} becomes ${opts.omitStatus || 'the omit status (pick one)'}.` });
 			if (outcome === 'deleted')
 				details.push({
@@ -351,7 +351,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			if (relinked) {
 				if (row.fieldChanges!.some((c) => changed(c))) markers.push({ key: 'fields', label: 'fields change', tone: 'info' });
 				markers.push(...fillMarkers(row.fills));
-				details.push({ text: 'Still linked to a template task: the apply re-syncs it too.' }, ...fieldDetails(row.fieldChanges, labels), ...fillDetails(row.fills));
+				details.push({ text: 'Still linked to a template task: the apply updates it from the template too.' }, ...fieldDetails(row.fieldChanges, labels), ...fillDetails(row.fills));
 			}
 			markers.push(...dateMarkers(row.task.id));
 			details.push(...(edges.get(`t${row.task.id}`) ?? []), ...conflictDetail(conflict));
@@ -449,7 +449,7 @@ export const GROUP_LABEL: Record<SummaryGroup, string> = {
 	tasks: 'Tasks',
 	fields: 'Fields',
 	dependencies: 'Dependencies and dates',
-	same: 'Stays as it is'
+	same: 'No change'
 };
 
 export interface TaskGroup {

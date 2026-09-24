@@ -11,12 +11,12 @@
 
 	export const STATE_LABEL: Record<AnyLineState, string> = {
 		pending: 'Pending',
-		landing: 'Landing',
-		landed: 'Landed',
+		landing: 'Applying',
+		landed: 'Applied',
 		failed: 'Failed',
 		cancelled: 'Cancelled',
 		undone: 'Undone',
-		clean: 'Landed clean',
+		clean: 'Applied',
 		differences: 'With differences',
 		not_applied: 'Not applied'
 	};

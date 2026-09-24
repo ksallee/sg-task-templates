@@ -17,7 +17,7 @@
 <section class="border-border flex shrink-0 flex-col gap-3 border-b px-6 py-4" data-slot="run-summary" aria-label="What Apply does">
 	<div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
 		<h2 class="text-sm font-semibold">If you apply</h2>
-		<span class="text-muted-foreground text-xs">Click a line to list the entities it touches.</span>
+		<span class="text-muted-foreground text-xs">Click a line to filter the entities.</span>
 	</div>
 	<div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-8 gap-y-3">
 		{#each groups as g (g.group)}
