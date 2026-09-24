@@ -6,10 +6,12 @@ import {
 	edgeKeepRequests,
 	extraRequests,
 	templateRequests,
+	unlinkRequests,
 	validateRequests,
 	writeBackRequests
 } from './batch';
 import { matchKey } from './matching';
+import { planEntity, withConflictPick } from './planner';
 import type {
 	AffectedEdge,
 	BatchRequest,
@@ -18,6 +20,7 @@ import type {
 	CreateRow,
 	Edge,
 	EntityPlan,
+	EntitySnapshot,
 	EntityTask,
 	ExtraAction,
 	ExtraRow,
@@ -26,6 +29,7 @@ import type {
 	KeepRow,
 	ProjectContext,
 	RunOptions,
+	Template,
 	TemplateTask
 } from './types';
 
@@ -417,8 +421,17 @@ describe('buildAfterApply', () => {
 		action: 'keep'
 	};
 
+	const transient = (a: AffectedEdge) => ({
+		templateEdge: a.replacedBy!,
+		downstream: { existing: a.existing.downstream },
+		upstream: { existing: a.existing.upstream },
+		keptEdge: a.existing.id
+	});
+	const withReplaced = (...as: AffectedEdge[]) =>
+		plan({ edges: { ...plan().edges, affected: as, transientAdded: as.map(transient) } });
+
 	it('keeps a replaced edge: deletes the template copy, then re-creates the old one', () => {
-		const p = plan({ edges: { ...plan().edges, affected: [replaced] } });
+		const p = withReplaced(replaced);
 		const after = { tasks: [], edges: [edge(802, 5002, 5001)] };
 		expect(buildAfterApply(p, OPTS, after)).toEqual([
 			{ request_type: 'delete', entity: 'TaskDependency', record_id: 802 },
@@ -436,15 +449,183 @@ describe('buildAfterApply', () => {
 	});
 
 	it('finds the template copy in the reverse direction', () => {
-		const p = plan({ edges: { ...plan().edges, affected: [replaced] } });
+		const p = withReplaced(replaced);
 		const after = { tasks: [], edges: [edge(803, 5001, 5002)] };
 		expect(buildAfterApply(p, OPTS, after)[0]).toEqual({ request_type: 'delete', entity: 'TaskDependency', record_id: 803 });
 	});
 
 	it('leaves a replaced edge the apply did not touch, and a removed one', () => {
-		const p = plan({ edges: { ...plan().edges, affected: [replaced, { ...replaced, action: 'remove', existing: { ...edge(704, 5003, 5001), id: 704 } }] } });
+		const p = withReplaced(replaced, { ...replaced, action: 'remove', existing: { ...edge(704, 5003, 5001), id: 704 } });
 		const after = { tasks: [], edges: [edge(702, 5002, 5001, 'start-to-start', 1), edge(804, 5003, 5001)] };
 		expect(buildAfterApply(p, OPTS, after)).toEqual([]);
+	});
+});
+
+describe('buildAfterApply: transient template copies', () => {
+	const replaced: AffectedEdge = {
+		existing: { ...edge(702, 5002, 5001, 'start-to-start', 1), id: 702 },
+		cause: 'replaced',
+		replacedBy: edge(null, 5002, 5001),
+		action: 'keep'
+	};
+	const copy = { templateEdge: edge(900, 3003, 3001), downstream: { existing: 5002 }, upstream: { existing: 5001 }, keptEdge: 702 };
+
+	it('acts on transientAdded, not on replaced edges without a template copy', () => {
+		const after = { tasks: [], edges: [edge(802, 5002, 5001)] };
+		expect(buildAfterApply(plan({ edges: { ...plan().edges, affected: [replaced] } }), OPTS, after)).toEqual([]);
+		const p = plan({ edges: { ...plan().edges, affected: [replaced], transientAdded: [copy] } });
+		expect(buildAfterApply(p, OPTS, after).map((r) => r.request_type)).toEqual(['delete', 'create']);
+	});
+
+	it('never re-creates an edge marked closesLoop, and leaves the template copy', () => {
+		const loop: AffectedEdge = { ...replaced, closesLoop: true };
+		const p = plan({ edges: { ...plan().edges, affected: [loop], transientAdded: [copy] } });
+		expect(buildAfterApply(p, OPTS, { tasks: [], edges: [edge(802, 5002, 5001)] })).toEqual([]);
+	});
+});
+
+// Plans from planEntity. Template 202: comp 3001 @11, roto 3002 @13, paint 3003 @14;
+// comp depends on paint, start-to-start +1 (recipe 015's shape).
+describe('from planEntity', () => {
+	const tpl: Template = {
+		id: 202,
+		code: 'tt2',
+		entityType: 'Shot',
+		tasks: [
+			{ ...TT_COMP, sortOrder: 10 },
+			{ ...TT_ROTO, sortOrder: 20 },
+			{ ...TT_PAINT, sortOrder: 30 }
+		],
+		edges: [edge(900, 3001, 3003, 'start-to-start', 1)]
+	};
+	const linked = (id: Id, content: string, stepId: number, link: Id, createdAt = '2026-09-02T15:58:21Z'): EntityTask => ({
+		...task(id, content, stepId),
+		templateTask: { id: link, templateId: 202 },
+		createdAt
+	});
+	const snap = (tasks: EntityTask[], edges: Edge[] = [], taskTemplate: Id | null = null): EntitySnapshot => ({
+		entity: { ...SHOT, entityType: 'Shot', taskTemplate: taskTemplate === null ? null : { type: 'TaskTemplate', id: taskTemplate } },
+		tasks,
+		edges,
+		usage: {},
+		readAt: '2026-09-24T10:00:00Z'
+	});
+	const creates = (reqs: BatchRequest[]) =>
+		reqs.flatMap((r) =>
+			r.request_type === 'create' && r.entity === 'TaskDependency'
+				? [[(r.data.task as { id: Id }).id, (r.data.dependent_task as { id: Id }).id]]
+				: []
+		);
+	const shotWrite = (reqs: BatchRequest[]) =>
+		reqs.findIndex((r) => r.entity === 'Shot' && r.request_type === 'update' && r.data.task_template !== null);
+
+	describe('106: conflict losers linked to the template task', () => {
+		const tasks = () => [
+			linked(5001, 'comp', 11, 3001),
+			linked(5003, 'paint', 14, 3003, '2026-01-01T00:00:00Z'),
+			linked(5004, 'paint', 14, 3003, '2026-02-01T00:00:00Z')
+		];
+
+		it('unlinks the loser before the template write', () => {
+			const p = planEntity(tpl, snap(tasks()), CTX, OPTS);
+			expect(p.rows.find((r) => r.kind === 'extra')).toMatchObject({ reason: 'conflict_loser', task: { id: 5004 } });
+			const w = buildEntityWrite(p, OPTS, CTX);
+			const i = w.batch.findIndex((r) => r.request_type === 'update' && r.record_id === 5004 && r.data.template_task === null);
+			expect(i).toBeGreaterThanOrEqual(0);
+			expect(i).toBeLessThan(shotWrite(w.batch));
+			expect(unlinkRequests(p)).toEqual([upd('Task', 5004, { template_task: null })]);
+		});
+
+		it('unlinks whichever Task loses to the user pick', () => {
+			const p = planEntity(tpl, snap(tasks()), CTX, withConflictPick(OPTS, 3003, 5004));
+			expect(unlinkRequests(p)).toEqual([upd('Task', 5003, { template_task: null })]);
+		});
+
+		it('leaves a loser that is not linked to the conflict template task', () => {
+			const t = [linked(5001, 'comp', 11, 3001), task(5003, 'paint', 14), task(5004, 'paint', 14, 9003)];
+			const p = planEntity(tpl, snap(t), CTX, OPTS);
+			expect(p.rows.filter((r) => r.kind === 'extra' && r.reason === 'conflict_loser')).toHaveLength(1);
+			expect(unlinkRequests(p)).toEqual([]);
+		});
+	});
+
+	describe('109: outside-upstream edges', () => {
+		// comp and paint kept; roto @12 an extra. comp on roto: outside upstream, erased by the apply.
+		// roto on paint: the outside Task downstream, kept by the apply.
+		const tasks = () => [linked(5001, 'comp', 11, 3001), linked(5003, 'paint', 14, 3003), task(5009, 'roto', 12)];
+		const edges = [edge(900 + 1, 5001, 5003, 'start-to-start', 1), edge(701, 5001, 5009), edge(702, 5009, 5003)];
+
+		it('keep re-creates it after the template write, like not_in_template', () => {
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, OPTS);
+			expect(p.edges.affected.map((a) => [a.existing.id, a.cause, a.action])).toEqual([[701, 'outside_upstream', 'keep']]);
+			const w = buildEntityWrite(p, OPTS, CTX);
+			expect(creates(w.batch)).toEqual([[5001, 5009]]);
+			const i = w.batch.findIndex((r) => r.request_type === 'create');
+			expect(i).toBeGreaterThan(shotWrite(w.batch));
+			expect(validateRequests(w.batch, p)).toEqual([]);
+		});
+
+		it('remove sends nothing: the apply erases it', () => {
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, { ...OPTS, edgeActions: { 701: 'remove' } });
+			expect(creates(buildEntityWrite(p, OPTS, CTX).batch)).toEqual([]);
+		});
+
+		it('is not re-created when the batch deletes the outside Task', () => {
+			const o = { ...OPTS, extraOverrides: { 5009: 'delete' as const }, deleteConfirmed: true };
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, o);
+			const w = buildEntityWrite(p, o, CTX);
+			expect(creates(w.batch)).toEqual([]);
+			expect(w.batch.at(-1)).toEqual({ request_type: 'delete', entity: 'Task', record_id: 5009 });
+		});
+
+		it('never re-creates an edge marked closesLoop, even under keep', () => {
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, OPTS);
+			const loop = { ...p.edges, affected: p.edges.affected.map((a) => ({ ...a, action: 'keep' as const, closesLoop: true as const })) };
+			expect(edgeKeepRequests({ ...p, edges: loop })).toEqual([]);
+		});
+	});
+
+	describe('replaced edges: transient template copies', () => {
+		// comp on paint exists as finish-to-start; the template's is start-to-start +1.
+		const tasks = () => [linked(5001, 'comp', 11, 3001), linked(5003, 'paint', 14, 3003)];
+		const edges = [edge(703, 5001, 5003)];
+
+		it('keep: the copy is transient, deleted after the apply, and the old edge re-created', () => {
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, OPTS);
+			expect(p.edges.expectedAdded).toEqual([]);
+			expect(p.edges.transientAdded).toHaveLength(1);
+			expect(creates(buildEntityWrite(p, OPTS, CTX).batch)).toEqual([]);
+			const after = { tasks: tasks(), edges: [edge(810, 5001, 5003, 'start-to-start', 1)] };
+			expect(buildAfterApply(p, OPTS, after)).toEqual([
+				{ request_type: 'delete', entity: 'TaskDependency', record_id: 810 },
+				{
+					request_type: 'create',
+					entity: 'TaskDependency',
+					data: {
+						task: { type: 'Task', id: 5001 },
+						dependent_task: { type: 'Task', id: 5003 },
+						dependency_type: 'finish-to-start-next-day',
+						offset_days: null
+					}
+				}
+			]);
+		});
+
+		it('remove: the template copy survives, nothing after the apply', () => {
+			const o = { ...OPTS, edgeActions: { 703: 'remove' as const } };
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, o);
+			expect(p.edges.expectedAdded).toHaveLength(1);
+			expect(buildAfterApply(p, o, { tasks: tasks(), edges: [edge(810, 5001, 5003, 'start-to-start', 1)] })).toEqual([]);
+		});
+
+		it('104: rejects a batch that deletes an edge the template write erases', () => {
+			const p = planEntity(tpl, snap(tasks(), edges), CTX, OPTS);
+			const batch = [...buildEntityWrite(p, OPTS, CTX).batch, { request_type: 'delete', entity: 'TaskDependency', record_id: 703 } as BatchRequest];
+			expect(validateRequests(batch, p)).toEqual([
+				`request ${batch.length - 1}: deletes TaskDependency 703, which the template write erases (404, 104)`
+			]);
+			expect(validateRequests(batch)).toEqual([]);
+		});
 	});
 });
 
