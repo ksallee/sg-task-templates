@@ -1,0 +1,31 @@
+{
+	"properties": {
+		"default_value": {
+			"value": "wtg"
+		},
+		"valid_values": {
+			"value": [
+				"wtg",
+				"ip",
+				"fin",
+				"apr",
+				"dis",
+				"na",
+				"hld",
+				"rev",
+				"omt",
+				"ready"
+			]
+		},
+		"hidden_values": {
+			"value": [
+				"dis"
+			]
+		},
+		"display_values": {
+			"value": {
+				"omt": "Omit"
+			}
+		}
+	}
+}

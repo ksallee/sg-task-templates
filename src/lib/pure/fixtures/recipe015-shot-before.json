@@ -1,0 +1,206 @@
+{
+	"shot": {
+		"type": "Shot",
+		"id": 7557,
+		"attributes": {
+			"code": "sh010",
+			"sg_status_list": "wtg"
+		},
+		"relationships": {
+			"project": {
+				"data": {
+					"id": 1180,
+					"name": "sandbox",
+					"type": "Project"
+				}
+			},
+			"task_template": {
+				"data": {
+					"id": 201,
+					"name": "tt1",
+					"type": "TaskTemplate"
+				}
+			}
+		}
+	},
+	"tasks": [
+		{
+			"type": "Task",
+			"id": 47295,
+			"attributes": {
+				"content": "roto",
+				"sg_status_list": "wtg",
+				"sg_sort_order": 20,
+				"duration": null,
+				"est_in_mins": null,
+				"sg_description": null,
+				"milestone": false,
+				"start_date": null,
+				"due_date": null,
+				"pinned": false,
+				"dependency_violation": false,
+				"created_at": "2026-09-02T15:58:21Z"
+			},
+			"relationships": {
+				"project": {
+					"data": {
+						"id": 1180,
+						"name": "sandbox",
+						"type": "Project"
+					}
+				},
+				"entity": {
+					"data": {
+						"id": 7557,
+						"name": "sh010",
+						"type": "Shot"
+					}
+				},
+				"step": {
+					"data": {
+						"id": 12,
+						"name": "Character FX",
+						"type": "Step"
+					}
+				},
+				"template_task": {
+					"data": {
+						"id": 47102,
+						"name": "roto",
+						"type": "Task"
+					}
+				},
+				"task_template": {
+					"data": null
+				},
+				"upstream_tasks": {
+					"data": []
+				},
+				"downstream_tasks": {
+					"data": []
+				},
+				"task_assignees": {
+					"data": []
+				}
+			}
+		},
+		{
+			"type": "Task",
+			"id": 47296,
+			"attributes": {
+				"content": "comp",
+				"sg_status_list": "wtg",
+				"sg_sort_order": 10,
+				"duration": null,
+				"est_in_mins": null,
+				"sg_description": null,
+				"milestone": false,
+				"start_date": null,
+				"due_date": null,
+				"pinned": false,
+				"dependency_violation": false,
+				"created_at": "2026-09-02T15:58:21Z"
+			},
+			"relationships": {
+				"project": {
+					"data": {
+						"id": 1180,
+						"name": "sandbox",
+						"type": "Project"
+					}
+				},
+				"entity": {
+					"data": {
+						"id": 7557,
+						"name": "sh010",
+						"type": "Shot"
+					}
+				},
+				"step": {
+					"data": {
+						"id": 11,
+						"name": "Animation",
+						"type": "Step"
+					}
+				},
+				"template_task": {
+					"data": {
+						"id": 47101,
+						"name": "comp",
+						"type": "Task"
+					}
+				},
+				"task_template": {
+					"data": null
+				},
+				"upstream_tasks": {
+					"data": []
+				},
+				"downstream_tasks": {
+					"data": []
+				},
+				"task_assignees": {
+					"data": []
+				}
+			}
+		},
+		{
+			"type": "Task",
+			"id": 47297,
+			"attributes": {
+				"content": "paint",
+				"sg_status_list": "ip",
+				"sg_sort_order": null,
+				"duration": null,
+				"est_in_mins": null,
+				"sg_description": null,
+				"milestone": false,
+				"start_date": null,
+				"due_date": null,
+				"pinned": false,
+				"dependency_violation": false,
+				"created_at": "2026-09-02T16:01:53Z"
+			},
+			"relationships": {
+				"project": {
+					"data": {
+						"id": 1180,
+						"name": "sandbox",
+						"type": "Project"
+					}
+				},
+				"entity": {
+					"data": {
+						"id": 7557,
+						"name": "sh010",
+						"type": "Shot"
+					}
+				},
+				"step": {
+					"data": {
+						"id": 14,
+						"name": "FX",
+						"type": "Step"
+					}
+				},
+				"template_task": {
+					"data": null
+				},
+				"task_template": {
+					"data": null
+				},
+				"upstream_tasks": {
+					"data": []
+				},
+				"downstream_tasks": {
+					"data": []
+				},
+				"task_assignees": {
+					"data": []
+				}
+			}
+		}
+	],
+	"dependencies": [],
+	"usage": {}
+}

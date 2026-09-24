@@ -1,0 +1,16 @@
+{
+	"type": "Project",
+	"id": 1180,
+	"attributes": {
+		"tracking_settings": {
+			"default_task_template": {
+				"Shot": {
+					"type": "TaskTemplate",
+					"id": 202,
+					"name": "tt2",
+					"valid": "valid"
+				}
+			}
+		}
+	}
+}
