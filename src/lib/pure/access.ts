@@ -70,7 +70,7 @@ const CAPABILITY_LABEL: Record<AccessCapability, string> = {
 export function buildAccessProbeRequests(input: {
 	task: EntityTask;
 	entity: EntitySnapshot['entity'];
-	entityCode: string;
+	entityCode: string | null;
 	project: EntityRef;
 	fields: FieldName[];
 }): AccessProbeRequests {
@@ -212,4 +212,32 @@ export function buildAccessWarning(summary: AccessSummary): PlanWarning | null {
 		`(094); this check ran with the launcher session, a case that is unmeasured, so a response ` +
 		`this run does not recognize is left unknown, not assumed refused.`;
 	return { code: 'access_short', detail, checks: summary.checks, fields: summary.fields };
+}
+
+/**
+ * The schema's `editable` for what the run writes: each of `fields` on Task that the schema names, and
+ * the entity's `task_template`, keyed `<Type>.task_template` so it never collides with a Task field.
+ * Only these: a read-only field the run never writes (`time_logs_sum`) must not make the write look short.
+ */
+export function runFieldAccess(
+	taskSchema: Record<FieldName, FieldSchema>,
+	fields: FieldName[],
+	entityType: string,
+	entityTaskTemplate: FieldSchema | null
+): Record<FieldName, SchemaFieldAccess> {
+	const picked: Record<FieldName, FieldSchema> = {};
+	for (const name of fields) if (taskSchema[name]) picked[name] = taskSchema[name];
+	if (entityTaskTemplate) picked[`${entityType}.task_template`] = entityTaskTemplate;
+	return schemaFieldAccess(picked);
+}
+
+/** An HTTP status and parsed error body to `AccessResponse`: the first error's `title` and `detail` (017 `first_error`). */
+export function accessResponseFrom(status: number, body: unknown): AccessResponse {
+	const errors = (body as { errors?: unknown } | null)?.errors;
+	const first = Array.isArray(errors) ? (errors[0] as { title?: unknown; detail?: unknown } | undefined) : undefined;
+	return {
+		status,
+		title: typeof first?.title === 'string' ? first.title : null,
+		detail: typeof first?.detail === 'string' ? first.detail : null
+	};
 }

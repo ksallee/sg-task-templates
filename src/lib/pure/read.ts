@@ -22,6 +22,7 @@ import {
 	type DependencyType,
 	type Edge,
 	type EntityRef,
+	type EntitySnapshot,
 	type EntityTask,
 	type FieldName,
 	type Id,
@@ -309,4 +310,98 @@ export function nonEmptyPolicyFields(template: Template): FieldName[] {
 /** The fields to request when reading this template's Tasks: the base set plus its policy fields. */
 export function taskFieldsFor(template: Template): string[] {
 	return [...new Set([...BASE_TASK_FIELDS, ...nonEmptyPolicyFields(template)])];
+}
+
+/** Data types read.ts never collects into `.fields`: they come under `relationships`, not `attributes`. */
+const RELATIONSHIP_TYPES = new Set(['entity', 'multi_entity']);
+
+/**
+ * The Task fields to request as custom policy candidates: editable, named `sg_`, outside the base set,
+ * and read from `attributes`. The schema names no origin (056); on the probed site every Task field a
+ * site may hide was `sg_`-named, so the prefix is the rule here. The client's normalized schema drops
+ * `visible.editable`, 056's other hint.
+ */
+export function customFieldCandidates(taskFields: Record<string, FieldSchema>): FieldName[] {
+	const base = new Set(BASE_TASK_FIELDS);
+	return Object.values(taskFields)
+		.filter((f) => f.editable && f.name.startsWith('sg_') && !base.has(f.name) && !RELATIONSHIP_TYPES.has(f.dataType))
+		.map((f) => f.name)
+		.sort();
+}
+
+/** An entity row (`code`, `task_template`) as the snapshot's entity. */
+export function entityFromRow(row: EntityRow): EntitySnapshot['entity'] {
+	const code = str(row.attributes?.code);
+	return {
+		type: row.type,
+		id: row.id,
+		...(code === null ? {} : { name: code }),
+		entityType: row.type,
+		taskTemplate: singleRef(row, 'task_template')
+	};
+}
+
+/** Every TaskTemplate with its own template tasks and the edges whose downstream Task is one of them. */
+export function templatesFromRows(templates: EntityRow[], tasks: EntityRow[], deps: EntityRow[]): Template[] {
+	return templates.map((tpl) => {
+		const own = tasks.filter((t) => singleRef(t, 'task_template')?.id === tpl.id);
+		const ids = new Set(own.map((t) => t.id));
+		return templateFromRows(tpl, own, deps.filter((d) => ids.has(edgeFromRow(d).downstream)));
+	});
+}
+
+/** `templateOf` for `taskFromRow`, from template task rows read with `task_template`. */
+export function templateOfFromRows(templateTasks: EntityRow[]): (templateTaskId: Id) => Id | null {
+	const byTask = new Map<Id, Id>();
+	for (const row of templateTasks) {
+		const tpl = singleRef(row, 'task_template');
+		if (tpl) byTask.set(row.id, tpl.id);
+	}
+	return (id) => byTask.get(id) ?? null;
+}
+
+/**
+ * One snapshot per entity row, in row order: its Tasks, every TaskDependency row touching one of them
+ * (either end, 109: an edge to an outside Task counts), and their Version and PublishedFile counts.
+ */
+export function snapshotsFromRows(input: {
+	entities: EntityRow[];
+	tasks: EntityRow[];
+	dependencies: EntityRow[];
+	versions: EntityRow[];
+	publishedFiles: EntityRow[];
+	templateOf: (templateTaskId: Id) => Id | null;
+	readAt: string;
+}): EntitySnapshot[] {
+	const edges = input.dependencies.map(edgeFromRow);
+	const usage = usageFromRows(input.versions, input.publishedFiles);
+	return input.entities.map((row) => {
+		const entity = entityFromRow(row);
+		const tasks = input.tasks
+			.filter((t) => {
+				const e = singleRef(t, 'entity');
+				return e?.type === entity.type && e.id === entity.id;
+			})
+			.map((t) => taskFromRow(t, input.templateOf));
+		const ids = new Set(tasks.map((t) => t.id));
+		const own: Record<Id, TaskUsage> = {};
+		for (const id of ids) if (usage[id]) own[id] = usage[id];
+		return {
+			entity,
+			tasks,
+			edges: edges.filter((e) => ids.has(e.downstream) || ids.has(e.upstream)),
+			usage: own,
+			readAt: input.readAt
+		};
+	});
+}
+
+/** The distinct `template_task` ids a batch of entity Tasks points at, in first-seen order. */
+export function linkedTemplateTaskIds(tasks: EntityRow[]): Id[] {
+	const ids = new Set<Id>();
+	for (const row of tasks) {
+		const link = singleRef(row, 'template_task');
+		if (link) ids.add(link.id);
+	}
+	return [...ids];
 }

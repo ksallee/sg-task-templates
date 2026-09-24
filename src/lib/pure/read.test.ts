@@ -3,7 +3,11 @@ import type { EntityRef } from './types';
 import { normalizeField, type EntityRow, type FieldSchema, type RawFieldSchema } from 'sg-widgets-core';
 import {
 	BASE_TASK_FIELDS,
+	customFieldCandidates,
 	defaultTemplateFor,
+	entityFromRow,
+	linkedTemplateTaskIds,
+	snapshotsFromRows,
 	edgeFromRow,
 	nonEmptyPolicyFields,
 	taskFieldsFor,
@@ -11,6 +15,8 @@ import {
 	taskStatusContext,
 	templatableTypes,
 	templateFromRows,
+	templateOfFromRows,
+	templatesFromRows,
 	templateTaskFromRow,
 	usageFromRows
 } from './read';
@@ -380,5 +386,150 @@ describe('recipe 015 fixture: shot-before through read.ts', () => {
 		expect(created.templateTask).toEqual({ id: 47202, name: 'roto', templateId: 202 });
 		const edges = (shotAfter.dependencies as EntityRow[]).map(edgeFromRow);
 		expect(edges).toEqual([{ id: 9101, downstream: 47297, upstream: 47296, type: 'start-to-start', offsetDays: 1 }]);
+	});
+});
+
+describe('customFieldCandidates', () => {
+	const f = (name: string, dataType: string, editable = true): FieldSchema => ({
+		name,
+		displayName: name,
+		entityType: 'Task',
+		dataType,
+		editable,
+		mandatory: false,
+		unique: false
+	});
+
+	it('keeps editable sg_ fields outside the base set, sorted', () => {
+		const schema = {
+			sg_priority_1: f('sg_priority_1', 'list'),
+			sg_check: f('sg_check', 'checkbox'),
+			sg_status_list: f('sg_status_list', 'status_list'), // base
+			sg_description: f('sg_description', 'text'), // base
+			sg_locked: f('sg_locked', 'text', false), // not editable
+			sg_owner: f('sg_owner', 'entity'), // under relationships: read.ts never collects it
+			sg_people: f('sg_people', 'multi_entity'),
+			color: f('color', 'color'), // not sg_: 056, no hideable Task field outside sg_
+			content: f('content', 'text')
+		};
+		expect(customFieldCandidates(schema)).toEqual(['sg_check', 'sg_priority_1']);
+	});
+});
+
+describe('entityFromRow', () => {
+	it('reads code as the name and the current task_template', () => {
+		const row: EntityRow = {
+			type: 'Shot',
+			id: 7557,
+			attributes: { code: 'sh010' },
+			relationships: { task_template: { data: { id: 201, name: 'tt1', type: 'TaskTemplate' } } }
+		};
+		expect(entityFromRow(row)).toEqual({
+			type: 'Shot',
+			id: 7557,
+			name: 'sh010',
+			entityType: 'Shot',
+			taskTemplate: { id: 201, name: 'tt1', type: 'TaskTemplate' }
+		});
+	});
+
+	it('reads a missing task_template as null', () => {
+		const row: EntityRow = { type: 'Asset', id: 3, attributes: { code: 'hero' }, relationships: {} };
+		expect(entityFromRow(row).taskTemplate).toBeNull();
+	});
+});
+
+describe('templatesFromRows', () => {
+	it('groups template tasks and edges under their template', () => {
+		const out = templatesFromRows(
+			templates.templates as EntityRow[],
+			templates.templateTasks as EntityRow[],
+			templates.templateDependencies as EntityRow[]
+		);
+		expect(out.map((t) => [t.id, t.code, t.tasks.map((x) => x.id), t.edges.map((e) => e.id)])).toEqual([
+			[201, 'tt1', [47101, 47102], []],
+			[202, 'tt2', [47201, 47202, 47203], [9001]]
+		]);
+	});
+
+	it('keeps a template with no tasks', () => {
+		const out = templatesFromRows(templates.templates as EntityRow[], [], []);
+		expect(out.map((t) => t.tasks.length)).toEqual([0, 0]);
+	});
+});
+
+describe('templateOfFromRows', () => {
+	it('maps a template task id to its template, null when unknown', () => {
+		const of = templateOfFromRows(templates.templateTasks as EntityRow[]);
+		expect(of(47101)).toBe(201);
+		expect(of(47203)).toBe(202);
+		expect(of(1)).toBeNull();
+	});
+});
+
+describe('snapshotsFromRows', () => {
+	const shot = (id: number, code: string): EntityRow => ({
+		type: 'Shot',
+		id,
+		attributes: { code },
+		relationships: { task_template: { data: null } }
+	});
+	const task = (id: number, entityId: number, content: string): EntityRow => ({
+		type: 'Task',
+		id,
+		attributes: { content, created_at: '2026-09-02T15:58:21Z' },
+		relationships: { entity: { data: { id: entityId, name: 'x', type: 'Shot' } } }
+	});
+	const dep = (id: number, down: number, up: number): EntityRow => ({
+		type: 'TaskDependency',
+		id,
+		attributes: { dependency_type: 'start-to-start', offset_days: null },
+		relationships: { task: { data: { id: down, type: 'Task' } }, dependent_task: { data: { id: up, type: 'Task' } } }
+	});
+	const version = (id: number, taskId: number): EntityRow => ({
+		type: 'Version',
+		id,
+		attributes: {},
+		relationships: { sg_task: { data: { id: taskId, type: 'Task' } } }
+	});
+
+	it('gives each entity its Tasks, the edges touching them and their usage', () => {
+		const out = snapshotsFromRows({
+			entities: [shot(1, 'sh010'), shot(2, 'sh020')],
+			tasks: [task(11, 1, 'a'), task(12, 1, 'b'), task(21, 2, 'a')],
+			dependencies: [dep(900, 12, 11), dep(901, 21, 99)],
+			versions: [version(5, 11), version(6, 21)],
+			publishedFiles: [],
+			templateOf: () => null,
+			readAt: '2026-09-24T10:00:00Z'
+		});
+		expect(out.map((s) => s.entity.id)).toEqual([1, 2]);
+		expect(out[0].tasks.map((t) => t.id)).toEqual([11, 12]);
+		expect(out[0].edges.map((e) => e.id)).toEqual([900]);
+		expect(out[0].usage).toEqual({ 11: { versions: 1, publishedFiles: 0 } });
+		// An edge to a Task on no entity of the batch still touches this one (109).
+		expect(out[1].edges.map((e) => e.id)).toEqual([901]);
+		expect(out[1].usage).toEqual({ 21: { versions: 1, publishedFiles: 0 } });
+		expect(out[1].readAt).toBe('2026-09-24T10:00:00Z');
+	});
+
+	it('gives an entity with no Tasks an empty snapshot', () => {
+		const out = snapshotsFromRows({
+			entities: [shot(3, 'sh030')],
+			tasks: [],
+			dependencies: [],
+			versions: [],
+			publishedFiles: [],
+			templateOf: () => null,
+			readAt: 'x'
+		});
+		expect(out[0]).toMatchObject({ tasks: [], edges: [], usage: {} });
+	});
+});
+
+describe('linkedTemplateTaskIds', () => {
+	it('lists each template_task id once, skipping unlinked Tasks', () => {
+		const rows = [...(shotBefore.tasks as EntityRow[]), shotBefore.tasks[0] as EntityRow];
+		expect(linkedTemplateTaskIds(rows)).toEqual([47102, 47101]);
 	});
 });
