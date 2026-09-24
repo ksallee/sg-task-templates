@@ -56,6 +56,16 @@ const CAPABILITY_LABEL: Record<AccessCapability, string> = {
 };
 
 /**
+ * A field's current value as a PUT takes it. read.ts keeps `fields.step` as the Step's bare id so
+ * two reads compare equal; a write needs the `{type, id}` hash, and a bare int is a 400
+ * (field_types/entity, "Write": `7479` -> "expected [Hash, ...] data type(s) but got Integer").
+ */
+function probeValue(task: EntityTask, field: FieldName): unknown {
+	if (field === 'step') return task.step ? { type: 'Step', id: task.step.id } : null;
+	return task.fields[field];
+}
+
+/**
  * The four probe requests for one run (017): a no-op PUT of the sample Task's current values for
  * the fields the plan will write, a no-op PUT of the entity's current `code`, a plain POST with an
  * invalid status, and the delete rollback `_batch`. `fields` are wire names already under policy, so
@@ -82,7 +92,7 @@ export function buildAccessProbeRequests(input: {
 					method: 'PUT',
 					entity: 'Task',
 					record_id: task.id,
-					body: Object.fromEntries(fields.map((f) => [f, task.fields[f]]))
+					body: Object.fromEntries(fields.map((f) => [f, probeValue(task, f)]))
 				};
 	const updateEntity: AccessPutRequest = {
 		method: 'PUT',

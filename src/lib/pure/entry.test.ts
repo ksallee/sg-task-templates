@@ -182,7 +182,7 @@ describe('planTotals', () => {
 describe('accessSample', () => {
 	const tpl = template(5, 'T', 'Shot', { tasks: [tplTask(100, 'Anim')] });
 
-	it('prefers a Task the run writes (keep or claim), with the policy fields but not step', () => {
+	it('prefers a Task the run writes (keep or claim), with the policy fields, step included', () => {
 		const kept = task(10, 'Anim', { entity: { type: 'Shot', id: 2 } });
 		const plans = [
 			plan(1, [{ kind: 'create', templateTask: tpl.tasks[0], templateDates: { start: null, due: null }, datesClearable: true }]),
@@ -191,8 +191,8 @@ describe('accessSample', () => {
 		const sample = accessSample(plans, [], tpl);
 		expect(sample?.task.id).toBe(10);
 		expect(sample?.entity.id).toBe(2);
-		// `fields.step` is flattened to an id (read.ts): as a PUT body it is not the wire shape.
-		expect(sample?.fields).toEqual(['content', 'sg_description']);
+		// access.ts sends `step` back as a Step link (field_types/entity).
+		expect(sample?.fields).toEqual(['content', 'sg_description', 'step']);
 	});
 
 	it('falls back to any Task on a selected entity', () => {
