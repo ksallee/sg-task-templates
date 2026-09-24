@@ -256,7 +256,6 @@ describe('lines', () => {
 			id: 'r',
 			project: { type: 'Project', id: 1 },
 			template: { id: 5, code: 'T' },
-			entryPoint: 'template_first',
 			user: { type: 'HumanUser', id: 9 },
 			options: options(),
 			plans: [busy, plan(2), plan(3), plan(4), plan(6, { noop: true })],
@@ -264,6 +263,8 @@ describe('lines', () => {
 		});
 		expect(run.entities.length).toBe(4);
 		expect(run.finishedAt).toBeNull();
+		// The entry point is retired (#59): a new run stores none.
+		expect('entryPoint' in run).toBe(false);
 		run.entities[0].status = { state: 'done', undo: rec };
 		run.entities[1].status = { state: 'failed', error: { status: null, message: 'boom' }, undo: null };
 		run.entities[2].status = { state: 'applying' };
@@ -288,7 +289,6 @@ describe('resumedRun', () => {
 			id: 'r',
 			project: { type: 'Project', id: 1 },
 			template: { id: 5, code: 'T' },
-			entryPoint: 'template_first',
 			user: { type: 'HumanUser', id: 9 },
 			options: options(),
 			plans: [plan(1), plan(2)],

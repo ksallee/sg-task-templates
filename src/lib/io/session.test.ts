@@ -111,7 +111,6 @@ const run3 = () =>
 		id: 'run-1',
 		project: ctx.project,
 		template: { id: TEMPLATE, code: 'TT Seed · Shot v2' },
-		entryPoint: 'template_first',
 		user: { type: 'HumanUser', id: 9 },
 		options,
 		plans: [1, 2, 3].map(claimPlan),

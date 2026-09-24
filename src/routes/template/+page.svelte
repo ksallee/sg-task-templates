@@ -1,18 +1,16 @@
 <!--
 	Template: the project, the entity type (only those with a task_template field), and the template,
-	previewed as its tasks by step with what each waits on. Then one of the brief's entry points leads
-	to Entities. Thin: the reads and the picks live in `$lib/app/run.svelte.ts`, the sorting in
+	previewed as its tasks by step with what each waits on. Next leads to Entities. Thin: the reads and the picks live in `$lib/app/run.svelte.ts`, the sorting in
 	`$lib/pure/entry.ts`, the preview in `$lib/pure/outline.ts`.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { goto } from '$app/navigation';
-	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+		import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Flag from '@lucide/svelte/icons/flag';
 	import LayoutTemplate from '@lucide/svelte/icons/layout-template';
 	import Search from '@lucide/svelte/icons/search';
 	import { liveContext } from '$lib/live';
-	import { run, type EntryPoint } from '$lib/app/run.svelte';
+	import { run } from '$lib/app/run.svelte';
 	import { templatesByType } from '$lib/pure/entry';
 	import { templateOutline } from '$lib/pure/outline';
 	import type { Template } from '$lib/pure/types';
@@ -35,18 +33,7 @@
 	const outline = $derived(run.template ? templateOutline(run.template) : null);
 	const context = $derived([run.project?.name ?? null, run.entityType, run.template?.code ?? null].filter(Boolean).join(' · '));
 
-	const ENTRIES: ReadonlyArray<{ value: EntryPoint; title: string; when: string }> = [
-		{ value: 'template_first', title: 'Every entity using it', when: 'The template changed and its entities should follow. All of them, selected for you.' },
-		{ value: 'entities_first', title: 'Pick entities', when: 'Move some entities onto this template, or fix a few, picked from the whole type.' },
-		{ value: 'no_template', title: 'Entities with no template', when: 'Give the untemplated ones a template. The project default is pre-picked.' }
-	];
-
 	const GRID = 'grid grid-cols-[7rem_2.5rem_minmax(9rem,1fr)_minmax(12rem,2fr)_4.5rem_4.5rem] gap-x-3';
-
-	function next(entry: EntryPoint): void {
-		run.setEntryPoint(entry);
-		void goto('/entities');
-	}
 </script>
 
 <svelte:head><title>Template · SG Task Templates</title></svelte:head>
@@ -64,7 +51,7 @@
 	>
 		<span class="min-w-0 flex-1 truncate">{t.code}</span>
 		{#if t.id === defaultId}
-			<span class="text-muted-foreground border-border inline-flex h-5 shrink-0 items-center rounded-md border px-1.5 text-xs font-medium">Default</span>
+			<span class="text-muted-foreground border-border inline-flex h-5 shrink-0 items-center rounded-md border px-1.5 text-xs font-medium" data-slot="project-default">Project default</span>
 		{/if}
 		<span class="text-muted-foreground w-6 shrink-0 text-right text-xs tabular-nums" aria-label={`${t.tasks.length} tasks`}>{t.tasks.length}</span>
 	</button>
@@ -119,7 +106,13 @@
 			{#snippet action()}<Button href="/connect">Connect</Button>{/snippet}
 		</PageState>
 	{:else}
-		<PageHeader title="Template" context={context || 'Pick the project, the entity type, then the template to apply.'} />
+		<PageHeader title="Template" context={context || 'Pick the project, the entity type, then the template to apply.'}>
+			{#snippet actions()}
+				<Button href={run.template ? '/entities' : undefined} disabled={!run.template} data-slot="next-entities">
+					Next: entities <ArrowRight data-icon="inline-end" />
+				</Button>
+			{/snippet}
+		</PageHeader>
 
 		<div class="flex min-h-0 flex-1">
 			<aside class="border-border flex w-80 shrink-0 flex-col border-r" aria-label="Choose the template" data-slot="template-picks">
@@ -164,12 +157,7 @@
 					{@const t = run.template}
 					<div class="flex flex-col gap-6 px-6 py-5">
 						<div class="flex flex-col gap-2">
-							<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-								<h2 class="text-base font-semibold">{t.code}</h2>
-								{#if t.id === defaultId}
-									<span class="text-muted-foreground border-border inline-flex h-5 items-center rounded-md border px-1.5 text-xs font-medium">Project default</span>
-								{/if}
-							</div>
+							<h2 class="text-base font-semibold">{t.code}</h2>
 							<p class="text-muted-foreground text-sm tabular-nums">
 								For {t.entityType ?? 'any type'} · {outline.taskCount}
 								{outline.taskCount === 1 ? 'task' : 'tasks'} in {outline.groups.length}
@@ -180,23 +168,6 @@
 								<Notice tone="warning" title={`Not a ${run.entityType} template.`}>{' '}Allowed; the plan warns on every entity.</Notice>
 							{/if}
 						</div>
-
-						<Section title="Next: which entities?" data-slot="entry-points">
-							<div class="grid gap-3 md:grid-cols-3">
-								{#each ENTRIES as entry (entry.value)}
-									<div class="bg-card text-card-foreground flex flex-col gap-3 rounded-lg border p-4" data-entry={entry.value}>
-										<div class="flex flex-1 flex-col gap-1">
-											<h3 class="text-sm font-semibold">{entry.title}</h3>
-											<p class="text-muted-foreground text-sm">{entry.when}</p>
-										</div>
-										<Button size="sm" variant={entry.value === run.entryPoint ? 'default' : 'outline'} class="self-start" onclick={() => next(entry.value)}>
-											{entry.value === 'template_first' ? 'Use every one' : entry.value === 'entities_first' ? 'Pick them' : 'Show them'}
-											<ArrowRight data-icon="inline-end" />
-										</Button>
-									</div>
-								{/each}
-							</div>
-						</Section>
 
 						<Section title="Tasks by step" meta="What each task waits on, offsets in working days (wd)." data-slot="template-tasks">
 							<div class="bg-card text-card-foreground overflow-hidden rounded-lg border" role="table" aria-label="Template tasks">
@@ -246,7 +217,7 @@
 					<PageState state="empty" icon={LayoutTemplate} title="Pick a template" line="Its tasks show here by step, with what each waits on.">
 						{#snippet action()}
 							{#if defaultId !== null}
-								<Button variant="outline" onclick={() => next('no_template')}>Entities with no template, on the project default</Button>
+								<Button variant="outline" onclick={() => run.setTemplate(defaultId)}>Pick the project default</Button>
 							{/if}
 						{/snippet}
 					</PageState>

@@ -163,7 +163,7 @@
 					card
 					data-slot="apply-totals"
 				>
-					<CountChips counts={summary.totals} />
+					<CountChips counts={summary.totals} entityType={run.entityType} />
 				</Section>
 				<Section title="What will be written" card>
 					<div class="flex flex-col gap-4" data-slot="apply-writes">

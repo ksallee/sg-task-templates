@@ -52,8 +52,7 @@
 					{/if}
 				</span>
 				<span
-					class={cn('truncate text-xs', blocking ? 'text-foreground' : 'text-muted-foreground')}
-					title={summary?.line}
+					class={cn('text-xs text-pretty', blocking ? 'text-foreground' : 'text-muted-foreground')}
 					data-slot="plan-entity-line">{summary?.line ?? ''}</span
 				>
 			</button>

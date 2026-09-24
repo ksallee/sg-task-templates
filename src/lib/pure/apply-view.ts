@@ -192,7 +192,6 @@ export interface NewRunInput {
 	id: string;
 	project: EntityRef;
 	template: { id: Id; code: string };
-	entryPoint: Run['entryPoint'];
 	user: EntityRef;
 	options: RunOptions;
 	plans: EntityPlan[];
@@ -206,7 +205,6 @@ export function newRun(input: NewRunInput): Run {
 		id: input.id,
 		project: input.project,
 		template: input.template,
-		entryPoint: input.entryPoint,
 		user: input.user,
 		options: input.options,
 		startedAt: input.now,

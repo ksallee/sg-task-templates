@@ -671,7 +671,8 @@ export interface Run {
 	id: string; // uuid
 	project: EntityRef;
 	template: { id: Id; code: string };
-	entryPoint: 'entities_first' | 'template_first' | 'no_template';
+	/** Retired in #59: only on runs saved before it. entry.ts's `legacyFilter` reads it on resume. */
+	entryPoint?: 'entities_first' | 'template_first' | 'no_template';
 	user: EntityRef; // the signed-in HumanUser
 	options: RunOptions;
 	startedAt: string;

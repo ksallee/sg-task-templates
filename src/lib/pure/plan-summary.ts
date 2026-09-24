@@ -105,6 +105,11 @@ export const OUTCOME_MEANING: Record<TaskOutcome, string> = {
 	unchanged: 'linked to this template before the apply, nothing changes'
 };
 
+/** An outcome's meaning; Created names the run's entity type (a display name, "Shot") when known. */
+export function outcomeMeaning(outcome: TaskOutcome, entityType?: string | null): string {
+	return outcome === 'created' && entityType ? `missing on the ${entityType}, created from the template` : OUTCOME_MEANING[outcome];
+}
+
 export type Tone = 'muted' | 'info' | 'success' | 'warning' | 'destructive';
 
 export type MarkerKey = 'renamed' | 'fields' | 'assignees' | 'dates_filled' | 'dates_move' | 'violation' | 'usage';
@@ -506,7 +511,7 @@ export function entitySummary(plan: EntityPlan, input: SummaryInput): EntitySumm
 	const groups = OUTCOME_ORDER.map((outcome) => ({
 		outcome,
 		label: OUTCOME_LABEL[outcome],
-		meaning: OUTCOME_MEANING[outcome],
+		meaning: outcomeMeaning(outcome, input.entityType),
 		lines: lines.filter((l) => l.outcome === outcome)
 	})).filter((g) => g.lines.length > 0);
 

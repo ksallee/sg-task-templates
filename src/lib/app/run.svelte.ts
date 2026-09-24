@@ -6,10 +6,11 @@
  *
  *   await run.start()                 settle the client (live.ts) and the reads the current picks need
  *   run.project, run.entityType,      the picks, read-only; change them with setProject, setEntityType,
-^ *   run.templateId, run.template,     setTemplate, setEntryPoint, setSelected (each clears the plans
- *   run.entryPoint, run.selected      it makes stale)
+ *   run.templateId, run.template,     setTemplate, setListFilter, setSelected (each clears the plans
+ *   run.listFilter, run.selected      it makes stale; a new project, type or template resets the filter)
  *   run.types, run.templates,         reads, as `Loadable`: templatable types (cached per session), every
  *   run.defaultTemplate               template with tasks and edges, the project's default for the type (088)
+ *   await run.countMatching(f, text)  how many entities a list filter matches (`_summarize`, 020)
  *   run.ctx, run.snapshots,           after buildPlans(): the project's Task statuses, the frozen reads,
  *   run.plans, run.options,           one EntityPlan per entity (planRun), the options they were built
  *   run.access, run.planning          with, the access summary (094; value null = nothing to check on)
@@ -35,12 +36,22 @@ import {
 } from '$lib/io/load';
 import { DEFAULT_CONCURRENCY, runPool } from '$lib/io/pool';
 import { liveWriter, prepareLive, project as storedProject, setProject as storeProject, type LiveState, type ProjectPick } from '$lib/live';
-import { accessSample, addToSelection, chunk, defaultRunOptions, entityListFilters, selectedWithin, type EntryPoint } from '$lib/pure/entry';
+import {
+	accessSample,
+	addToSelection,
+	chunk,
+	defaultRunOptions,
+	entityListFilters,
+	legacyFilter,
+	selectedWithin,
+	storedFilter,
+	type ListFilter
+} from '$lib/pure/entry';
 import { planRun } from '$lib/pure/planner';
 import { errorOf } from '$lib/pure/run';
 import type { AccessSummary, EntityPlan, EntitySnapshot, Id, ProjectContext, Run, RunOptions, Template } from '$lib/pure/types';
 
-export type { EntryPoint };
+export type { ListFilter };
 
 /** A read the screens show: not started, in flight (with progress when known), done, or failed. */
 export type Loadable<T> =
@@ -62,7 +73,9 @@ const KEYS = {
 interface Picks {
 	entityType: string | null;
 	templateId: Id | null;
-	entryPoint: EntryPoint;
+	listFilter: ListFilter | null;
+	/** Retired in #59; read once, as the filter it implied. */
+	entryPoint?: unknown;
 }
 
 function readJson<T>(storage: () => Storage, key: string): T | null {
@@ -88,7 +101,8 @@ class RunState {
 	project = $state<ProjectPick | null>(null);
 	entityType = $state<string | null>(null);
 	templateId = $state<Id | null>(null);
-	entryPoint = $state<EntryPoint>('template_first');
+	/** The entities list's filter; null until the list opens (entry.ts `openingFilter`). */
+	listFilter = $state<ListFilter | null>(null);
 	selected = $state.raw<EntityRef[]>([]);
 
 	types = $state.raw<Loadable<string[]>>(IDLE);
@@ -120,9 +134,7 @@ class RunState {
 		if (picks) {
 			this.entityType = picks.entityType ?? null;
 			this.templateId = picks.templateId ?? null;
-			if (picks.entryPoint === 'entities_first' || picks.entryPoint === 'template_first' || picks.entryPoint === 'no_template') {
-				this.entryPoint = picks.entryPoint;
-			}
+			this.listFilter = storedFilter(picks.listFilter, picks.entryPoint);
 		}
 	}
 
@@ -153,6 +165,7 @@ class RunState {
 		this.types = IDLE;
 		this.templates = IDLE;
 		this.defaultTemplate = IDLE;
+		this.listFilter = null;
 		this.selected = [];
 		this.#clearPlans();
 		this.#readForProject();
@@ -162,6 +175,7 @@ class RunState {
 		if (next === this.entityType) return;
 		this.entityType = next;
 		this.templateId = null;
+		this.listFilter = null;
 		this.selected = [];
 		this.#clearPlans();
 		this.#save();
@@ -171,17 +185,15 @@ class RunState {
 	setTemplate(id: Id | null): void {
 		if (id === this.templateId) return;
 		this.templateId = id;
+		this.listFilter = null;
 		this.selected = [];
 		this.#clearPlans();
 		this.#save();
 	}
 
-	/** `no_template` with nothing picked takes the project's default for the type (088, brief 5). */
-	setEntryPoint(next: EntryPoint): void {
-		// A list filter, not a new run: the picks stay, and the page says how many it hides.
-		if (next !== this.entryPoint) this.entryPoint = next;
-		const fallback = this.defaultTemplate.state === 'ready' ? this.defaultTemplate.value : null;
-		if (next === 'no_template' && this.templateId === null && fallback) this.templateId = fallback.id;
+	/** The list's Show filter. Not a new run: the picks stay, and the page says how many it hides. */
+	setListFilter(next: ListFilter | null): void {
+		this.listFilter = next;
 		this.#save();
 	}
 
@@ -195,7 +207,7 @@ class RunState {
 		const project = this.project;
 		const type = this.entityType;
 		if (!project || !type) return;
-		const rows = await searchAll(this.client(), type, entityListFilters(project.id, this.entryPoint, this.templateId, search), ['code']);
+		const rows = await searchAll(this.client(), type, entityListFilters(project.id, this.listFilter ?? 'all', this.templateId, search), ['code']);
 		const code = (row: (typeof rows)[number]) => (typeof row.attributes?.code === 'string' ? row.attributes.code : undefined);
 		this.setSelected(addToSelection(this.selected, rows.map((row) => ({ type: row.type, id: row.id, name: code(row) }))));
 	}
@@ -206,7 +218,19 @@ class RunState {
 		const type = this.entityType;
 		const picked = this.selected;
 		if (!project || !type || picked.length === 0) return null;
-		const filters = selectedWithin(entityListFilters(project.id, this.entryPoint, this.templateId, search), picked);
+		const filters = selectedWithin(entityListFilters(project.id, this.listFilter ?? 'all', this.templateId, search), picked);
+		return this.#count(type, filters);
+	}
+
+	/** How many of the type's entities `filter` matches, with the code search. Null before the picks. */
+	async countMatching(filter: ListFilter, search: string): Promise<number | null> {
+		const project = this.project;
+		const type = this.entityType;
+		if (!project || !type) return null;
+		return this.#count(type, entityListFilters(project.id, filter, this.templateId, search));
+	}
+
+	async #count(type: string, filters: ReturnType<typeof entityListFilters>): Promise<number | null> {
 		const summary = await this.client().summarize(type, { filters, summaryFields: [{ field: 'id', type: 'count' }] });
 		const count = summary.summaries['id'];
 		return typeof count === 'number' ? count : null;
@@ -261,8 +285,9 @@ class RunState {
 		const type = remaining[0]?.type ?? stored.entities[0]?.entity.type ?? null;
 		this.setProject({ id: stored.project.id, name: stored.project.name });
 		this.setEntityType(type);
-		this.setEntryPoint(stored.entryPoint);
 		this.setTemplate(stored.template.id);
+		// A run saved before #59 reopens on the filter its entry point implied; a newer one on the list's own.
+		this.setListFilter(legacyFilter(stored.entryPoint));
 		await this.#templateCache.get(stored.project.id)?.catch(() => undefined);
 		this.setSelected(remaining);
 		const planned = await this.buildPlans();
@@ -306,7 +331,7 @@ class RunState {
 		writeJson(() => localStorage, KEYS.picks, {
 			entityType: this.entityType,
 			templateId: this.templateId,
-			entryPoint: this.entryPoint
+			listFilter: this.listFilter
 		} satisfies Picks);
 	}
 
@@ -378,7 +403,7 @@ class RunState {
 			(value) => {
 				if (this.project?.id !== project.id || this.entityType !== type) return;
 				this.defaultTemplate = { state: 'ready', value };
-				if (value && this.templateId === null && (preselect || this.entryPoint === 'no_template')) this.setTemplate(value.id);
+				if (value && this.templateId === null && preselect) this.setTemplate(value.id);
 			},
 			(error) => {
 				if (this.project?.id === project.id && this.entityType === type) this.defaultTemplate = failed(error);

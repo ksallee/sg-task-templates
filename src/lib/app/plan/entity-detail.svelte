@@ -187,7 +187,7 @@
 	{#each summary.groups as g (g.outcome)}
 		<section class="flex flex-col gap-2" data-slot="task-group" data-outcome={g.outcome}>
 			<div class="flex flex-wrap items-center gap-2">
-				<OutcomeChip outcome={g.outcome} count={g.lines.length} />
+				<OutcomeChip outcome={g.outcome} count={g.lines.length} entityType={plan.entity.type} />
 				<span class="text-muted-foreground text-xs">{g.meaning}</span>
 			</div>
 			<ul class={cn('divide-border flex flex-col divide-y rounded-lg border', g.outcome === 'needs_choice' && 'border-destructive/60')}>
@@ -210,7 +210,7 @@
 									>{m.label}</span
 								>
 							{/each}
-							<OutcomeChip outcome={l.outcome} />
+							<OutcomeChip outcome={l.outcome} entityType={plan.entity.type} />
 						</button>
 						{#if on}
 							<div class="flex flex-col gap-2 pr-3 pb-3 pl-9" data-slot="task-fold">

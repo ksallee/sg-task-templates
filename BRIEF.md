@@ -126,9 +126,11 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
      Tasks with no upstream edge; those stay unpinned with null dates (Kevin, 2026-09-24; probe 097).
    - Tasks whose dates may move because of new edges are shown. Pinned Tasks are never touched; the
      plan shows those that would flag `dependency_violation`.
-5. **Default template**: in v1 as an entry filter. "Entities with no template" in the project, with
-   the template pre-selected from `tracking_settings.default_task_template.<Type>` (088). Same apply
-   path; nothing relies on the unmeasured API-create behaviour.
+5. **Default template**: in v1 as a filter. The entities list shows All, Using this template, Other
+   template or No template, opening on Using this template when an entity uses it, else All, nothing
+   pre-selected; the template from `tracking_settings.default_task_template.<Type>` (088) is tagged
+   Project default and pre-selected (Kevin, 2026-09-24, #59). Same apply path; nothing
+   relies on the unmeasured API-create behaviour.
 6. **Writing**
    - One batch per entity, write-backs included: a `task_template` write sees claims made earlier in
      the same batch, so one `_batch` per entity is enough (changed 2026-09-24, probe 098). A failure

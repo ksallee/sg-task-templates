@@ -6,6 +6,9 @@ import {
 	defaultRunOptions,
 	addToSelection,
 	entityListFilters,
+	legacyFilter,
+	openingFilter,
+	storedFilter,
 	onlySelected,
 	planBlocker,
 	selectedWithin,
@@ -84,29 +87,68 @@ function plan(id: number, rows: EntityPlan['rows'], counts: Partial<EntityPlan['
 
 describe('entityListFilters', () => {
 	const project = ['project', 'is', { type: 'Project', id: 70 }];
+	const tpl = { type: 'TaskTemplate', id: 5 };
 
-	it('lists every entity of the project when picking entities first', () => {
-		expect(entityListFilters(70, 'entities_first', 5, '')).toEqual({ logical_operator: 'and', conditions: [project] });
+	it('lists every entity of the project on All', () => {
+		expect(entityListFilters(70, 'all', 5, '')).toEqual({ logical_operator: 'and', conditions: [project] });
 	});
 
-	it('narrows to the template when the template comes first', () => {
-		expect(entityListFilters(70, 'template_first', 5, '').conditions).toEqual([
+	it('narrows to the template on Using this template', () => {
+		expect(entityListFilters(70, 'using', 5, '').conditions).toEqual([project, ['task_template', 'is', tpl]]);
+	});
+
+	it('narrows to entities on another template: not this one and not none (negation keeps nulls, doors/field_types)', () => {
+		expect(entityListFilters(70, 'other', 5, '').conditions).toEqual([
 			project,
-			['task_template', 'is', { type: 'TaskTemplate', id: 5 }]
+			['task_template', 'is_not', tpl],
+			['task_template', 'is_not', null]
 		]);
 	});
 
 	it('narrows to entities with no template', () => {
-		expect(entityListFilters(70, 'no_template', 5, '').conditions).toEqual([project, ['task_template', 'is', null]]);
+		expect(entityListFilters(70, 'none', 5, '').conditions).toEqual([project, ['task_template', 'is', null]]);
+	});
+
+	it('needs every word of the search in the code, one contains per word (sg-widgets nameSearchFilter, doors/findings-filter)', () => {
+		expect(entityListFilters(70, 'all', null, '  sh01   anim ').conditions).toEqual([
+			project,
+			['code', 'contains', 'sh01'],
+			['code', 'contains', 'anim']
+		]);
 	});
 
 	it('adds a trimmed code search, and skips a blank one', () => {
-		expect(entityListFilters(70, 'no_template', null, '  sh01 ').conditions).toContainEqual(['code', 'contains', 'sh01']);
-		expect(entityListFilters(70, 'entities_first', null, '   ').conditions).toHaveLength(1);
+		expect(entityListFilters(70, 'none', null, '  sh01 ').conditions).toContainEqual(['code', 'contains', 'sh01']);
+		expect(entityListFilters(70, 'all', null, '   ').conditions).toHaveLength(1);
 	});
 
-	it('has no template condition when the template comes first but none is picked', () => {
-		expect(entityListFilters(70, 'template_first', null, '').conditions).toEqual([project]);
+	it('has no template condition on Using or Other when no template is picked', () => {
+		expect(entityListFilters(70, 'using', null, '').conditions).toEqual([project]);
+		expect(entityListFilters(70, 'other', null, '').conditions).toEqual([project, ['task_template', 'is_not', null]]);
+	});
+});
+
+describe('the list filter', () => {
+	it('opens on Using this template when an entity uses it, else on All', () => {
+		expect(openingFilter(3)).toBe('using');
+		expect(openingFilter(0)).toBe('all');
+	});
+
+	it('maps a retired entry point to the filter it implied', () => {
+		expect(legacyFilter('template_first')).toBe('using');
+		expect(legacyFilter('entities_first')).toBe('all');
+		expect(legacyFilter('no_template')).toBe('none');
+		expect(legacyFilter(undefined)).toBeNull();
+		expect(legacyFilter('bogus')).toBeNull();
+	});
+
+	it('keeps a stored filter when it is one of the four, else reads the retired entry point', () => {
+		expect(storedFilter('other')).toBe('other');
+		expect(storedFilter('nope')).toBeNull();
+		expect(storedFilter(null, 'no_template')).toBe('none');
+		expect(storedFilter(undefined, 'template_first')).toBe('using');
+		expect(storedFilter('all', 'no_template')).toBe('all');
+		expect(storedFilter(undefined)).toBeNull();
 	});
 });
 
@@ -222,7 +264,7 @@ describe('selection across filters', () => {
 	});
 
 	it('narrows the list filter to the selected ids, to count or to show them', () => {
-		const list = entityListFilters(70, 'no_template', 5, 'sh');
+		const list = entityListFilters(70, 'none', 5, 'sh');
 		expect(selectedWithin(list, [ref(1), ref(2)])).toEqual({
 			logical_operator: 'and',
 			conditions: [...list.conditions, ['id', 'in', [1, 2]]]
