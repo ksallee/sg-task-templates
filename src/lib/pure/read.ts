@@ -7,9 +7,12 @@
  * for a given template — the ones the apply overwrites when a template task's value is non-empty
  * (102) — custom fields included.
  *
- * `.fields` on a `TaskCore` (see types.ts) holds every policy-relevant field's raw wire value,
- * keyed by wire name, so `nonEmptyPolicyFields` and later `planner.ts` can look any of them up the
- * same way whether they are built in (`content`, `step`, ...) or a site's own custom field.
+ * `.fields` on a `TaskCore` (see types.ts) holds every policy-relevant field's value, keyed by wire
+ * name, so `nonEmptyPolicyFields` and later `planner.ts` can look any of them up the same way
+ * whether they are built in (`content`, `step`, ...) or a site's own custom field. Scalars are the
+ * wire value; `step` is its id and `task_reviewers` a sorted `{type, id}` list, so two reads compare
+ * equal. Custom fields are read from `attributes` only: a custom entity or multi_entity field
+ * (under `relationships`) is not collected; 102 measured a list and a checkbox field.
  */
 
 import { usableStatuses, type EntityRow, type FieldSchema } from 'sg-widgets-core';
@@ -116,7 +119,7 @@ function normalizeCreatedAt(v: unknown): string {
 	return m ? `${m[1]}T${m[2]}Z` : v;
 }
 
-/** `false`, `null`, `undefined`, `""` and `[]` count as empty (102, Q-F). `0` does not. */
+/** `false`, `null`, `undefined`, `""` and `[]` count as empty; `0` is a value (102, 108). */
 function isNonEmptyValue(v: unknown): boolean {
 	if (v === null || v === undefined || v === '' || v === false) return false;
 	if (Array.isArray(v)) return v.length > 0;
@@ -124,9 +127,9 @@ function isNonEmptyValue(v: unknown): boolean {
 }
 
 /**
- * Every policy field's raw wire value, keyed by wire name: the built-ins (`step` and
- * `task_reviewers` flattened to a comparable id / id list) plus whatever custom attributes the row
- * carries beyond `TaskAttributes`.
+ * Every policy field's value, keyed by wire name: the built-ins (`step` flattened to its id,
+ * `task_reviewers` to `{type, id}` sorted by type then id: a Group and a person can share an id) plus
+ * whatever custom attributes the row carries beyond `TaskAttributes`.
  */
 function policyFields(row: EntityRow, step: EntityRef | null, reviewers: EntityRef[]): Record<FieldName, unknown> {
 	const a = row.attributes ?? {};
@@ -138,7 +141,9 @@ function policyFields(row: EntityRow, step: EntityRef | null, reviewers: EntityR
 		est_in_mins: num(a.est_in_mins),
 		sg_description: str(a.sg_description),
 		milestone: bool(a.milestone),
-		task_reviewers: reviewers.map((r) => r.id).sort((x, y) => x - y)
+		task_reviewers: reviewers
+			.map((r) => ({ type: r.type, id: r.id }))
+			.sort((x, y) => (x.type === y.type ? x.id - y.id : x.type < y.type ? -1 : 1))
 	};
 	for (const [k, v] of Object.entries(a)) {
 		if (!TASK_ATTRIBUTE_KEYS.has(k)) out[k] = v;
@@ -258,20 +263,27 @@ export function usageFromRows(versions: EntityRow[], publishedFiles: EntityRow[]
 	return out;
 }
 
-/** `Project.tracking_settings.default_task_template` (088). Absent, `{}` and a missing key = null. */
+/**
+ * `Project.tracking_settings.default_task_template.<Type>` (088), a `{type, id, name, valid}` dict.
+ * Absent, `{}`, a missing key and an entry without a numeric id = null. The one reader of the
+ * default: planner.ts's `defaultTemplateId` (feat/10-planner) is this, minus the name.
+ */
 export function defaultTemplateFor(trackingSettings: unknown, entityType: string): EntityRef | null {
 	if (!trackingSettings || typeof trackingSettings !== 'object') return null;
 	const dtt = (trackingSettings as Record<string, unknown>).default_task_template;
 	if (!dtt || typeof dtt !== 'object') return null;
 	const entry = (dtt as DefaultTaskTemplates)[entityType];
-	if (!entry) return null;
+	if (!entry || typeof entry.id !== 'number') return null;
 	return { type: 'TaskTemplate', id: entry.id, name: entry.name };
 }
 
-/** Entity types whose schema declares a `task_template` field, custom entities included (brief 1). */
+/**
+ * Entity types whose schema declares a `task_template` field, custom entities included (brief 1),
+ * Task excepted: on a Task, `task_template` marks a template task (entity_types/TaskTemplate).
+ */
 export function templatableTypes(fieldsByType: Record<string, Record<string, FieldSchema>>): string[] {
 	return Object.entries(fieldsByType)
-		.filter(([, fields]) => 'task_template' in fields)
+		.filter(([type, fields]) => type !== 'Task' && 'task_template' in fields)
 		.map(([type]) => type);
 }
 

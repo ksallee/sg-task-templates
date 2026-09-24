@@ -1,13 +1,31 @@
 {
-	"name": "sg_status_list",
-	"displayName": "Status",
-	"entityType": "Task",
-	"dataType": "status_list",
-	"editable": true,
-	"mandatory": false,
-	"unique": false,
-	"validValues": ["wtg", "ip", "fin", "apr", "dis", "na", "hld", "rev", "omt", "ready"],
-	"hiddenValues": ["dis"],
-	"displayValues": { "omt": "Omit" },
-	"defaultValue": "wtg"
+	"properties": {
+		"default_value": {
+			"value": "wtg"
+		},
+		"valid_values": {
+			"value": [
+				"wtg",
+				"ip",
+				"fin",
+				"apr",
+				"dis",
+				"na",
+				"hld",
+				"rev",
+				"omt",
+				"ready"
+			]
+		},
+		"hidden_values": {
+			"value": [
+				"dis"
+			]
+		},
+		"display_values": {
+			"value": {
+				"omt": "Omit"
+			}
+		}
+	}
 }

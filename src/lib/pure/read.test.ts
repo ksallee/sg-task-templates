@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { EntityRow, FieldSchema } from 'sg-widgets-core';
+import type { EntityRef } from './types';
+import { normalizeField, type EntityRow, type FieldSchema, type RawFieldSchema } from 'sg-widgets-core';
 import {
 	BASE_TASK_FIELDS,
 	defaultTemplateFor,
@@ -108,8 +109,30 @@ describe('taskFromRow', () => {
 		expect(task.fields.content).toBe('x');
 		expect(task.fields.step).toBe(11);
 		expect(task.fields.sg_sort_order).toBe(10);
-		expect(task.fields.task_reviewers).toEqual([5]);
+		expect(task.fields.task_reviewers).toEqual([{ type: 'Group', id: 5 }]);
 		expect(task.fields.sg_priority_1).toBe('1_Tier');
+	});
+});
+
+describe('task_reviewers in .fields', () => {
+	// task_reviewers holds Groups and people (102 wrote Groups G1, G2): ids alone collide across types.
+	const row = (reviewers: EntityRef[]): EntityRow => ({
+		type: 'Task',
+		id: 1,
+		attributes: { content: 'x' },
+		relationships: { entity: { data: { id: 1, name: 'x', type: 'Shot' } }, task_reviewers: { data: reviewers } }
+	});
+
+	it('keeps the type next to the id, so a Group and a person of one id differ', () => {
+		const group = taskFromRow(row([{ type: 'Group', id: 5, name: 'G1' }]), () => null);
+		const person = taskFromRow(row([{ type: 'HumanUser', id: 5, name: 'P' }]), () => null);
+		expect(group.fields.task_reviewers).not.toEqual(person.fields.task_reviewers);
+	});
+
+	it('is order-independent and drops the name', () => {
+		const a = taskFromRow(row([{ type: 'HumanUser', id: 9, name: 'P' }, { type: 'Group', id: 5, name: 'G1' }]), () => null);
+		const b = taskFromRow(row([{ type: 'Group', id: 5, name: 'renamed' }, { type: 'HumanUser', id: 9, name: 'P' }]), () => null);
+		expect(a.fields.task_reviewers).toEqual(b.fields.task_reviewers);
 	});
 });
 
@@ -222,6 +245,11 @@ describe('defaultTemplateFor', () => {
 		expect(defaultTemplateFor(project.attributes.tracking_settings, 'Asset')).toBeNull();
 	});
 
+	it('returns null for an entry without a numeric id', () => {
+		expect(defaultTemplateFor({ default_task_template: { Shot: {} } }, 'Shot')).toBeNull();
+		expect(defaultTemplateFor({ default_task_template: { Shot: { type: 'TaskTemplate', id: '202' } } }, 'Shot')).toBeNull();
+	});
+
 	it('returns the ref for a set type', () => {
 		expect(defaultTemplateFor(project.attributes.tracking_settings, 'Shot')).toEqual({
 			type: 'TaskTemplate',
@@ -241,6 +269,14 @@ describe('templatableTypes', () => {
 		expect(templatableTypes(fieldsByType)).toEqual(['Shot', 'CustomEntity01']);
 	});
 
+	it('leaves out Task: its task_template marks template tasks (TaskTemplate card)', () => {
+		const fieldsByType = {
+			Task: { task_template: {} as FieldSchema, template_task: {} as FieldSchema },
+			Shot: { task_template: {} as FieldSchema }
+		};
+		expect(templatableTypes(fieldsByType)).toEqual(['Shot']);
+	});
+
 	it('is empty when nothing has the field', () => {
 		expect(templatableTypes({ Note: { subject: {} as FieldSchema } })).toEqual([]);
 	});
@@ -248,7 +284,18 @@ describe('templatableTypes', () => {
 
 describe('taskStatusContext', () => {
 	it('subtracts hidden_values from valid_values', () => {
-		const ctx = taskStatusContext(taskStatusField as FieldSchema);
+		// The fixture holds the wire `properties` (contracts/fixtures.md); the client normalizes them.
+		const envelope = (value: unknown) => ({ value, editable: false });
+		const raw = {
+			name: envelope('Status'),
+			entity_type: envelope('Task'),
+			data_type: envelope('status_list'),
+			editable: envelope(true),
+			mandatory: envelope(false),
+			unique: envelope(false),
+			properties: taskStatusField.properties
+		} as unknown as RawFieldSchema;
+		const ctx = taskStatusContext(normalizeField('sg_status_list', raw));
 		expect(ctx.defaultTaskStatus).toBe('wtg');
 		expect(ctx.validTaskStatuses).not.toContain('dis');
 		expect(ctx.validTaskStatuses).toContain('wtg');
@@ -259,9 +306,8 @@ describe('taskStatusContext', () => {
 describe('nonEmptyPolicyFields / taskFieldsFor', () => {
 	it('lists the non-empty fields across a template’s tasks', () => {
 		const tpl = tt2();
-		// comp: content only; roto: content only; paint: content + step non-empty (always set)
-		expect(nonEmptyPolicyFields(tpl)).toEqual(expect.arrayContaining(['content', 'step']));
-		expect(nonEmptyPolicyFields(tpl)).not.toContain('sg_description');
+		// Every tt2 task holds content, step and sg_sort_order; the rest are null, false or [].
+		expect(nonEmptyPolicyFields(tpl)).toEqual(['content', 'sg_sort_order', 'step']);
 	});
 
 	it('never lists a field whose only value is false or empty', () => {
@@ -271,7 +317,7 @@ describe('nonEmptyPolicyFields / taskFieldsFor', () => {
 				{
 					type: 'Task',
 					id: 1,
-					attributes: { content: 'a', milestone: false, sg_description: '', task_reviewers_ignored: [] },
+					attributes: { content: 'a', milestone: false, sg_description: '', est_in_mins: 0 },
 					relationships: { task_template: { data: { id: 201, name: 'tt1', type: 'TaskTemplate' } } }
 				}
 			],
@@ -279,6 +325,7 @@ describe('nonEmptyPolicyFields / taskFieldsFor', () => {
 		);
 		expect(nonEmptyPolicyFields(tpl)).not.toContain('milestone');
 		expect(nonEmptyPolicyFields(tpl)).not.toContain('sg_description');
+		expect(nonEmptyPolicyFields(tpl)).toContain('est_in_mins'); // 108: 0 overwrites
 	});
 
 	it('adds a non-empty custom field to the policy list', () => {
