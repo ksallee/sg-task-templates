@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flowSteps, type FlowFacts } from './flow';
+import { flowSteps, inFlow, type FlowFacts } from './flow';
 
 const NONE: FlowFacts = { connected: false, templatePicked: false, planned: false, runStarted: false, runFinished: false };
 const states = (path: string, facts: Partial<FlowFacts>) => flowSteps(path, { ...NONE, ...facts }).map((s) => `${s.id}:${s.state}`);
@@ -80,5 +80,17 @@ describe('flowSteps', () => {
 
 	it('result is open once connected: undo from a file needs only a site', () => {
 		expect(flowSteps('/connect', { ...NONE, connected: true })[5].state).toBe('open');
+	});
+});
+
+describe('inFlow', () => {
+	it('is true on a step screen and its sub-paths', () => {
+		expect(inFlow(flowSteps('/plan', NONE))).toBe(true);
+		expect(inFlow(flowSteps('/result/abc', NONE))).toBe(true);
+	});
+
+	it('is false outside the flow: home and how it works', () => {
+		expect(inFlow(flowSteps('/', NONE))).toBe(false);
+		expect(inFlow(flowSteps('/how', NONE))).toBe(false);
 	});
 });

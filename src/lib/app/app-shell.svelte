@@ -1,7 +1,9 @@
 <!--
 	The frame of every screen (docs/design.md): a h-12 header as sg-notes' (wordmark, the step
 	indicator, the site and who reads it, the scheme switch), the resume banner, then the page.
-	The header holds who and where; the page holds what this screen is about.
+	The header holds who and where; the page holds what this screen is about. Outside the flow
+	(home, how it works) the step indicator is not drawn. On a phone the wordmark keeps its mark only
+	while the steps show, so the header never overflows.
 -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
@@ -12,7 +14,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { isDark, setMode } from '$lib/theme';
 	import { prepareLive, type LiveState } from '$lib/live';
-	import { flowSteps } from '$lib/pure/flow';
+	import { flowSteps, inFlow } from '$lib/pure/flow';
 	import { run } from './run.svelte';
 	import { session } from './apply.svelte';
 	import FlowSteps from './flow-steps.svelte';
@@ -33,6 +35,8 @@
 			runFinished: session.phase !== 'running'
 		})
 	);
+
+	const flow = $derived(inFlow(steps));
 
 	/** The site as the header names it: the studio, without the suffix every Flow PT host carries (as sg-notes). */
 	function shortHost(siteUrl: string): string {
@@ -63,16 +67,16 @@
 </script>
 
 <div class="bg-background text-foreground flex h-dvh flex-col">
-	<header class="border-border bg-background flex h-12 shrink-0 items-center gap-5 border-b px-4" data-slot="app-header">
+	<header class="border-border bg-background flex h-12 shrink-0 items-center gap-3 border-b px-3 sm:gap-5 sm:px-4" data-slot="app-header">
 		<a href="/" class="focus-visible:ring-ring shrink-0 rounded-md text-sm outline-none focus-visible:ring-2" aria-label="SG Task Templates, home">
-			<Wordmark />
+			<Wordmark collapse={flow} />
 		</a>
 
 		<div class="flex min-w-0 flex-1 items-center">
-			<FlowSteps {steps} />
+			{#if flow}<FlowSteps {steps} />{/if}
 		</div>
 
-		<div class="flex shrink-0 items-center gap-2 text-sm">
+		<div class="flex shrink-0 items-center gap-1 text-sm sm:gap-2">
 			{#if live?.siteUrl}
 				<a
 					href="/connect"

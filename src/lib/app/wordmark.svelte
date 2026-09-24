@@ -4,14 +4,15 @@
 	for the rest. The mark is its own: a rubber stamp over its imprint, one template pressed onto
 	many entities. The imprint is the accent; the stamp is `currentColor` at 30% over the ground.
 	`src/lib/assets/favicon.svg` is this drawing with the default palette's values pinned.
+	`collapse` keeps the mark alone below the sm breakpoint (the shell, when the steps need the room).
 -->
 <script lang="ts">
-	let { title = 'SG Task Templates', size = '1.25em' }: { title?: string; size?: string } = $props();
+	let { title = 'SG Task Templates', size = '1.25em', collapse = false }: { title?: string; size?: string; collapse?: boolean } = $props();
 	const head = $derived(title.split(' ')[0] ?? '');
 	const tail = $derived(title.split(' ').slice(1).join(' '));
 </script>
 
-<span class="wordmark" translate="no">
+<span class="wordmark" class:mark-only={collapse} translate="no">
 	<svg class="mark" style="width:{size};height:{size}" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
 		<circle class="quiet" cx="16" cy="6.5" r="4.5" />
 		<path class="quiet" d="M13.2 10.5h5.6l1.4 5h-8.4z" />
@@ -49,6 +50,17 @@
 
 	.type {
 		overflow: hidden;
+	}
+
+	@media (max-width: 639.98px) {
+		.mark-only .type {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			overflow: hidden;
+			clip-path: inset(50%);
+			white-space: nowrap;
+		}
 	}
 
 	.head {

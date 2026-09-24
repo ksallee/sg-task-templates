@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOW_ANCHORS, HOW_CONCEPTS, HOW_SECTIONS, howHref, type HowConcept } from './how';
+import { activeSection, HOW_ANCHORS, HOW_CONCEPTS, HOW_SECTIONS, howHref, type HowConcept } from './how';
 
 describe('how', () => {
 	it('lists the sections of /how in page order', () => {
@@ -41,5 +41,26 @@ describe('how', () => {
 		expect(howHref('mayMove')).toBe('/how#dates');
 		expect(howHref('undo')).toBe('/how#undo');
 		expect(howHref('access')).toBe('/how#permissions');
+	});
+});
+
+describe('activeSection', () => {
+	const tops = (...t: number[]) => HOW_SECTIONS.slice(0, t.length).map((s, i) => ({ id: s.id, top: t[i] }));
+
+	it('is the first section before any heading reaches the line', () => {
+		expect(activeSection(tops(200, 800, 1400), 80)).toBe('matching');
+	});
+
+	it('is the last section whose heading is at or above the line', () => {
+		expect(activeSection(tops(-900, -200, 80, 700), 80)).toBe('fields');
+		expect(activeSection(tops(-900, -200, 81, 700), 80)).toBe('outcomes');
+	});
+
+	it('is the last section when scrolled to the bottom, even below the line', () => {
+		expect(activeSection(tops(-900, -200, 300), 80, true)).toBe('fields');
+	});
+
+	it('is null with no sections', () => {
+		expect(activeSection([], 80)).toBeNull();
 	});
 });

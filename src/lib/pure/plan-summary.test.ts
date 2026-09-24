@@ -148,7 +148,7 @@ describe('taskLines: one outcome per Task', () => {
 		const p = plan(extraSnap);
 		const anim = byTask(taskLines(p, input([p])), 10);
 		expect(anim.details.map((d) => d.text)).toContain(
-			'Dependency after Paint #11: the apply drops it (its upstream is not in the template); re-created after the apply.'
+			'Dependency after Paint #11: the apply removes it (its upstream is not in the template); re-created after the apply.'
 		);
 	});
 
@@ -235,7 +235,7 @@ describe('taskLines: conflicts', () => {
 		expect(byTask(lines, 2).conflict).not.toBeNull();
 		expect(byTask(lines, 1).outcome).toBe('left');
 		expect(byTask(lines, 1).conflict).not.toBeNull();
-		expect(byTask(lines, 1).details.map((d) => d.text)).toContain('Not picked in a conflict.');
+		expect(byTask(lines, 1).details.map((d) => d.text)).toContain('Not picked.');
 	});
 });
 
@@ -255,13 +255,13 @@ describe('entitySummary', () => {
 		const p = plan(s, opts0(), one);
 		expect(p.noop).toBe(true);
 		const e = entitySummary(p, input([p], opts0(), { template: one }));
-		expect(e.line).toBe('Nothing to write · 1 unchanged');
+		expect(e.line).toBe('Nothing to write · 1 already linked');
 		expect(e.tally.noop).toBe(1);
 	});
 
-	it('a claim-heavy entity reads linked, created, left alone', () => {
+	it('a claim-heavy entity reads linked, created, not in template', () => {
 		const p = plan(extraSnap);
-		expect(entitySummary(p, input([p])).line).toBe('2 linked, 2 created, 2 left alone');
+		expect(entitySummary(p, input([p])).line).toBe('2 linked, 2 created, 2 not in template');
 	});
 });
 
@@ -273,10 +273,10 @@ describe('planSummary: the run summary', () => {
 		const text = Object.fromEntries(s.lines.map((l) => [l.key, `${l.text}${l.where ? `, ${l.where}` : ''}`]));
 		expect(text.needs_choice).toBe('1 needs a choice: several Tasks match one template task, on 1 of 2 Shots');
 		expect(text.created).toBe('5 new Tasks created from the template, on both Shots');
-		expect(text.linked).toBe('2 existing Tasks linked to the template instead of duplicated, on 1 of 2 Shots');
-		expect(text.left).toBe('2 Tasks not in the template left alone, on 1 of 2 Shots');
+		expect(text.linked).toBe('2 existing Tasks matched by name and Step, linked to the template, on 1 of 2 Shots');
+		expect(text.left).toBe('2 Tasks not in the template, not changed, on 1 of 2 Shots');
 		expect(text.deps_added).toBe('4 dependencies added, on both Shots');
-		expect(text.deps_recreated).toBe('1 dependency the apply drops, re-created after it, on 1 of 2 Shots');
+		expect(text.deps_recreated).toBe('1 dependency removed by the apply, re-created after it, on 1 of 2 Shots');
 		expect(s.lines[0].key).toBe('needs_choice');
 		expect(s.lines.every((l) => l.count > 0)).toBe(true);
 	});

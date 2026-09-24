@@ -127,13 +127,13 @@
 
 			{#if names.length > 0}
 				<div class="flex flex-col gap-2">
-					<p class="text-xs font-medium">Extras by name <span class="text-muted-foreground font-normal">· Tasks not in the template, by name on every entity</span></p>
+					<p class="text-xs font-medium">Not in template <span class="text-muted-foreground font-normal">· by name, on every entity</span></p>
 					<div class="grid grid-cols-[repeat(auto-fill,20rem)] gap-x-6 gap-y-1.5">
 						{#each names as n (n.name)}
 							<div class="flex items-center gap-2">
 								<span class="w-28 truncate text-xs" title={n.name}>{n.name || '(no name)'} <span class="text-muted-foreground tabular-nums">×{n.count}</span></span>
 								<Segmented
-									label={`Action for extras named ${n.name}`}
+									label={`Action for Tasks not in the template named ${n.name}`}
 									value={options.extraByName[n.name] ?? 'leave'}
 									options={EXTRA_OPTIONS}
 									reselect

@@ -133,12 +133,12 @@ export function summaryGroups(s: WriteSummary): SummaryGroup[] {
 		add(s.nothingToWrite, `${plural(s.nothingToWrite, 'entity already matches', 'entities already match')} the template: skipped.`);
 	});
 	group('Tasks', () => {
-		add(s.claims, `${plural(s.claims, 'existing Task', 'existing Tasks')} linked to ${s.claims === 1 ? 'its template task' : 'their template tasks'} (claimed); ${s.claims === 1 ? 'its' : 'their'} status, assignees and publishes stay.`);
+		add(s.claims, `${plural(s.claims, 'existing Task', 'existing Tasks')} matched by name and Step, linked to the template; ${s.claims === 1 ? 'its' : 'their'} status, assignees and publishes unchanged.`);
 		add(s.creates, `${plural(s.creates, 'Task', 'Tasks')} created from the template.`);
 		add(s.renames, `${plural(s.renames, 'Task', 'Tasks')} renamed to the template's name.`);
-		add(s.omits, `${plural(s.omits, 'extra Task', 'extra Tasks')} set to the omit status.`);
-		add(s.deletes, `${plural(s.deletes, 'extra Task', 'extra Tasks')} deleted${s.deletesWithUsage ? `, ${s.deletesWithUsage} with Versions or PublishedFiles` : ''}.`);
-		add(s.leaves, `${plural(s.leaves, 'extra Task', 'extra Tasks')} left untouched.`);
+		add(s.omits, `${plural(s.omits, 'Task', 'Tasks')} not in the template set to the omit status.`);
+		add(s.deletes, `${plural(s.deletes, 'Task', 'Tasks')} not in the template deleted${s.deletesWithUsage ? `, ${s.deletesWithUsage} with Versions or PublishedFiles` : ''}.`);
+		add(s.leaves, `${plural(s.leaves, 'Task', 'Tasks')} not in the template, not changed.`);
 	});
 	group('Fields', () => {
 		add(s.overwrites, `${plural(s.overwrites, 'field', 'fields')} overwritten with the template's value.`);
@@ -148,7 +148,7 @@ export function summaryGroups(s: WriteSummary): SummaryGroup[] {
 	});
 	group('Dependencies and dates', () => {
 		add(s.edgesAdded, `${plural(s.edgesAdded, 'dependency', 'dependencies')} added from the template.`);
-		add(s.edgesRecreated, `${plural(s.edgesRecreated, 'dependency', 'dependencies')} the apply erases, re-created as kept (new ids).`);
+		add(s.edgesRecreated, `${plural(s.edgesRecreated, 'dependency', 'dependencies')} removed by the apply, re-created (new ids).`);
 		add(s.edgesRemoved, `${plural(s.edgesRemoved, 'dependency', 'dependencies')} removed.`);
 		add(s.mayMove, `${plural(s.mayMove, 'unpinned Task', 'unpinned Tasks')} may be rescheduled by the new dependencies.`);
 		add(s.wouldViolate, `${plural(s.wouldViolate, 'pinned Task', 'pinned Tasks')} will be flagged as violating a dependency.`);
@@ -162,7 +162,7 @@ export function startBlockers(plans: EntityPlan[], opts: RunOptions): string[] {
 	if (writable.length === 0) return ['Nothing to write: every entity already matches the template.'];
 	const out: string[] = [];
 	const conflicted = writable.filter((p) => p.warnings.some((w) => w.code === 'unresolved_conflict')).length;
-	if (conflicted) out.push(`${plural(conflicted, 'entity has', 'entities have')} an unresolved conflict. Resolve it on the plan.`);
+	if (conflicted) out.push(`${plural(conflicted, 'entity has', 'entities have')} a Task that needs a choice. Pick it on the plan.`);
 	const extras = writable.flatMap((p) => p.rows.flatMap((r) => (r.kind === 'extra' ? [r] : [])));
 	const deletes = extras.filter((r) => r.action === 'delete').length;
 	if (deletes && !opts.deleteConfirmed)

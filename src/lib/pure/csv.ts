@@ -12,6 +12,7 @@
  * CRLF line endings, a UTF-8 BOM for spreadsheet apps.
  */
 
+import { KIND_LABEL, KINDS } from './kinds';
 import { keyParts } from './matching';
 import type {
 	AffectedEdge,
@@ -184,7 +185,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 	const c = plan.counts;
 	head.reason = plan.noop
 		? `already on ${template.code}: nothing to write`
-		: `keep ${c.keep}, claim ${c.claim}, create ${c.create}, extra ${c.extra}, conflict ${c.conflict}` +
+		: KINDS.map((k) => `${KIND_LABEL[k]} ${c[k]}`).join(', ') +
 			(plan.needsClearFirst ? `; already on ${template.code}: cleared then set (084)` : '');
 	const rows: Row[] = [head];
 
@@ -316,7 +317,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 		} else {
 			const gone = deletedEnd(e);
 			if (gone !== undefined) {
-				r.reason = `deleted with the extra ${idLabel(gone)} (103)`;
+				r.reason = `deleted with the Task not in the template ${idLabel(gone)} (103)`;
 				r.decision = '';
 			} else r.reason = 'outside Task upstream: erased by the apply (109)';
 		}
@@ -330,7 +331,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 		const r = edgeRow('edge-outside', e);
 		const gone = deletedEnd(e);
 		r.reason =
-			gone !== undefined ? `deleted with the extra ${idLabel(gone)} (103)` : 'outside Task downstream: kept';
+			gone !== undefined ? `deleted with the Task not in the template ${idLabel(gone)} (103)` : 'outside Task downstream: kept';
 		rows.push(r);
 	}
 

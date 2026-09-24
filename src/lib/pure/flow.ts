@@ -80,3 +80,8 @@ export function flowSteps(pathname: string, facts: FlowFacts): FlowStep[] {
 		return { id: rule.id, label: rule.label, href, state, hint: state === 'blocked' ? rule.hint : null };
 	});
 }
+
+/** A step screen is on show. Home and How it works are outside the flow: the shell hides the steps there. */
+export function inFlow(steps: readonly FlowStep[]): boolean {
+	return steps.some((s) => s.state === 'current');
+}
