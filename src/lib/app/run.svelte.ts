@@ -25,7 +25,7 @@
 import type { EntityRef, SgClient } from 'sg-widgets-core';
 import { checkAccess } from '$lib/io/access';
 import {
-	loadCustomTaskFields,
+	loadTaskFields,
 	loadDefaultTemplate,
 	loadProjectContext,
 	loadSnapshots,
@@ -93,6 +93,8 @@ class RunState {
 
 	types = $state.raw<Loadable<string[]>>(IDLE);
 	templates = $state.raw<Loadable<Template[]>>(IDLE);
+	/** Task field display names by code name, project-scoped (Task schema with `project_id`). */
+	fieldLabels = $state.raw<Record<string, string>>({});
 	defaultTemplate = $state.raw<Loadable<EntityRef | null>>(IDLE);
 
 	ctx = $state.raw<ProjectContext | null>(null);
@@ -110,7 +112,7 @@ class RunState {
 
 	#live: LiveState | null = null;
 	#started: Promise<void> | null = null;
-	#templateCache = new Map<Id, Promise<Template[]>>();
+	#templateCache = new Map<Id, Promise<{ templates: Template[]; labels: Record<string, string> }>>();
 
 	constructor() {
 		this.project = storedProject();
@@ -339,13 +341,16 @@ class RunState {
 		let pending = this.#templateCache.get(project.id);
 		if (!pending) {
 			const client = this.client();
-			pending = loadCustomTaskFields(client, project.id).then((custom) => loadTemplates(client, custom));
+			pending = loadTaskFields(client, project.id).then(async ({ custom, labels }) => ({ templates: await loadTemplates(client, custom), labels }));
 			this.#templateCache.set(project.id, pending);
 			pending.catch(() => this.#templateCache.delete(project.id));
 		}
 		try {
-			const value = await pending;
-			if (this.project?.id === project.id) this.templates = { state: 'ready', value };
+			const { templates: value, labels } = await pending;
+			if (this.project?.id === project.id) {
+				this.fieldLabels = labels;
+				this.templates = { state: 'ready', value };
+			}
 		} catch (error) {
 			if (this.project?.id === project.id) this.templates = failed(error);
 		}

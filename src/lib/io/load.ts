@@ -12,6 +12,7 @@ import { SgApiError, type EntityRow, type FieldSchema, type SgClient, type WireG
 import {
 	BASE_TASK_FIELDS,
 	customFieldCandidates,
+	fieldDisplayNames,
 	defaultTemplateFor,
 	entityFromRow,
 	linkedTemplateTaskIds,
@@ -83,9 +84,16 @@ export function loadTaskSchema(client: SgClient, projectId: Id): Promise<Record<
 	return client.fields('Task', projectId);
 }
 
-/** The custom Task fields to request: editable only (read.ts `customFieldCandidates`). */
-export async function loadCustomTaskFields(client: SgClient, projectId: Id): Promise<FieldName[]> {
-	return customFieldCandidates(await loadTaskSchema(client, projectId));
+/**
+ * From one Task schema read at project scope: the custom Task fields to request (editable only,
+ * read.ts `customFieldCandidates`) and every field's display name (`fieldDisplayNames`).
+ */
+export async function loadTaskFields(
+	client: SgClient,
+	projectId: Id
+): Promise<{ custom: FieldName[]; labels: Record<FieldName, string> }> {
+	const schema = await loadTaskSchema(client, projectId);
+	return { custom: customFieldCandidates(schema), labels: fieldDisplayNames(schema) };
 }
 
 /** Every TaskTemplate on the site with its template tasks and the edges between them. */

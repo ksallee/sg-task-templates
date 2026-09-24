@@ -4,6 +4,7 @@ import { normalizeField, type EntityRow, type FieldSchema, type RawFieldSchema }
 import {
 	BASE_TASK_FIELDS,
 	customFieldCandidates,
+	fieldDisplayNames,
 	defaultTemplateFor,
 	entityFromRow,
 	linkedTemplateTaskIds,
@@ -531,5 +532,22 @@ describe('linkedTemplateTaskIds', () => {
 	it('lists each template_task id once, skipping unlinked Tasks', () => {
 		const rows = [...(shotBefore.tasks as EntityRow[]), shotBefore.tasks[0] as EntityRow];
 		expect(linkedTemplateTaskIds(rows)).toEqual([47102, 47101]);
+	});
+});
+
+describe('fieldDisplayNames', () => {
+	const f = (name: string, displayName: string): FieldSchema => ({
+		name,
+		displayName,
+		entityType: 'Task',
+		dataType: 'text',
+		editable: true,
+		mandatory: false,
+		unique: false
+	});
+
+	it('maps code names to the project-scoped display names, leaving out blank ones', () => {
+		const schema = { sg_description: f('sg_description', 'Description'), content: f('content', 'Task Name'), sg_x: f('sg_x', '  ') };
+		expect(fieldDisplayNames(schema)).toEqual({ sg_description: 'Description', content: 'Task Name' });
 	});
 });

@@ -329,6 +329,16 @@ export function customFieldCandidates(taskFields: Record<string, FieldSchema>): 
 		.sort();
 }
 
+/**
+ * Task field display names by code name, from the schema read with `project_id` (project-scoped
+ * labels). A blank display name is left out: the UI falls back to the code name.
+ */
+export function fieldDisplayNames(taskFields: Record<string, FieldSchema>): Record<FieldName, string> {
+	const out: Record<FieldName, string> = {};
+	for (const f of Object.values(taskFields)) if (f.displayName?.trim()) out[f.name] = f.displayName.trim();
+	return out;
+}
+
 /** An entity row (`code`, `task_template`) as the snapshot's entity. */
 export function entityFromRow(row: EntityRow): EntitySnapshot['entity'] {
 	const code = str(row.attributes?.code);
