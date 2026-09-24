@@ -145,7 +145,8 @@ function deletedExtras(plan: EntityPlan, opts?: Pick<RunOptions, 'deleteConfirme
 /**
  * Kept edges the apply erases with no template copy on the pair: re-created after the template
  * write, new id. `not_in_template`: between linked Tasks (102). `outside_upstream`: a linked Task
- * on a Task not linked to T (109), skipped when this batch deletes that Task. `remove` sends
+ * on a Task not linked to T (109). An edge with an end this batch deletes is never re-created:
+ * it would point at a retired Task and roll back the batch; it counts as removed (103). `remove` sends
  * nothing: the apply erases them. Replaced edges: `buildAfterApply`.
  */
 export function edgeKeepRequests(plan: EntityPlan, opts?: Pick<RunOptions, 'deleteConfirmed'>): BatchRequest[] {

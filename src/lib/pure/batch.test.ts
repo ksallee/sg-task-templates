@@ -300,6 +300,23 @@ describe('edgeKeepRequests', () => {
 		]);
 	});
 
+	it('never re-creates a kept edge with an end the run deletes: removed with the extra (103)', () => {
+		const p = plan({
+			rows: [extra(task(5009, 'roto', 12), 'delete')],
+			edges: {
+				...plan().edges,
+				affected: [
+					affected({ ...edge(701, 5002, 5009), id: 701 }, 'not_in_template'),
+					affected({ ...edge(705, 5002, 5001), id: 705 }, 'outside_upstream')
+				]
+			}
+		});
+		expect(edgeKeepRequests(p, { deleteConfirmed: true }).map((r) => r.request_type === 'create' && r.data.dependent_task)).toEqual([
+			{ type: 'Task', id: 5001 }
+		]);
+		expect(edgeKeepRequests(p, { deleteConfirmed: false })).toHaveLength(2);
+	});
+
 	it('sends nothing for a removed edge or a replaced one (second phase)', () => {
 		const p = plan({
 			edges: {
