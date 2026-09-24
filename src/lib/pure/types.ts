@@ -548,6 +548,54 @@ export interface UndoRecord {
 	/** Added by the apply (015, 099), template replacements included: delete on undo. */
 	addedEdges: Array<Edge & { id: Id }>;
 	clearedDates: Array<{ taskId: Id; start: string | null; due: string | null }>;
+	/**
+	 * Every TaskDependency row touching the entity's Tasks before the apply. The edge revert's
+	 * target: the old template's re-sync on undo can erase hand-made edges between its Tasks (102).
+	 */
+	edgesBefore?: Array<Edge & { id: Id }>;
+	/** Surviving Tasks whose dates the apply's cascade moved (087, 092, 102). Not undoable. */
+	datesMoved?: Array<{ taskId: Id; before: TaskDates; after: TaskDates }>;
+}
+
+export interface TaskDates {
+	start: string | null;
+	due: string | null;
+}
+
+/** What an undo cannot put back, for the result screen. */
+export type UndoNote =
+	/** Writing old dates pins the Task (087); revive and re-create reschedule from upstream (095). */
+	| { code: 'dates_moved'; taskId: Id; before: TaskDates; after: TaskDates }
+	/** Erased rows (101, 102) come back as new rows: same type and offset, new id. */
+	| { code: 'edges_recreated'; edgeIds: Id[] }
+	/** Event log rows of the apply and the undo stay (096 recipe, 090). */
+	| { code: 'history_kept' };
+
+/** The revert of one entity: `batch`, then `reviveTasks`, then read edges and `EdgeRevert`. */
+export interface RevertPlan {
+	/** One `_batch`, in 096's order: template_task, task_template, delete created, fields, statuses. */
+	batch: BatchRequest[];
+	/** `POST /entity/tasks/<id>?revive=1` each (048, 089): not a batch request. */
+	reviveTasks: Id[];
+	notes: UndoNote[];
+}
+
+/** The edge part of a revert, from the edges read live after `RevertPlan`. Run in this order. */
+export interface EdgeRevert {
+	/** One `_batch` of TaskDependency deletes: added edges, and whatever holds a pair to restore. */
+	remove: BatchRequest[];
+	/** `POST /entity/task_dependencies/<id>?revive=1` each, before any create (095). */
+	revive: Id[];
+	/** One `_batch` of TaskDependency creates for erased rows (086 route 1, 101). */
+	create: BatchRequest[];
+	/** Live edges unknown to the record (the old template's re-sync, someone else): left in place. */
+	left: Array<Edge & { id: Id }>;
+}
+
+/** The downloadable undo file of a run. */
+export interface UndoFile {
+	version: 1;
+	records: UndoRecord[];
 }
 
 // --- run -------------------------------------------------------------------------------------------
