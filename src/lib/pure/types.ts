@@ -434,7 +434,13 @@ export type PlanWarning =
 	| { code: 'template_duplicate_key'; key: MatchKey; templateTaskIds: Id[] }
 	| { code: 'delete_with_usage'; taskId: Id; usage: TaskUsage }
 	| { code: 'rename'; taskId: Id; from: string | null; to: string | null; handRenamed: boolean }
-	| { code: 'access_short'; detail: string } // 094 pending
+	| {
+			code: 'access_short';
+			detail: string;
+			/** 094: the four probe checks and the schema `editable` read, for the plan screen. */
+			checks?: AccessCheck[];
+			fields?: Record<FieldName, SchemaFieldAccess>;
+	  }
 	| { code: 'unresolved_conflict'; templateTaskIds: Id[] }
 	/** A kept edge would close a loop after the apply (085, 107): removed by default. */
 	| { code: 'edge_closes_loop'; edgeId: Id; action: EdgeAction };
@@ -518,4 +524,75 @@ export interface Run {
 	startedAt: string;
 	finishedAt: string | null;
 	entities: Array<{ entity: EntityRef; status: EntityRunState }>;
+}
+
+// --- access preflight (094) ---------------------------------------------------------------------
+
+/** The four things a run needs to do, each checked before any write lands (094). */
+export type AccessCapability = 'update_task' | 'update_entity' | 'create_task' | 'delete_task';
+
+export type AccessResult = 'allowed' | 'refused' | 'unknown';
+
+/**
+ * What the I/O layer hands back for one probe call: the HTTP status and the first JSON:API error's
+ * `title` and `detail`, kept apart as 017 reads them. `title` carries the update, create and delete
+ * refusals and the create check's invalid status (017 `first_error`); `detail` carries the delete
+ * check's sentinel (017 `_rolled_back`: a rolled-back `_batch` answers `title` "Not Found"). Both
+ * `null` on a 2xx, which has no error body, and `detail` `null` when the error has none.
+ */
+export interface AccessResponse {
+	status: number;
+	title: string | null;
+	detail: string | null;
+}
+
+/** A plain `PUT /entity/<slug>/<id>` (017 `can_update`). `entity` is the schema name; the I/O layer maps the slug. */
+export interface AccessPutRequest {
+	method: 'PUT';
+	entity: string;
+	record_id: number;
+	body: Record<string, unknown>;
+}
+
+/** A plain `POST /entity/<slug>` (017 `can_create_task`). Never a `_batch` create (see below). */
+export interface AccessPostRequest {
+	method: 'POST';
+	entity: string;
+	body: Record<string, unknown>;
+}
+
+/**
+ * The four probe requests for one run (094, 017). Built here; sent and read back by the I/O layer.
+ * Only the delete check is a `_batch`: 017 checks create with a plain POST, because a rolled-back
+ * `_batch` create moved the parent Shot's `updated_at` in 4 of 15 tries (094).
+ */
+export interface AccessProbeRequests {
+	/**
+	 * No-op PUT: the sample Task's current values for the fields the plan will write. `null` when
+	 * there are no fields: an empty PUT answers 200 for every caller and tests nothing (094 candidate 5).
+	 */
+	updateTask: AccessPutRequest | null;
+	/** No-op PUT: the entity's current `code`, the field 094 measured (candidate 4, on a Shot). */
+	updateEntity: AccessPutRequest;
+	/** POST Task with an invalid `sg_status_list`: never lands, whoever the caller is (094 candidate 6). */
+	createTask: AccessPostRequest;
+	/** `_batch` [delete the sample Task, update of a missing id]: the sentinel rolls it back (094 candidate 9). */
+	deleteTask: BatchRequest[];
+}
+
+export interface AccessCheck {
+	capability: AccessCapability;
+	result: AccessResult;
+	/** `null` when the call was never made. */
+	response: AccessResponse | null;
+}
+
+/** `GET /schema/<Type>/fields?project_id=`'s `editable` per field (094): `false` = refused, `true` = maybe. */
+export type SchemaFieldAccess = 'refused' | 'maybe';
+
+export interface AccessSummary {
+	checks: AccessCheck[];
+	fields: Record<FieldName, SchemaFieldAccess>;
+	/** A refusal was seen somewhere: the write the plan needs looks short. Unknown never sets this. */
+	looksShort: boolean;
 }
