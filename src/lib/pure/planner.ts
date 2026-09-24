@@ -209,14 +209,19 @@ function extraAction(task: EntityTask, opts: RunOptions): ExtraAction {
 function resolveConflict(
   c: MatchConflict,
   opts: RunOptions,
+  entityId: Id,
   warnings: PlanWarning[],
 ): Record<Id, Id | null> {
   const pick: Record<Id, Id | null> = {};
   const used = new Set<Id>();
   const invalid: Id[] = [];
+  const picks = {
+    ...opts.conflictPicks,
+    ...(opts.entityConflictPicks?.[entityId] ?? {}),
+  };
   for (const ttId of c.templateTaskIds) {
-    if (!(ttId in opts.conflictPicks)) continue;
-    const p = opts.conflictPicks[ttId];
+    if (!(ttId in picks)) continue;
+    const p = picks[ttId];
     if (p === null) pick[ttId] = null;
     else if (c.candidates.includes(p) && !used.has(p)) {
       pick[ttId] = p;
@@ -348,7 +353,7 @@ export function planEntity(
   for (const id of m.create) byTt.set(id, createRow(ttById.get(id)!));
   const losers: Id[] = [];
   for (const c of m.conflict) {
-    const pick = resolveConflict(c, opts, warnings);
+    const pick = resolveConflict(c, opts, snap.entity.id, warnings);
     conflictBefore.set(c.templateTaskIds[0], {
       kind: "conflict",
       key: c.key,
@@ -531,6 +536,23 @@ export function withConflictPick(
   return {
     ...opts,
     conflictPicks: { ...opts.conflictPicks, [templateTaskId]: taskId },
+  };
+}
+
+/** One entity's conflict pick; wins over `withConflictPick` for that entity. */
+export function withEntityConflictPick(
+  opts: RunOptions,
+  entityId: Id,
+  templateTaskId: Id,
+  taskId: Id | null,
+): RunOptions {
+  const all = opts.entityConflictPicks ?? {};
+  return {
+    ...opts,
+    entityConflictPicks: {
+      ...all,
+      [entityId]: { ...(all[entityId] ?? {}), [templateTaskId]: taskId },
+    },
   };
 }
 
