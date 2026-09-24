@@ -8,6 +8,7 @@
 	import { page } from '$app/state';
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
+	import CircleHelp from '@lucide/svelte/icons/circle-help';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { isDark, setMode } from '$lib/theme';
 	import { prepareLive, type LiveState } from '$lib/live';
@@ -63,7 +64,7 @@
 
 <div class="bg-background text-foreground flex h-dvh flex-col">
 	<header class="border-border bg-background flex h-12 shrink-0 items-center gap-5 border-b px-4" data-slot="app-header">
-		<a href="/connect" class="focus-visible:ring-ring shrink-0 rounded-md text-sm outline-none focus-visible:ring-2" aria-label="SG Task Templates, connect">
+		<a href="/" class="focus-visible:ring-ring shrink-0 rounded-md text-sm outline-none focus-visible:ring-2" aria-label="SG Task Templates, home">
 			<Wordmark />
 		</a>
 
@@ -88,6 +89,7 @@
 					{/if}
 				</a>
 			{/if}
+			<Button size="icon" variant="ghost" href="/how" aria-label="How it works" title="How it works"><CircleHelp aria-hidden="true" /></Button>
 			<Button size="icon" variant="ghost" onclick={toggleScheme} aria-label={dark ? 'Switch to light' : 'Switch to dark'} title={dark ? 'Switch to light' : 'Switch to dark'}>
 				{#if dark}
 					<Moon aria-hidden="true" />
