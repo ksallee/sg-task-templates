@@ -365,6 +365,8 @@ export interface ExtraRow {
 	action: ExtraAction;
 	usage: TaskUsage; // loud warning on delete when non-zero (089)
 	reason: ExtraReason;
+	/** Set on a Task that stays linked to this template's task (a conflict loser): the apply re-syncs it too (102). */
+	fieldChanges?: FieldChange[];
 }
 
 /** Unresolved: shown with its candidates; resolves into keep/claim/create + extras. */
