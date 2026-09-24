@@ -7,8 +7,8 @@
  *   2. Domain: flat records the planner works on. `read.ts` is the only code that turns layer 1
  *      into layer 2.
  *
- * Corpus tag `corpus/2026-09-24`, plus the sg-groundtruth #79 probes (092..101, branches
- * probe/79-NNN) and #81 (103..109, probe/81-NNN). Comments name the entry each shape rests on.
+ * Corpus tag `corpus/2026-09-24.1` (findings through 112, recipes through 023). Comments name
+ * the entry each shape rests on.
  */
 
 import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
@@ -518,14 +518,15 @@ export type EntityResult = EntityResultOk | EntityResultFailed;
 // --- undo ------------------------------------------------------------------------------------------
 
 /**
- * Everything the full undo needs, in 096's order (one batch, 104):
- *   0. revive `deletedTasks` (103), before the old template's write re-creates them (096);
- *   1. `claimed`, `unlinked`: write each old `template_task` back;
+ * Everything the full undo needs, in 096's order (one batch, 104). See undo.ts for the steps:
+ *   0. revive `deletedTasks` (103), before the old template's write re-creates them (110);
+ *   1. `claimed`, `unlinked`: write each old `template_task` back, one Task per old template task
+ *      before the entity write, a second one after it (112);
  *   2. `previousTaskTemplate`: write the entity's old `task_template` back;
- *   3. `created`: delete the Tasks the apply made;
- *   4. write back pre-merge state: `fieldValues`, `omitted`, revive `deletedTasks` (048), remove
- *      `addedEdges`, re-create `droppedEdges` not already re-created (101: erased, not revivable),
- *      revive `deletedEdges` by id (095), restore `clearedDates`.
+ *   3. `created`: delete the Tasks the apply made; delete `addedEdges` the write leaves (104, 111);
+ *   4. write back `fieldValues`, `omitted`;
+ *   5. edges back to `edgesBefore`, by pair: revive `deletedEdges` (095), re-create the rest (101,
+ *      109, 111).
  */
 export interface UndoRecord {
 	version: 1;
@@ -543,8 +544,13 @@ export interface UndoRecord {
 	 * the revert batch leaves out edges it would find already removed (104).
 	 */
 	resyncedOnUndo?: Id[];
+	/**
+	 * Every Task linked to a template task before the apply, and to which. Finds a second Task on
+	 * an old template task, relinked or left linked (112). Missing in older records.
+	 */
+	linkedBefore?: Array<{ taskId: Id; templateTask: Id; templateId: Id | null }>;
 	created: Id[];
-	/** Pre-apply value of every field under policy on every kept and claimed Task (102). */
+	/** Pre-apply value of every field under policy on every kept and claimed Task (102), `content` included (112). */
 	fieldValues: Array<{ taskId: Id; field: FieldName; previous: unknown }>;
 	omitted: Array<{ taskId: Id; previousStatus: string | null }>;
 	deletedTasks: Id[]; // revive (048, 089)
@@ -575,21 +581,27 @@ export interface TaskDates {
 export type UndoNote =
 	/** Writing old dates pins the Task (087); revive and re-create reschedule from upstream (095). */
 	| { code: 'dates_moved'; taskId: Id; before: TaskDates; after: TaskDates }
-	/** Erased rows (101, 102) come back as new rows: same type and offset, new id. */
+	/** Erased rows (101, 102, 109, 111) come back as new rows: same ends, type and offset, new id. */
 	| { code: 'edges_recreated'; edgeIds: Id[] }
+	/** Downstream Tasks of edges revived or re-created by the edge revert: unpinned ones reschedule (092, 095). */
+	| { code: 'dates_may_move'; taskIds: Id[] }
+	/**
+	 * Several Tasks on one old template task that all held edges, or the one left linked held none:
+	 * which one the old template's write wires is the server's pick (106, 112), not measured.
+	 */
+	| { code: 'linked_twice_unmeasured'; templateTask: Id; taskIds: Id[] }
 	/** Event log rows of the apply and the undo stay (096 recipe, 090). */
 	| { code: 'history_kept' };
 
-/** The revert of one entity: `reviveTasks`, then read edges and `batch`, then read edges and `EdgeRevert`. */
+/**
+ * The revert batch of one entity. Built after `tasksToRevive` are revived and the edges read live
+ * (110); then read edges again and build the `EdgeRevert`.
+ */
 export interface RevertPlan {
 	/**
-	 * `POST /entity/tasks/<id>?revive=1` each, FIRST (103: same id, fields, edges; 096: the old
-	 * template's write would re-create a Task still retired). Not a batch request (103).
-	 */
-	reviveTasks: Id[];
-	/**
-	 * One `_batch`, in 096's order: template_task (claims, then unlinked losers), task_template,
-	 * delete created Tasks, delete added edges the write leaves (104), fields, statuses.
+	 * One `_batch`: template_task (one Task per old template task), task_template, the other
+	 * template_task writes (112), delete created Tasks, delete added edges the write leaves (104,
+	 * 111), fields, statuses.
 	 */
 	batch: BatchRequest[];
 	notes: UndoNote[];
@@ -601,10 +613,12 @@ export interface EdgeRevert {
 	remove: BatchRequest[];
 	/** `POST /entity/task_dependencies/<id>?revive=1` each, before any create (095). */
 	revive: Id[];
-	/** One `_batch` of TaskDependency creates for erased rows (086 route 1, 101, 109). */
+	/** One `_batch` of TaskDependency creates for erased rows (086 route 1, 101, 109, 111). */
 	create: BatchRequest[];
 	/** Live edges unknown to the record (the old template's re-sync, someone else): left in place. */
 	left: Array<Edge & { id: Id }>;
+	/** What the edge revert cannot put back exactly: new ids, dates that may move. */
+	notes: UndoNote[];
 }
 
 /** The downloadable undo file of a run. */
