@@ -546,15 +546,37 @@ export interface AccessResponse {
 	title: string | null;
 }
 
-/** The four probe requests for one run (094). Built here; sent and read back by the I/O layer. */
+/** A plain `PUT /entity/<slug>/<id>` (017 `can_update`). `entity` is the schema name; the I/O layer maps the slug. */
+export interface AccessPutRequest {
+	method: 'PUT';
+	entity: string;
+	record_id: number;
+	body: Record<string, unknown>;
+}
+
+/** A plain `POST /entity/<slug>` (017 `can_create_task`). Never a `_batch` create (see below). */
+export interface AccessPostRequest {
+	method: 'POST';
+	entity: string;
+	body: Record<string, unknown>;
+}
+
+/**
+ * The four probe requests for one run (094, 017). Built here; sent and read back by the I/O layer.
+ * Only the delete check is a `_batch`: 017 checks create with a plain POST, because a rolled-back
+ * `_batch` create moved the parent Shot's `updated_at` in 4 of 15 tries (094).
+ */
 export interface AccessProbeRequests {
-	/** No-op PUT: the sample Task's current values for the fields the plan will write. */
-	updateTask: BatchRequest;
-	/** No-op PUT: the entity's current `task_template`. */
-	updateEntity: BatchRequest;
-	/** POST Task with an invalid `sg_status_list`: never lands, whoever the caller is. */
-	createTask: BatchRequest;
-	/** `_batch` [delete the sample Task, update of a missing id]: the sentinel rolls it back. */
+	/**
+	 * No-op PUT: the sample Task's current values for the fields the plan will write. `null` when
+	 * there are no fields: an empty PUT answers 200 for every caller and tests nothing (094 candidate 5).
+	 */
+	updateTask: AccessPutRequest | null;
+	/** No-op PUT: the entity's current `code`, the field 094 measured (candidate 4, on a Shot). */
+	updateEntity: AccessPutRequest;
+	/** POST Task with an invalid `sg_status_list`: never lands, whoever the caller is (094 candidate 6). */
+	createTask: AccessPostRequest;
+	/** `_batch` [delete the sample Task, update of a missing id]: the sentinel rolls it back (094 candidate 9). */
 	deleteTask: BatchRequest[];
 }
 

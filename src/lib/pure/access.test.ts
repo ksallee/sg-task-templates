@@ -56,37 +56,43 @@ describe('buildAccessProbeRequests', () => {
 	const reqs = buildAccessProbeRequests({
 		task,
 		entity,
+		entityCode: 'sh010',
 		project,
 		fields: ['duration', 'sg_description']
 	});
 
-	it('no-op PUTs only the given fields, at their current values', () => {
+	it('no-op PUTs only the given fields, at their current values, as a plain PUT (017 can_update)', () => {
 		expect(reqs.updateTask).toEqual({
-			request_type: 'update',
+			method: 'PUT',
 			entity: 'Task',
 			record_id: 47295,
-			data: { duration: 60, sg_description: 'a Task' }
+			body: { duration: 60, sg_description: 'a Task' }
 		});
 	});
 
-	it('no-op PUTs the entity its own current task_template', () => {
+	it('sends no update probe for no fields: an empty PUT answers 200 for everyone (094 candidate 5)', () => {
+		const none = buildAccessProbeRequests({ task, entity, entityCode: 'sh010', project, fields: [] });
+		expect(none.updateTask).toBeNull();
+	});
+
+	it('no-op PUTs the entity its own current code, the field 094 measured (candidate 4), as a plain PUT', () => {
 		expect(reqs.updateEntity).toEqual({
-			request_type: 'update',
+			method: 'PUT',
 			entity: 'Shot',
 			record_id: 7557,
-			data: { task_template: { type: 'TaskTemplate', id: 201, name: 'tt1' } }
+			body: { code: 'sh010' }
 		});
 	});
 
-	it('posts a create with an invalid status, never a real Task', () => {
+	it('posts a create with an invalid status as a plain POST, never a batch create (017)', () => {
 		expect(reqs.createTask).toEqual({
-			request_type: 'create',
+			method: 'POST',
 			entity: 'Task',
-			data: {
+			body: {
 				project: { type: 'Project', id: 1180 },
 				entity: { type: 'Shot', id: 7557 },
-				content: ACCESS_CREATE_CONTENT,
-				sg_status_list: ACCESS_INVALID_STATUS
+				content: 'permission check',
+				sg_status_list: 'zz_not_a_status'
 			}
 		});
 	});
@@ -97,7 +103,7 @@ describe('buildAccessProbeRequests', () => {
 			{
 				request_type: 'update',
 				entity: 'Task',
-				record_id: ACCESS_DELETE_SENTINEL_ID,
+				record_id: 999999999,
 				data: { content: 'x' }
 			}
 		]);

@@ -19,7 +19,9 @@
 import type {
 	AccessCapability,
 	AccessCheck,
+	AccessPostRequest,
 	AccessProbeRequests,
+	AccessPutRequest,
 	AccessResponse,
 	AccessResult,
 	AccessSummary,
@@ -50,34 +52,44 @@ const CAPABILITY_LABEL: Record<AccessCapability, string> = {
 };
 
 /**
- * The four probe requests for one run: a no-op PUT of the sample Task's current values for the
- * fields the plan will write, a no-op PUT of the entity's current `task_template`, a create with an
- * invalid status, and the delete rollback batch. `fields` are wire names already under policy, so
- * their current values live on `task.fields` (types.ts, `TaskCore.fields`).
+ * The four probe requests for one run (017): a no-op PUT of the sample Task's current values for
+ * the fields the plan will write, a no-op PUT of the entity's current `code`, a plain POST with an
+ * invalid status, and the delete rollback `_batch`. `fields` are wire names already under policy, so
+ * their current values live on `task.fields` (types.ts, `TaskCore.fields`). `entityCode` is the
+ * entity's current `code`, read with `GET /entity/<slug>/<id>?fields=code` as 017's `can_update` does.
+ *
+ * No fields, no update probe: an empty PUT answers 200 for every caller (094 candidate 5), so
+ * `updateTask` is `null` and its result stays `unknown`.
+ *
+ * 094 ran the entity PUT on a Shot's `code` only; an Asset's was read in the schema, never PUT.
  */
 export function buildAccessProbeRequests(input: {
 	task: EntityTask;
 	entity: EntitySnapshot['entity'];
+	entityCode: string;
 	project: EntityRef;
 	fields: FieldName[];
 }): AccessProbeRequests {
-	const { task, entity, project, fields } = input;
-	const updateTask: BatchRequest = {
-		request_type: 'update',
-		entity: 'Task',
-		record_id: task.id,
-		data: Object.fromEntries(fields.map((f) => [f, task.fields[f]]))
-	};
-	const updateEntity: BatchRequest = {
-		request_type: 'update',
+	const { task, entity, entityCode, project, fields } = input;
+	const updateTask: AccessPutRequest | null =
+		fields.length === 0
+			? null
+			: {
+					method: 'PUT',
+					entity: 'Task',
+					record_id: task.id,
+					body: Object.fromEntries(fields.map((f) => [f, task.fields[f]]))
+				};
+	const updateEntity: AccessPutRequest = {
+		method: 'PUT',
 		entity: entity.entityType,
 		record_id: entity.id,
-		data: { task_template: entity.taskTemplate }
+		body: { code: entityCode }
 	};
-	const createTask: BatchRequest = {
-		request_type: 'create',
+	const createTask: AccessPostRequest = {
+		method: 'POST',
 		entity: 'Task',
-		data: {
+		body: {
 			project: { type: 'Project', id: project.id },
 			entity: { type: entity.type, id: entity.id },
 			content: ACCESS_CREATE_CONTENT,
