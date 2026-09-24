@@ -820,6 +820,19 @@ describe("planEntity: entity level", () => {
       planEntity(tt2, s, ctx, { ...opts, edgeActions: { 5: "remove" } }).noop,
     ).toBe(false);
   });
+
+  it("warns on a kept edge that would close a loop, removed by default (085, 107)", () => {
+    // tt2 adds comp(1) on paint(3). Site: roto(2) on comp(1), paint(3) on roto(2): 3 -> 1 -> 2 -> 3.
+    const a: Edge = { id: 6, downstream: 2, upstream: 1, type: "finish-to-start-next-day", offsetDays: null };
+    const b: Edge = { id: 7, downstream: 3, upstream: 2, type: "finish-to-start-next-day", offsetDays: null };
+    const p = planEntity(tt2, snap(linked(), { edges: [a, b] }), ctx, opts);
+    expect(p.edges.affected).toMatchObject([
+      { existing: { id: 6 }, action: "keep" },
+      { existing: { id: 7 }, closesLoop: true, action: "remove" },
+    ]);
+    expect(p.warnings).toContainEqual({ code: "edge_closes_loop", edgeId: 7, action: "remove" });
+    expect(p.warnings.filter((w) => w.code === "edge_closes_loop")).toHaveLength(1);
+  });
 });
 
 describe("planRun and bulk helpers", () => {

@@ -438,6 +438,10 @@ export function planEntity(
     needsClearFirst: snap.entity.taskTemplate?.id === template.id,
     noop: false,
   };
+  // 085, 107: a loop is a 400 that rolls the whole batch back; edges.ts defaults it to remove.
+  for (const a of plan.edges.affected)
+    if (a.closesLoop)
+      warnings.push({ code: "edge_closes_loop", edgeId: a.existing.id, action: a.action });
   plan.noop = isNoop(plan, opts);
   return plan;
 }
