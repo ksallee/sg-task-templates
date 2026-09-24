@@ -34,7 +34,7 @@
 </script>
 
 {#if !hidden && (runs.length || message)}
-	<div class="border-border flex shrink-0 flex-col gap-1 border-b bg-amber-500/10 px-4 py-2 text-sm" data-slot="resume-banner">
+	<div class="border-border flex shrink-0 flex-col gap-1 border-b bg-warning/10 px-4 py-2 text-sm" data-slot="resume-banner">
 		{#each runs as { run: r, counts } (r.id)}
 			<div class="flex flex-wrap items-center gap-2">
 				<span class="mr-auto">

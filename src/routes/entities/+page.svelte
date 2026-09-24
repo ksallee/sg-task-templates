@@ -7,19 +7,24 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount, untrack } from 'svelte';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Search from '@lucide/svelte/icons/search';
 	import { createEntitySource, resolveColumns, type CollectionColumn } from 'sg-widgets-core';
 	import { liveContext } from '$lib/live';
 	import { run, type EntryPoint } from '$lib/app/run.svelte';
 	import { entityListFilters, planBlocker } from '$lib/pure/entry';
+	import PageHeader from '$lib/app/page-header.svelte';
+	import PageState from '$lib/app/page-state.svelte';
+	import Notice from '$lib/app/notice.svelte';
 	import EntityTable from '$lib/components/entity-table.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as ToggleGroup from '$lib/components/ui/toggle-group/index.js';
 
-	const ENTRIES: ReadonlyArray<{ value: EntryPoint; label: string }> = [
-		{ value: 'template_first', label: 'Using this template' },
-		{ value: 'entities_first', label: 'All' },
-		{ value: 'no_template', label: 'No template' }
+	const ENTRIES: ReadonlyArray<{ value: EntryPoint; label: string; line: string }> = [
+		{ value: 'template_first', label: 'Using this template', line: 'Every entity already on the template, selected on arrival.' },
+		{ value: 'entities_first', label: 'All', line: 'The whole type: pick the ones to move onto the template.' },
+		{ value: 'no_template', label: 'No template', line: 'Entities with no template yet.' }
 	];
 
 	const started = run.start();
@@ -43,6 +48,9 @@
 
 	const blocker = $derived(planBlocker({ project: run.project, entityType: run.entityType, template: run.template, selected: run.selected.length }));
 	const isDefault = $derived(run.defaultTemplate.state === 'ready' && run.defaultTemplate.value?.id === run.templateId);
+	const entry = $derived(ENTRIES.find((e) => e.value === run.entryPoint) ?? ENTRIES[0]);
+	const planning = $derived(run.planning.state === 'loading');
+	const count = $derived(run.selected.length);
 
 	onMount(() => {
 		void started.then(async () => {
@@ -83,79 +91,96 @@
 <svelte:head><title>Entities · SG Task Templates</title></svelte:head>
 
 {#await started}
-	<p class="text-muted-foreground p-6 text-sm">Reaching the site…</p>
+	<PageState state="loading" title="Reaching the site…" />
 {:then}
 	{#if run.problem}
-		<div class="flex flex-col items-start gap-2 p-6">
-			<p class="text-sm">{run.problem}</p>
-			<Button size="sm" href="/connect">Connect</Button>
-		</div>
+		<PageState state="error" title="Not connected" line={run.problem}>
+			{#snippet action()}<Button href="/connect">Connect</Button>{/snippet}
+		</PageState>
 	{:else if !run.project || !entityType || run.templateId === null}
-		<div class="flex flex-col items-start gap-2 p-6">
-			<p class="text-sm">Pick a project, an entity type and a template first.</p>
-			<Button size="sm" href="/template">Template</Button>
-		</div>
+		<PageState state="empty" title="No template yet" line="Pick a project, an entity type and a template first.">
+			{#snippet action()}<Button href="/template">Template</Button>{/snippet}
+		</PageState>
 	{:else}
-		<div class="flex min-h-0 flex-1 flex-col">
-			<div class="border-border flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2" data-slot="entity-picks">
-				<span class="text-sm">
-					<span class="text-muted-foreground">{entityType} ·</span>
-					<a href="/template" class="font-medium underline-offset-4 hover:underline">{run.template?.code ?? `Template ${run.templateId}`}</a>
-					{#if isDefault}<span class="text-muted-foreground">(project default)</span>{/if}
-				</span>
+		<PageHeader title="Entities">
+			{#snippet context()}
+				<span>{run.project?.name ?? `Project ${run.project?.id}`}</span>
+				<span aria-hidden="true">·</span>
+				<span>{entityType}</span>
+				<span aria-hidden="true">·</span>
+				<a href="/template" class="text-foreground font-medium underline-offset-4 hover:underline">{run.template?.code ?? `Template ${run.templateId}`}</a>
+				{#if isDefault}<span>(project default)</span>{/if}
+			{/snippet}
+			{#snippet actions()}
+				{#if planning}
+					<span class="text-muted-foreground text-sm tabular-nums" data-slot="planning-progress">
+						Reading {run.planning.state === 'loading' ? (run.planning.done ?? 0) : 0} of {run.planning.state === 'loading' ? (run.planning.total ?? count) : count}…
+					</span>
+				{:else if blocker}
+					<span class="text-muted-foreground text-sm">{blocker}</span>
+				{/if}
+				<Button onclick={() => void next()} disabled={blocker !== null || planning}>
+					{planning ? 'Planning…' : count > 0 ? `Plan ${count} ${count === 1 ? 'entity' : 'entities'}` : 'Plan'}
+					<ArrowRight data-icon="inline-end" />
+				</Button>
+			{/snippet}
+			{#if run.planning.state === 'error'}
+				<Notice tone="destructive" title="Could not build the plan." data-slot="planning-error">{' '}{run.planning.message}</Notice>
+			{/if}
+		</PageHeader>
+
+		<div class="border-border flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b px-6 py-3" data-slot="entity-picks">
+			<div class="flex items-center gap-2">
+				<span class="text-muted-foreground text-xs font-medium" id="which-label">Show</span>
 				<ToggleGroup.Root
 					type="single"
 					size="sm"
 					variant="outline"
 					value={run.entryPoint}
 					onValueChange={(value) => value && run.setEntryPoint(value as EntryPoint)}
-					aria-label="Which entities"
+					aria-labelledby="which-label"
 				>
-					{#each ENTRIES as entry (entry.value)}
-						<ToggleGroup.Item value={entry.value}>{entry.label}</ToggleGroup.Item>
+					{#each ENTRIES as e (e.value)}
+						<ToggleGroup.Item value={e.value} title={e.line}>{e.label}</ToggleGroup.Item>
 					{/each}
 				</ToggleGroup.Root>
-				<Input class="h-8 w-56" type="search" placeholder="Filter by code" bind:value={search} aria-label="Filter by code" />
 			</div>
-
-			<div class="flex min-h-0 flex-1 flex-col p-4">
-				{#if source}
-					<EntityTable
-						{source}
-						bind:columns
-						context={liveContext()}
-						projectId={run.project.id}
-						{filters}
-						selectable
-						selection={run.selected}
-						onSelectionChange={(rows) => run.setSelected(rows)}
-						paging="scroll"
-						maxHeight="100%"
-						density="compact"
-						class="min-h-0 flex-1"
-					/>
-				{/if}
+			<div class="relative w-64">
+				<Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" aria-hidden="true" />
+				<Input class="h-8 pl-8" type="search" placeholder="Filter by code" bind:value={search} aria-label="Filter by code" />
 			</div>
+			<span class="text-muted-foreground min-w-0 flex-1 truncate text-sm" title={entry.line}>{entry.line}</span>
+		</div>
 
-			<footer class="border-border flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-2" data-slot="entities-footer">
-				<span class="text-sm tabular-nums" data-slot="selected-count">{run.selected.length} selected</span>
-				<Button size="sm" variant="ghost" onclick={() => void selectAll()} disabled={selectingAll}>
-					{selectingAll ? 'Selecting…' : 'Select all matching'}
-				</Button>
-				<Button size="sm" variant="ghost" onclick={() => run.setSelected([])} disabled={run.selected.length === 0}>Clear</Button>
-				{#if selectError}<span class="text-destructive text-sm">{selectError}</span>{/if}
-				<span class="mr-auto"></span>
-				{#if run.planning.state === 'loading'}
-					<span class="text-muted-foreground text-sm tabular-nums" data-slot="planning-progress">
-						Reading {run.planning.done ?? 0} of {run.planning.total ?? run.selected.length}…
-					</span>
-				{:else if run.planning.state === 'error'}
-					<span class="text-destructive text-sm" data-slot="planning-error">Could not build the plan: {run.planning.message}</span>
-				{:else if blocker}
-					<span class="text-muted-foreground text-sm">{blocker}</span>
-				{/if}
-				<Button size="sm" onclick={() => void next()} disabled={blocker !== null || run.planning.state === 'loading'}>Next: plan</Button>
-			</footer>
+		<div class="border-border bg-muted flex shrink-0 flex-wrap items-center gap-2 border-b px-6 py-2" data-slot="selection-bar">
+			<span class="text-sm" data-slot="selected-count">
+				<span class="font-semibold tabular-nums">{count}</span>
+				<span class="text-muted-foreground">selected</span>
+			</span>
+			<Button size="sm" variant="outline" onclick={() => void selectAll()} disabled={selectingAll}>
+				{selectingAll ? 'Selecting…' : query ? `Select all matching “${query}”` : 'Select all'}
+			</Button>
+			<Button size="sm" variant="ghost" onclick={() => run.setSelected([])} disabled={count === 0}>Clear</Button>
+			{#if selectError}<span class="text-destructive text-sm">{selectError}</span>{/if}
+		</div>
+
+		<div class="flex min-h-0 flex-1 flex-col px-6 py-4">
+			{#if source}
+				<EntityTable
+					{source}
+					bind:columns
+					context={liveContext()}
+					projectId={run.project.id}
+					{filters}
+					selectable
+					selection={run.selected}
+					onSelectionChange={(rows) => run.setSelected(rows)}
+					paging="scroll"
+					maxHeight="100%"
+					density="compact"
+					class="min-h-0 flex-1"
+				/>
+			{/if}
 		</div>
 	{/if}
 {/await}

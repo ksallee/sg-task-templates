@@ -1,8 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import NavBar from '$lib/app/nav-bar.svelte';
-	import ResumeBanner from '$lib/app/resume-banner.svelte';
+	import AppShell from '$lib/app/app-shell.svelte';
 	import { apply, mode } from '$lib/theme';
 
 	let { children } = $props();
@@ -20,8 +19,4 @@
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
 
-<div class="bg-background text-foreground flex h-dvh flex-col">
-	<NavBar />
-	<ResumeBanner />
-	{@render children()}
-</div>
+<AppShell>{@render children()}</AppShell>

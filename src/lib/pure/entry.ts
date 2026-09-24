@@ -43,11 +43,14 @@ const byCode = (a: Template, b: Template) => a.code.localeCompare(b.code, undefi
 
 /**
  * The type's own templates, then the rest. A template's `entity_type` is not enforced (083): another
- * type's template is offered too, and the plan warns on the mismatch (brief 7).
+ * type's template is offered too, and the plan warns on the mismatch (brief 7). `query` narrows both
+ * lists to codes holding it, case-insensitive.
  */
-export function templatesByType(templates: Template[], entityType: string | null): { matching: Template[]; others: Template[] } {
-	const matching = templates.filter((t) => entityType !== null && t.entityType === entityType).sort(byCode);
-	const others = templates.filter((t) => entityType === null || t.entityType !== entityType).sort(byCode);
+export function templatesByType(templates: Template[], entityType: string | null, query = ''): { matching: Template[]; others: Template[] } {
+	const needle = query.trim().toLocaleLowerCase();
+	const shown = needle ? templates.filter((t) => t.code.toLocaleLowerCase().includes(needle)) : templates;
+	const matching = shown.filter((t) => entityType !== null && t.entityType === entityType).sort(byCode);
+	const others = shown.filter((t) => entityType === null || t.entityType !== entityType).sort(byCode);
 	return { matching, others };
 }
 
