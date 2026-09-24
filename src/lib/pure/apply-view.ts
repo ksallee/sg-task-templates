@@ -129,7 +129,7 @@ export function summaryGroups(s: WriteSummary): SummaryGroup[] {
 	};
 	const add = (n: number, text: string) => n > 0 && lines.push(text);
 	group('Entities', () => {
-		add(s.templateWrites, `The template is set on ${plural(s.templateWrites, 'entity', 'entities')}, ${s.templateWrites === 1 ? 'in one atomic batch' : 'one atomic batch each'}.`);
+		add(s.templateWrites, `The template is set on ${plural(s.templateWrites, 'entity', 'entities')}.`);
 		add(s.nothingToWrite, `${plural(s.nothingToWrite, 'entity already matches', 'entities already match')} the template: skipped.`);
 	});
 	group('Tasks', () => {
@@ -167,11 +167,11 @@ export function startBlockers(plans: EntityPlan[], opts: RunOptions): string[] {
 	const deletes = extras.filter((r) => r.action === 'delete').length;
 	if (deletes && !opts.deleteConfirmed)
 		out.push(
-			`${plural(deletes, 'Task is', 'Tasks are')} marked delete but the delete is not confirmed. Confirm it on the plan, or leave the Task.`
+			`${plural(deletes, 'Task is', 'Tasks are')} set to delete, not confirmed. Confirm on the plan, or set to leave.`
 		);
 	const omits = extras.filter((r) => r.action === 'omit').length;
 	if (omits && !opts.omitStatus)
-		out.push(`${plural(omits, 'Task is', 'Tasks are')} marked omit but no omit status is chosen. Choose one on the plan.`);
+		out.push(`${plural(omits, 'Task is', 'Tasks are')} set to omit with no omit status. Pick one on the plan.`);
 	return out;
 }
 
@@ -180,10 +180,10 @@ export function undoNote(persistent: boolean): { persistent: boolean; lines: str
 	return {
 		persistent,
 		lines: [
-			'Each entity is one atomic batch: it lands whole or not at all.',
+			'Each entity is applied whole or not at all.',
 			persistent
-				? 'Its undo record is stored in this browser as it lands. Download it to undo from another browser.'
-				: 'This browser cannot store the undo record: it lives in this tab only. Download it before you close the tab, or undo is lost.'
+				? 'The undo record is stored in this browser as each entity is applied. Download it to undo from another browser.'
+				: 'This browser cannot store the undo record. Download it before you close the tab, or undo is lost.'
 		]
 	};
 }

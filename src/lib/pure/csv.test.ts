@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PLAN_CSV_COLUMNS, planToCsv } from './csv';
+import { PLAN_CSV_COLUMNS, PLAN_CSV_HEADERS, planToCsv } from './csv';
 import { matchKey } from './matching';
 import { planEntity, withConflictPick, withExtraOverride } from './planner';
 import type {
@@ -198,14 +198,29 @@ type Line = Record<Col, string>;
 function lines(plans: EntityPlan[], template: Template = tt2, labels?: Record<string, string>): Line[] {
 	const csv = planToCsv(plans, template, labels);
 	const [header, ...body] = parse(csv.slice(1));
-	expect(header).toEqual([...PLAN_CSV_COLUMNS]);
+	expect(header).toEqual(PLAN_CSV_COLUMNS.map((c) => PLAN_CSV_HEADERS[c]));
 	return body.map((cells) => {
 		expect(cells).toHaveLength(PLAN_CSV_COLUMNS.length);
 		return Object.fromEntries(PLAN_CSV_COLUMNS.map((c, i) => [c, cells[i]])) as Line;
 	});
 }
 
-const byAction = (ls: Line[], action: string) => ls.filter((l) => l.action === action);
+/** The Outcome cell for each row kind, in the app's words. */
+const A: Record<string, string> = {
+	apply: 'Apply',
+	noop: 'Nothing to write',
+	keep: 'Already linked',
+	claim: 'Linked',
+	create: 'Created',
+	extra: 'Not in template',
+	conflict: 'Needs a choice',
+	'edge-add': 'Dependency added',
+	'edge-replace': 'Dependency replaced',
+	'edge-delete': 'Dependency removed',
+	'edge-outside': 'Dependency on a Task outside the template'
+};
+
+const byAction = (ls: Line[], action: string) => ls.filter((l) => l.action === A[action]);
 const one = (ls: Line[], action: string) => {
 	const found = byAction(ls, action);
 	expect(found).toHaveLength(1);
@@ -222,7 +237,7 @@ describe('planToCsv: format', () => {
 	it('starts with a UTF-8 BOM, uses CRLF and ends with one', () => {
 		const csv = planToCsv([], tt2);
 		expect(csv.charCodeAt(0)).toBe(0xfeff);
-		expect(csv.slice(1)).toBe(`${PLAN_CSV_COLUMNS.join(',')}\r\n`);
+		expect(csv.slice(1)).toBe(`${PLAN_CSV_COLUMNS.map((c) => PLAN_CSV_HEADERS[c]).join(',')}\r\n`);
 	});
 
 	it('quotes commas, quotes and newlines, and prints values as they are (no formula guard)', () => {
@@ -235,7 +250,7 @@ describe('planToCsv: format', () => {
 describe('planToCsv: entity row', () => {
 	it('opens each entity with an apply row carrying the five counts', () => {
 		const ls = lines([plan(snap(before(), { taskTemplate: 201 }))]);
-		expect(ls[0].action).toBe('apply');
+		expect(ls[0].action).toBe('Apply');
 		expect(ls[0].template_task).toBe('tt2 #202');
 		expect(ls[0].reason).toBe('Already linked 0, Linked 2, Created 1, Not in template 1, Needs a choice 0');
 	});
@@ -244,7 +259,7 @@ describe('planToCsv: entity row', () => {
 		const p = plan(snap(linked(), { taskTemplate: 202, edges: [edge(77, 1, 3)] }));
 		expect(p.noop).toBe(true);
 		const ls = lines([p]);
-		expect(ls[0].action).toBe('noop');
+		expect(ls[0].action).toBe('Nothing to write');
 		expect(byAction(ls, 'keep')).toHaveLength(3);
 	});
 
@@ -252,12 +267,12 @@ describe('planToCsv: entity row', () => {
 		const empty: Template = { ...tt2, tasks: [], edges: [] };
 		const ls = lines([plan(snap([]), opts, empty), plan(snap(before(), { id: 7558 }), opts, empty)], empty);
 		expect(ls.every((l) => l.action !== '')).toBe(true);
-		expect(ls[0].action).toBe('apply');
+		expect(ls[0].action).toBe('Apply');
 	});
 
 	it('names the clear-then-set write when task_template already equals the template', () => {
 		const ls = lines([plan(snap(linked(), { taskTemplate: 202 }))]);
-		expect(ls[0].action).toBe('apply');
+		expect(ls[0].action).toBe('Apply');
 		expect(ls[0].reason).toContain('already on tt2');
 	});
 
@@ -280,21 +295,21 @@ describe('planToCsv: task rows (recipe 015)', () => {
 		expect(comp.key).toBe('comp @ step11');
 		expect(comp.reason).toBe('was linked to #47101 (template 201)');
 		const paint = byAction(ls(), 'claim').find((l) => l.task === 'paint #47297')!;
-		expect(paint.reason).toBe('unlinked, same key');
+		expect(paint.reason).toBe('not linked before, same name and Step');
 	});
 
 	it('creates from the template task, with its dates and whether they can be cleared', () => {
 		const create = one(ls(), 'create');
 		expect(create.task).toBe('roto (new)');
 		expect(create.template_task).toBe('roto #47202');
-		expect(create.dates).toBe('template dates 2026-03-02 .. 2026-03-04; clearable');
+		expect(create.dates).toBe('template dates 2026-03-02 to 2026-03-04; can be cleared');
 	});
 
 	it('says when a created Task cannot have its dates cleared (upstream edge, 097)', () => {
 		const t: Template = { ...tt2, edges: [edge(900, 47202, 47201)] };
 		const ls = lines([plan(snap([task(1, 'comp', 11)]), opts, t)], t);
 		const create = byAction(ls, 'create').find((l) => l.task === 'roto (new)')!;
-		expect(create.dates).toBe('template dates 2026-03-02 .. 2026-03-04; not clearable (upstream edge)');
+		expect(create.dates).toBe('template dates 2026-03-02 to 2026-03-04; cannot be cleared (upstream dependency)');
 	});
 
 	it('writes an extra with its reason, decision and usage in one cell', () => {
@@ -302,14 +317,14 @@ describe('planToCsv: task rows (recipe 015)', () => {
 		const extra = one(lines([p]), 'extra');
 		expect(extra.task).toBe('roto #47295');
 		expect(extra.key).toBe('roto @ step12');
-		expect(extra.reason).toBe('not_in_template');
+		expect(extra.reason).toBe('not in the template');
 		expect(extra.decision).toBe('leave');
 		expect(extra.usage).toBe('2 versions, 1 published file');
 	});
 
 	it('marks a Task that may move after the added edge (092)', () => {
 		const comp = byAction(ls(), 'claim').find((l) => l.task === 'comp #47296')!;
-		expect(comp.dates).toBe('may move (092)');
+		expect(comp.dates).toBe('may move');
 	});
 
 	it('marks a pinned Task that would flag dependency_violation (092)', () => {
@@ -317,7 +332,7 @@ describe('planToCsv: task rows (recipe 015)', () => {
 		const comp = byAction(lines([plan(snap(tasks, { taskTemplate: 201 }))]), 'claim').find(
 			(l) => l.task === 'comp #47296'
 		)!;
-		expect(comp.dates).toBe('pinned: would flag dependency_violation (092)');
+		expect(comp.dates).toBe('pinned: would flag a dependency violation');
 	});
 });
 
@@ -325,7 +340,7 @@ describe('planToCsv: keep rows, field changes and renames', () => {
 	it('flags keyMismatch on a keep row and shows a hand rename once', () => {
 		const ls = lines([plan(snap([task(1, 'Comp v2', 12, { link: 47201, linkTemplate: 202 })]))]);
 		const keep = one(ls, 'keep');
-		expect(keep.reason).toBe('linked; key differs (renamed or step moved)');
+		expect(keep.reason).toBe('linked; name or Step differs');
 		expect(keep.warnings).toBe('RENAMED BY HAND: Comp v2 -> comp');
 		expect(keep.field_changes).not.toContain('content');
 		expect(ls.filter((l) => l.warnings.includes('Comp v2'))).toHaveLength(1);
@@ -341,7 +356,7 @@ describe('planToCsv: keep rows, field changes and renames', () => {
 		const o: RunOptions = { ...opts, fieldPolicies: { est_in_mins: 'fill_if_empty' } };
 		const keep = one(lines([plan(snap([k]), o, t)], t), 'keep');
 		expect(keep.field_changes).toBe(
-			'step: keeps step12, template step11 (keep); sg_description: keeps A, template T (keep); est_in_mins: ∅ -> 480 (fill_if_empty)'
+			'step: step12 kept (template: step11); sg_description: A kept (template: T); est_in_mins: ∅ -> 480 (filled if empty)'
 		);
 	});
 
@@ -353,7 +368,7 @@ describe('planToCsv: keep rows, field changes and renames', () => {
 		};
 		const k = task(1, 'comp', 11, { link: 47201, linkTemplate: 202, fields: { sg_description: 'A' } });
 		const keep = one(lines([plan(snap([k]), opts, t)], t, { sg_description: 'Description', est_in_mins: '' }), 'keep');
-		expect(keep.field_changes).toBe('Description (sg_description): keeps A, template T (keep); est_in_mins: keeps ∅, template 480 (keep)');
+		expect(keep.field_changes).toBe('Description (sg_description): A kept (template: T); est_in_mins: ∅ kept (template: 480)');
 	});
 
 	it('shows re-sync field changes on an extra still linked to the template (conflict loser, 102)', () => {
@@ -367,13 +382,13 @@ describe('planToCsv: keep rows, field changes and renames', () => {
 			task(2, 'paint', 14, { link: 47203, linkTemplate: 202, createdAt: '2026-01-01T00:00:00Z' })
 		];
 		const extra = one(lines([plan(snap(two), opts, t)], t), 'extra');
-		expect(extra.reason).toBe('conflict_loser');
-		expect(extra.field_changes).toBe('sg_description: keeps ∅, template T (keep)');
+		expect(extra.reason).toBe('not picked, unlinked from the template task');
+		expect(extra.field_changes).toBe('sg_description: ∅ kept (template: T)');
 	});
 
 	it('writes link_wins on a same-key Task when another is linked', () => {
 		const ls = lines([plan(snap([...linked(), task(9, 'Paint', 14)], { taskTemplate: 202 }))]);
-		expect(one(ls, 'extra').reason).toBe('link_wins');
+		expect(one(ls, 'extra').reason).toBe('same name and Step, another Task is linked');
 	});
 });
 
@@ -386,8 +401,8 @@ describe('planToCsv: conflicts', () => {
 		expect(c.template_task).toBe('paint #47203');
 		expect(c.task).toBe('Paint  #47299, paint #47297');
 		expect(c.usage).toBe('#47299: 1 version; #47297: none');
-		expect(c.reason).toBe('pre-pick by usage');
-		expect(c.decision).toBe('pick = pre-pick: Paint  #47299');
+		expect(c.reason).toBe('pre-pick: it has Versions or PublishedFiles');
+		expect(c.decision).toBe('pick (the pre-pick): Paint  #47299');
 	});
 
 	it('labels a pick that differs from the pre-pick', () => {
@@ -412,12 +427,12 @@ describe('planToCsv: conflicts', () => {
 		const rows = byAction(ls, 'conflict');
 		expect(rows.map((r) => r.template_task)).toEqual(['Comp #11', 'comp #10', 'comp #12']);
 		expect(rows.map((r) => r.decision)).toEqual([
-			'pick = pre-pick: comp #1',
+			'pick (the pre-pick): comp #1',
 			'pick: create a new Task; pre-pick: comp #2',
 			'pick: comp #2; pre-pick: create a new Task'
 		]);
 		// The duplicate-key warning prints once, on the first conflict row, not on resolved rows.
-		const hits = ls.filter((l) => l.warnings.includes('template has 3 tasks of key comp @ step13'));
+		const hits = ls.filter((l) => l.warnings.includes('template has 3 tasks named comp @ step13'));
 		expect(hits).toEqual([rows[0]]);
 	});
 });
@@ -428,7 +443,7 @@ describe('planToCsv: warnings', () => {
 		const p = plan(snap(before(), { taskTemplate: 201, usage: { 47295: { versions: 2, publishedFiles: 0 } } }), o);
 		const hits = lines([p]).filter((l) => l.warnings.includes('delete with'));
 		expect(hits).toHaveLength(1);
-		expect(hits[0].action).toBe('extra');
+		expect(hits[0].action).toBe(A.extra);
 		expect(hits[0].warnings).toBe('delete with 2 versions, 0 published files');
 	});
 
@@ -446,11 +461,11 @@ describe('planToCsv: warnings', () => {
 		const ls = lines([plan(snap(linked(), { taskTemplate: 202, edges: [a, b] }))]);
 		const hits = ls.filter((l) => l.warnings !== '');
 		expect(hits).toHaveLength(1);
-		expect(hits[0].action).toBe('edge-delete');
+		expect(hits[0].action).toBe(A['edge-delete']);
 		expect(hits[0].edge_upstream).toBe('roto #2');
-		expect(hits[0].decision).toBe('remove');
-		expect(hits[0].reason).toContain('keeping it would close a loop (107)');
-		expect(hits[0].warnings).toBe('edge #7 would close a loop: remove (107)');
+		expect(hits[0].decision).toBe('removed');
+		expect(hits[0].reason).toContain('keeping it would close a loop');
+		expect(hits[0].warnings).toBe('dependency #7 would close a loop: removed');
 	});
 });
 
@@ -460,7 +475,7 @@ describe('planToCsv: edges', () => {
 		expect(e.edge_upstream).toBe('paint #47297');
 		expect(e.edge_downstream).toBe('comp #47296');
 		expect(e.edge_spec).toBe('start-to-start, offset 1');
-		expect(e.reason).toBe('template edge (099)');
+		expect(e.reason).toBe('from the template');
 		expect(e.decision).toBe('');
 	});
 
@@ -478,8 +493,8 @@ describe('planToCsv: edges', () => {
 		expect(e.edge_upstream).toBe('paint #3');
 		expect(e.edge_downstream).toBe('comp #1');
 		expect(e.edge_spec).toBe('finish-to-finish, offset 0 -> start-to-start, offset 1');
-		expect(e.reason).toBe('replaced by the template edge (101)');
-		expect(e.decision).toBe('keep');
+		expect(e.reason).toBe("replaced by the template's dependency");
+		expect(e.decision).toBe('re-created');
 	});
 
 	it('says when the template edge runs the other way', () => {
@@ -489,8 +504,8 @@ describe('planToCsv: edges', () => {
 		const e = one(ls, 'edge-replace');
 		expect(e.edge_upstream).toBe('comp #1');
 		expect(e.edge_downstream).toBe('paint #3');
-		expect(e.reason).toBe('replaced by the template edge, reversed (101)');
-		expect(e.decision).toBe('remove');
+		expect(e.reason).toBe("replaced by the template's dependency, reversed");
+		expect(e.decision).toBe('removed');
 	});
 
 	it('writes an edge the template lacks between linked Tasks, keep by default', () => {
@@ -499,8 +514,8 @@ describe('planToCsv: edges', () => {
 		expect(e.edge_upstream).toBe('comp #1');
 		expect(e.edge_downstream).toBe('roto #2');
 		expect(e.edge_spec).toBe('finish-to-start-next-day, offset none');
-		expect(e.reason).toBe('not in the template: the apply deletes it (102)');
-		expect(e.decision).toBe('keep');
+		expect(e.reason).toBe('not in the template: the apply removes it');
+		expect(e.decision).toBe('re-created');
 	});
 
 	describe('edges to a Task outside the template', () => {
@@ -511,10 +526,10 @@ describe('planToCsv: edges', () => {
 			const e = one(lines([plan(s)]), 'edge-outside');
 			expect(e.edge_upstream).toBe('cleanup #9');
 			expect(e.edge_downstream).toBe('comp #1');
-			expect(e.reason).toBe('outside Task upstream: erased by the apply (109)');
-			expect(e.decision).toBe('keep');
+			expect(e.reason).toBe('upstream Task outside the template: the apply removes it');
+			expect(e.decision).toBe('re-created');
 			const removed = one(lines([plan(s, withEdge(opts, 503, 'remove'))]), 'edge-outside');
-			expect(removed.decision).toBe('remove');
+			expect(removed.decision).toBe('removed');
 		});
 
 		it('a conflict loser is outside once unlinked (106, 109)', () => {
@@ -525,21 +540,21 @@ describe('planToCsv: edges', () => {
 			];
 			const s = snap(two, { edges: [edge(77, 1, 3), edge(506, 3, 2)] });
 			const ls = lines([plan(s)]);
-			expect(one(ls, 'extra').reason).toBe('conflict_loser');
+			expect(one(ls, 'extra').reason).toBe('not picked, unlinked from the template task');
 			const e = one(ls, 'edge-outside');
 			expect(e.edge_upstream).toBe('comp #2');
-			expect(e.reason).toBe('outside Task upstream: erased by the apply (109)');
+			expect(e.reason).toBe('upstream Task outside the template: the apply removes it');
 		});
 
 		it('an outside downstream edge is kept', () => {
 			const s = snap(tasks(), { edges: [edge(77, 1, 3), edge(504, 9, 1)] });
-			expect(one(lines([plan(s)]), 'edge-outside').reason).toBe('outside Task downstream: kept');
+			expect(one(lines([plan(s)]), 'edge-outside').reason).toBe('downstream Task outside the template: kept');
 		});
 
 		it('an extra that is deleted takes its edges (103)', () => {
 			const s = snap(tasks(), { edges: [edge(77, 1, 3), edge(504, 9, 1)] });
 			const e = one(lines([plan(s, withExtraOverride(opts, 9, 'delete'))]), 'edge-outside');
-			expect(e.reason).toBe('deleted with the Task not in the template cleanup #9 (103)');
+			expect(e.reason).toBe('deleted with the Task not in the template cleanup #9');
 		});
 
 		it('names a Task of another entity by id', () => {

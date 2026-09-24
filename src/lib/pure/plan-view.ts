@@ -182,7 +182,7 @@ export const PICK_REASON: Record<PickReason, string> = {
 export const EXTRA_REASON: Record<ExtraRow['reason'], string> = {
 	not_in_template: 'not in the template',
 	link_wins: 'same name and Step, another Task is linked',
-	conflict_loser: 'not picked: unlinked (106)'
+	conflict_loser: 'not picked, unlinked from the template task'
 };
 
 /** The stock Omit code (entry.ts). The screen asks for a status only when the project lacks it. */
@@ -246,9 +246,9 @@ export function entityWarnings(plan: EntityPlan, opts: RunOptions): ViewWarning[
 	const out: ViewWarning[] = [];
 	for (const w of plan.warnings) {
 		if (w.code === 'template_entity_type_mismatch') {
-			out.push({ code: w.code, level: 'warn', text: `The template is for ${w.templateType ?? 'no type'}; this is a ${w.entityType}. Allowed (083 does not enforce it).` });
+			out.push({ code: w.code, level: 'warn', text: `The template is for ${w.templateType ?? 'no type'}; this is a ${w.entityType}. Allowed.` });
 		} else if (w.code === 'edge_closes_loop') {
-			out.push({ code: w.code, level: 'warn', text: `Keeping edge #${w.edgeId} would close a dependency loop; the server refuses it (085, 107). Removed.` });
+			out.push({ code: w.code, level: 'warn', text: `Keeping dependency #${w.edgeId} would close a loop, which the site refuses. Removed.` });
 		} else if (w.code === 'unresolved_conflict') {
 			out.push({ code: w.code, level: 'block', text: `A pick is no longer valid for template tasks ${w.templateTaskIds.map((id) => `#${id}`).join(', ')}. Pick again.` });
 		} else if (w.code === 'template_duplicate_key') {
@@ -274,10 +274,7 @@ export function accessWarningText(summary: AccessSummary): string | null {
 	const parts: string[] = [];
 	if (caps.length) parts.push(`cannot ${caps.join(', ')}`);
 	if (fields.length) parts.push(`cannot write ${fields.join(', ')}`);
-	return (
-		`Write access looks short: ${parts.join('; ')}. The corpus measured these refusals as another user ` +
-		`(sudo_as, 094), not through a launcher session; a response it does not recognize is left unknown.`
-	);
+	return `Write access looks refused: ${parts.join('; ')}. The check is partial: a response it does not recognize counts as unknown.`;
 }
 
 export interface EntityFilter {
@@ -318,7 +315,7 @@ export function applyBlockers(
 	const deletes = pendingDeletes(plans).length;
 	if (deletes > 0 && !opts.deleteConfirmed) out.push(`Confirm ${deletes} delete${deletes === 1 ? '' : 's'}.`);
 	const loops = plans.reduce((n, p) => n + p.edges.affected.filter((a) => a.closesLoop && a.action === 'keep').length, 0);
-	if (loops > 0) out.push(`${loops} kept edge${loops === 1 ? '' : 's'} would close a loop: remove ${loops === 1 ? 'it' : 'them'}.`);
+	if (loops > 0) out.push(`${loops} kept ${loops === 1 ? 'dependency' : 'dependencies'} would close a loop: remove ${loops === 1 ? 'it' : 'them'}.`);
 	if (plans.length > 0 && plans.every((p) => p.noop)) out.push('Nothing to write.');
 	return out;
 }
@@ -344,7 +341,7 @@ export function groupRows(rows: PlanRow[]): RowGroups {
 /** The normalized match key as the plan shows it (Kevin): `content @ Step`. */
 export function keyLabel(key: MatchKey, step: { name?: string } | null): string {
 	const { content, stepId } = keyParts(key);
-	const stepName = step?.name ?? (stepId === null ? 'no step' : `step #${stepId}`);
+	const stepName = step?.name ?? (stepId === null ? 'no Step' : `Step #${stepId}`);
 	return `${content || '(empty)'} @ ${stepName}`;
 }
 
@@ -465,7 +462,7 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 					}
 				: null,
 			action: a.action,
-			keepDisabled: a.closesLoop ? 'Keeping it would close a dependency loop: the server refuses it and the batch rolls back (085, 107).' : null
+			keepDisabled: a.closesLoop ? 'Keeping it would close a dependency loop, which the site refuses.' : null
 		})),
 		outsideDownstream: plan.edges.toExtras.map((e) => ({
 			upstream: existing(e.upstream),
@@ -480,9 +477,9 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 }
 
 export const CAUSE_LABEL: Record<AffectedEdge['cause'], string> = {
-	not_in_template: 'not in the template: the apply deletes it (102)',
-	replaced: "replaced by the template's edge (101, 102)",
-	outside_upstream: 'upstream Task is outside the template: the apply erases it (109)'
+	not_in_template: 'not in the template: the apply removes it',
+	replaced: "replaced by the template's dependency",
+	outside_upstream: 'upstream Task is outside the template: the apply removes it'
 };
 
 /** `YYYY-MM-DD`, time left out: the plan file's name. */

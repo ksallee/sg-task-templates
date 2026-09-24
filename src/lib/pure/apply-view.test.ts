@@ -156,7 +156,7 @@ describe('summaryGroups', () => {
 		expect(summaryGroups(writeSummary([busy, plan(2, { noop: true })], options({ deleteConfirmed: true })))).toEqual([
 			{
 				title: 'Entities',
-				lines: ['The template is set on 1 entity, in one atomic batch.', '1 entity already matches the template: skipped.']
+				lines: ['The template is set on 1 entity.', '1 entity already matches the template: skipped.']
 			},
 			{
 				title: 'Tasks',
@@ -199,8 +199,8 @@ describe('startBlockers', () => {
 		const conflicted = plan(3, { warnings: [{ code: 'unresolved_conflict', templateTaskIds: [500] }] });
 		expect(startBlockers([busy, conflicted], options({ omitStatus: '' }))).toEqual([
 			'1 entity has a Task that needs a choice. Pick it on the plan.',
-			'1 Task is marked delete but the delete is not confirmed. Confirm it on the plan, or leave the Task.',
-			'1 Task is marked omit but no omit status is chosen. Choose one on the plan.'
+			'1 Task is set to delete, not confirmed. Confirm on the plan, or set to leave.',
+			'1 Task is set to omit with no omit status. Pick one on the plan.'
 		]);
 		expect(startBlockers([plan(4, { noop: true })], options())).toEqual(['Nothing to write: every entity already matches the template.']);
 	});
@@ -211,14 +211,14 @@ describe('undoNote', () => {
 		expect(undoNote(true)).toEqual({
 			persistent: true,
 			lines: [
-				'Each entity is one atomic batch: it lands whole or not at all.',
-				'Its undo record is stored in this browser as it lands. Download it to undo from another browser.'
+				'Each entity is applied whole or not at all.',
+				'The undo record is stored in this browser as each entity is applied. Download it to undo from another browser.'
 			]
 		});
 		const off = undoNote(false);
 		expect(off.persistent).toBe(false);
 		expect(off.lines[1]).toBe(
-			'This browser cannot store the undo record: it lives in this tab only. Download it before you close the tab, or undo is lost.'
+			'This browser cannot store the undo record. Download it before you close the tab, or undo is lost.'
 		);
 	});
 });

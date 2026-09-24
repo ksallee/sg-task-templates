@@ -4,9 +4,9 @@
 -->
 <script lang="ts">
 	const frames = [
-		{ title: 'Before', line: 'Comp waits on Anim.', state: 'on' },
+		{ title: 'Before', line: 'Comp depends on Anim.', state: 'on' },
 		{ title: 'Flow PT’s apply', line: 'Removed. Can’t be restored.', state: 'gone' },
-		{ title: 'This app, Keep', line: 'Re-created right after, a new id.', state: 'back' }
+		{ title: 'This app, Keep', line: 'Re-created after the apply, with a new id.', state: 'back' }
 	] as const;
 </script>
 

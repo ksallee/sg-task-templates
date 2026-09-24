@@ -52,7 +52,7 @@
 <svelte:head><title>Connect · SG Task Templates</title></svelte:head>
 
 {#await live}
-	<PageState state="loading" title="Reaching the site…" />
+	<PageState state="loading" title="Connecting to the site…" />
 {:then state}
 	{@const editing = editingSite || state.siteUrl === ''}
 	<PageHeader title="Connect" context="Name the Flow PT site and sign in as yourself. Nothing is written before the Apply screen.">
@@ -119,9 +119,9 @@
 									{#if approving}
 										Approve the request in the tab that opened.
 									{:else if state.devToken}
-										Reading through the dev key. Sign in to write as yourself.
+										Reading with the dev key. Sign in to write as yourself.
 									{:else}
-										Not signed in. Writes land in the event log under the person who signs in.
+										Not signed in. The event log records writes under the person who signs in.
 									{/if}
 								</span>
 							</div>
@@ -141,11 +141,11 @@
 			{:else}
 				<p class="text-muted-foreground flex items-center gap-1.5 text-sm" data-slot="connect-ready">
 					<CircleCheck class="text-success size-4" aria-hidden="true" />
-					The site answers. Next, pick the project, entity type and template.
+					Connected. Next, pick the project, entity type and template.
 				</p>
 			{/if}
 		</div>
 	</div>
 {:catch error}
-	<PageState state="error" title="Could not reach the site" line={error.message} />
+	<PageState state="error" title="Could not connect to the site" line={error.message} />
 {/await}

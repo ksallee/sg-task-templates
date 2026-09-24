@@ -308,7 +308,7 @@ describe('buildAccessWarning', () => {
 		expect(buildAccessWarning(summary)).toBeNull();
 	});
 
-	it('carries the checks, the fields and the caveat: sudo_as measured, the launcher session unmeasured', () => {
+	it('carries the checks, the fields and the caveat that the check is partial', () => {
 		const refused: AccessCheck = {
 			capability: 'delete_task',
 			result: 'refused',
@@ -320,9 +320,7 @@ describe('buildAccessWarning', () => {
 		if (warning?.code !== 'access_short') throw new Error('expected access_short');
 		expect(warning.checks).toEqual([refused]);
 		expect(warning.fields).toEqual({ sg_status_list: 'refused' });
-		expect(warning.detail).toMatch(/sudo_as/);
-		expect(warning.detail).toMatch(/launcher session/);
-		expect(warning.detail).toMatch(/unmeasured/);
+		expect(warning.detail).toMatch(/The check is partial/);
 		expect(warning.detail).toMatch(/delete/i);
 	});
 });

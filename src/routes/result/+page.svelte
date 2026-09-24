@@ -20,7 +20,7 @@
 	import Section from '$lib/app/section.svelte';
 	import UndoDialog from '$lib/app/undo-dialog.svelte';
 	import { entityLabel } from '$lib/pure/apply-view';
-	import { describeNote, groupRows, mergeNotes, nameBook, resultRows, type ResultKind } from '$lib/pure/result-view';
+	import { UNDO_STAGE_LABEL, describeNote, groupRows, mergeNotes, nameBook, resultRows, type ResultKind } from '$lib/pure/result-view';
 	import type { UndoRecord } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { cn } from '$lib/utils.js';
@@ -84,11 +84,11 @@
 {/snippet}
 
 {#snippet undoOutcome()}
-	<Section title="Last undo" meta={`${undoneOk.length} put back${undoneFailed.length ? ` · ${undoneFailed.length} failed` : ''}`} card data-slot="undo-outcome">
+	<Section title="Last undo" meta={`${undoneOk.length} undone${undoneFailed.length ? ` · ${undoneFailed.length} failed` : ''}`} card data-slot="undo-outcome">
 		<div class="flex flex-col gap-2 text-sm">
 			{#each undoneFailed as o (o.entity.id)}
 				{#if o.kind === 'failed'}
-					<p class="text-destructive"><span class="font-medium">{entityLabel(o.entity)}</span>: {o.error.message} (at {o.stage})</p>
+					<p class="text-destructive"><span class="font-medium">{entityLabel(o.entity)}</span>: {o.error.message} (while {UNDO_STAGE_LABEL[o.stage]})</p>
 				{/if}
 			{/each}
 			{#if undoneNotes.length}
@@ -98,7 +98,7 @@
 			{/if}
 			{#if leftEdges}
 				<p class="text-muted-foreground">
-					{leftEdges} live {leftEdges === 1 ? 'dependency' : 'dependencies'} the record does not know {leftEdges === 1 ? 'was' : 'were'} left in place.
+					{leftEdges} {leftEdges === 1 ? 'dependency' : 'dependencies'} not in the undo record: not changed.
 				</p>
 			{/if}
 		</div>
@@ -149,7 +149,7 @@
 				<LineState state="clean" count={tally.clean ?? 0} />
 				<LineState state="differences" count={tally.differences ?? 0} />
 				<LineState state="failed" count={tally.failed ?? 0} />
-				{#if tally.landed}<LineState state="landed" label="Landed earlier" count={tally.landed} />{/if}
+				{#if tally.landed}<LineState state="landed" label="Applied earlier" count={tally.landed} />{/if}
 				{#if tally.landing}<LineState state="landing" count={tally.landing} />{/if}
 				{#if tally.undone}<LineState state="undone" count={tally.undone} />{/if}
 				{#if tally.not_applied}<LineState state="not_applied" count={tally.not_applied} />{/if}
@@ -160,7 +160,7 @@
 		{#if session.error}<Notice tone="destructive">{session.error}</Notice>{/if}
 		{#if !session.persistent && current}
 			<Notice tone="warning" title="Undo is download-only in this browser. ">
-				The record lives in this tab. Download it before you close the tab.
+				Download the undo record before you close the tab.
 				{#snippet action()}
 					<Button size="sm" variant="outline" onclick={() => session.download()} disabled={undoable.length === 0}>
 						<Download data-icon="inline-start" /> Download
@@ -218,7 +218,7 @@
 					{#if selected}
 						{@const row = selected}
 						<Section title={row.label} data-slot="result-detail">
-							{#snippet meta()}<LineState state={row.kind} label={row.kind === 'landed' ? 'Landed earlier' : undefined} />{/snippet}
+							{#snippet meta()}<LineState state={row.kind} label={row.kind === 'landed' ? 'Applied earlier' : undefined} />{/snippet}
 							{#snippet actions()}
 								{#if row.canRetry}
 									<Button size="sm" variant="outline" onclick={() => void session.retry([row.key])} disabled={session.phase === 'running'}>Retry</Button>
@@ -237,12 +237,12 @@
 								{/if}
 							{/snippet}
 							{#if row.error}
-								<Notice tone="destructive" title="The batch failed: ">{row.error}</Notice>
+								<Notice tone="destructive" title="Error: ">{row.error}</Notice>
 							{/if}
 							{#if row.differences.length}
 								<div class="bg-card text-card-foreground flex flex-col gap-2 rounded-lg border p-4">
 									<p class="text-sm">
-										Landed, but the read-back differs from the plan in {row.differences.length}
+										Applied. The read-back differs from the plan in {row.differences.length}
 										{row.differences.length === 1 ? 'place' : 'places'}:
 									</p>
 									<ul class="marker:text-muted-foreground flex list-disc flex-col gap-1 pl-5 text-sm">
@@ -250,15 +250,15 @@
 									</ul>
 								</div>
 							{:else if row.kind === 'clean'}
-								<p class="text-muted-foreground text-sm">Read back as planned: every Task, link, field and dependency where the plan put it.</p>
+								<p class="text-muted-foreground text-sm">Matches the plan.</p>
 							{:else if row.kind === 'landed'}
-								<p class="text-muted-foreground text-sm">Landed in an earlier session: no read-back to compare here.</p>
+								<p class="text-muted-foreground text-sm">Applied in an earlier session. No read-back to compare.</p>
 							{:else if row.kind === 'undone'}
-								<p class="text-muted-foreground text-sm">Undone: put back as it was before the apply.</p>
+								<p class="text-muted-foreground text-sm">Restored to its state before the apply.</p>
 							{:else if row.kind === 'not_applied'}
-								<p class="text-muted-foreground text-sm">Never applied: the run stopped before this entity.</p>
+								<p class="text-muted-foreground text-sm">The run stopped before this entity.</p>
 							{:else if row.kind === 'landing'}
-								<p class="text-muted-foreground text-sm">Still landing.</p>
+								<p class="text-muted-foreground text-sm">Still applying.</p>
 							{/if}
 						</Section>
 					{/if}

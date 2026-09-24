@@ -75,13 +75,13 @@ export function describeNote(note: UndoNote, n: NameBook): string {
 				return `${n.task(note.taskId)}: the apply filled its dates from the template (now ${span(note.after)}). Undo does not clear them: a null start date pins a Task with an upstream dependency.`;
 			return `${n.task(note.taskId)}: the apply moved its dates (${span(note.before)}, now ${span(note.after)}). Undo does not write them back: that would pin it.`;
 		case 'edges_recreated':
-			return `${note.edgeIds.length} ${note.edgeIds.length === 1 ? 'dependency comes' : 'dependencies come'} back as new rows: same ends, type and offset, new ids.`;
+			return `${note.edgeIds.length} ${note.edgeIds.length === 1 ? 'dependency is' : 'dependencies are'} re-created: same Tasks, type and offset, new ids.`;
 		case 'dates_may_move':
 			return `Dates may move on ${list(note.taskIds.map(n.task))}: unpinned Tasks downstream of a revived or re-created dependency reschedule.`;
 		case 'linked_twice_unmeasured':
-			return `${list(note.taskIds.map(n.task))} were both linked to ${n.templateTask(note.templateTask)}: which one the old template wires is the server's pick, not measured.`;
+			return `${list(note.taskIds.map(n.task))} were both linked to ${n.templateTask(note.templateTask)}: Flow PT picks which one the old template links again.`;
 		case 'violation_may_change':
-			return `The dependency violation flag may differ from before on ${list(note.taskIds.map(n.task))}: pinned Tasks keep their dates while what they depend on changed.`;
+			return `The dependency violation flag may differ from before on ${list(note.taskIds.map(n.task))}: pinned Tasks keep their dates while their upstream Tasks changed.`;
 		case 'history_kept':
 			return 'The event log keeps the apply and the undo.';
 	}
@@ -129,6 +129,14 @@ export function mergeNotes(groups: UndoNote[][]): UndoNote[] {
 	if (history) out.push({ code: 'history_kept' });
 	return out;
 }
+
+/** Where a failed undo stopped (revert.ts `RevertStage`), in words. */
+export const UNDO_STAGE_LABEL: Record<'revive_tasks' | 'read' | 'batch' | 'edges', string> = {
+	revive_tasks: 'reviving Tasks',
+	read: 'reading the entity',
+	batch: 'writing the old values',
+	edges: 'restoring dependencies'
+};
 
 // --- rows ---------------------------------------------------------------------------------------
 
@@ -197,10 +205,10 @@ export interface ResultGroup {
 /** Outcome groups in the order the screen shows them: what needs a look first. */
 export const RESULT_GROUPS: ReadonlyArray<{ kind: ResultKind; title: string }> = [
 	{ kind: 'failed', title: 'Failed' },
-	{ kind: 'differences', title: 'Landed with differences' },
-	{ kind: 'landing', title: 'Landing' },
-	{ kind: 'clean', title: 'Landed clean' },
-	{ kind: 'landed', title: 'Landed earlier' },
+	{ kind: 'differences', title: 'Applied with differences' },
+	{ kind: 'landing', title: 'Applying' },
+	{ kind: 'clean', title: 'Applied' },
+	{ kind: 'landed', title: 'Applied earlier' },
 	{ kind: 'undone', title: 'Undone' },
 	{ kind: 'not_applied', title: 'Not applied' }
 ];

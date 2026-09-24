@@ -50,11 +50,11 @@
 		[
 			edges.added.length ? `${edges.added.length} added` : null,
 			edges.affected.length
-				? `${edges.affected.length} dropped by the apply (${edges.affected.filter((e) => e.action === 'keep').length} re-created)`
+				? `${edges.affected.length} removed by the apply (${edges.affected.filter((e) => e.action === 'keep').length} re-created)`
 				: null,
 			edges.outsideDownstream.length ? `${edges.outsideDownstream.length} to Tasks outside the template, kept` : null,
 			edges.mayMove.length ? `dates may move on ${edges.mayMove.length}` : null,
-			edges.wouldViolate.length ? `${edges.wouldViolate.length} would flag a violation` : null
+			edges.wouldViolate.length ? `${edges.wouldViolate.length} would flag a dependency violation` : null
 		]
 			.filter(Boolean)
 			.join(' · ') || 'No dependency changes'
@@ -109,7 +109,7 @@
 		{#each row.templateTasks as tt (tt.id)}
 			{@const chosen = tt.id in picks ? String(row.pick[tt.id] ?? 'create') : ''}
 			<fieldset class="flex flex-col gap-1.5">
-				<legend class="mb-1.5 text-xs">Template task <span class="font-medium">{tt.content}</span> takes</legend>
+				<legend class="mb-1.5 text-xs">Task to link to template task <span class="font-medium">{tt.content}</span></legend>
 				<div class="flex flex-col gap-1" role="radiogroup" aria-label={`Pick for ${tt.content}`}>
 					{#each row.candidates as c (c.task.id)}
 						{@const on = chosen === String(c.task.id)}
@@ -176,8 +176,8 @@
 			<Button size="xs" variant="ghost" onclick={() => setAll(anyClosed)} data-slot="expand-all">{anyClosed ? 'Expand all' : 'Collapse all'}</Button>
 		</div>
 		<p class="text-muted-foreground text-xs">
-			{plan.entity.entityType} · now on {plan.entity.taskTemplate?.name ?? 'no template'}
-			{#if plan.needsClearFirst}· already on this template: the write clears then sets it (084){/if}
+			{plan.entity.entityType} · current template: {plan.entity.taskTemplate?.name ?? 'none'}
+			{#if plan.needsClearFirst}· already on this template: the apply clears it, then sets it again{/if}
 		</p>
 		{#each warnings as w (w.code + w.text)}
 			<Notice tone={TONE[w.level]} data-slot="entity-warning">{w.text}</Notice>
@@ -259,7 +259,7 @@
 			<span class="text-muted-foreground text-xs">{edgeLine}</span>
 		</button>
 		{#if depsOpen}
-			<p class="text-muted-foreground text-xs">What each Task waits on, offsets in working days (wd).</p>
+			<p class="text-muted-foreground text-xs">Offsets in working days (wd).</p>
 			{#if noEdges}
 				<p class="text-muted-foreground text-sm">No dependency changes.</p>
 			{/if}
@@ -276,7 +276,7 @@
 			{#if edges.affected.length > 0}
 				<div class="flex flex-col gap-1.5">
 					<p class="text-muted-foreground text-xs font-medium">
-						Deleted or replaced by the apply · {edges.affected.length} <span class="font-normal">· keep re-creates it after, as a new edge</span>
+						Removed or replaced by the apply · {edges.affected.length} <span class="font-normal">· keep re-creates it after the apply, with a new id</span>
 					</p>
 					<ul class="divide-border flex flex-col divide-y rounded-lg border text-sm">
 						{#each edges.affected as e (e.id)}
@@ -285,7 +285,7 @@
 									{@render waits(e)}
 									<span class="mr-auto"></span>
 									<Segmented
-										label={`Edge ${e.id}`}
+										label={`Dependency ${e.id}`}
 										value={e.action}
 										options={[
 											{ value: 'keep', label: 'keep', disabled: e.keepDisabled !== null, title: e.keepDisabled ?? undefined },
@@ -317,12 +317,12 @@
 			{/if}
 			{#if edges.mayMove.length > 0}
 				<Notice tone="info" title="Dates may move: " data-slot="date-impact">
-					{edges.mayMove.join(', ')}. Unpinned, downstream of a new edge (092).
+					{edges.mayMove.join(', ')}. Unpinned, downstream of a new dependency.
 				</Notice>
 			{/if}
 			{#if edges.wouldViolate.length > 0}
-				<Notice tone="warning" title="Would flag dependency_violation: " data-slot="date-violation">
-					{edges.wouldViolate.join(', ')}. Pinned, they hold their dates (092).
+				<Notice tone="warning" title="Would flag a dependency violation: " data-slot="date-violation">
+					{edges.wouldViolate.join(', ')}. Pinned: they keep their dates.
 				</Notice>
 			{/if}
 		{/if}

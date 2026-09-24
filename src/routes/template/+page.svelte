@@ -78,7 +78,7 @@
 		<p class="text-muted-foreground text-sm">Pick a project first.</p>
 	{:else if run.types.state === 'ready'}
 		{#if run.types.value.length === 0}
-			<p class="text-muted-foreground text-sm">No entity type in this project has a task template field.</p>
+			<p class="text-muted-foreground text-sm">No entity type in this project has a Task Template field.</p>
 		{:else}
 			<EntityTypePicker
 				context={liveContext()}
@@ -93,13 +93,13 @@
 	{:else}
 		<div class="flex flex-col gap-1.5" data-slot="types-loading">
 			<Skeleton class="h-8 w-full" />
-			<span class="text-muted-foreground text-xs">Reading which types take a template, once per session…</span>
+			<span class="text-muted-foreground text-xs">Reading which types have a Task Template field…</span>
 		</div>
 	{/if}
 {/snippet}
 
 {#await started}
-	<PageState state="loading" title="Reaching the site…" />
+	<PageState state="loading" title="Connecting to the site…" />
 {:then}
 	{#if run.problem}
 		<PageState state="error" title="Not connected" line={run.problem}>
@@ -140,7 +140,7 @@
 							{:else}
 								<p class="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium">For {run.entityType}</p>
 								{#each groups.matching as t (t.id)}{@render item(t)}{:else}
-									<p class="text-muted-foreground px-2 py-1.5 text-sm">{query ? 'No match.' : `No template names ${run.entityType}.`}</p>
+									<p class="text-muted-foreground px-2 py-1.5 text-sm">{query ? 'No match.' : `No template for ${run.entityType}.`}</p>
 								{/each}
 								{#if groups.others.length > 0}
 									<p class="text-muted-foreground px-2 pt-4 pb-1 text-xs font-medium">Other types · allowed, the plan warns</p>
@@ -169,13 +169,13 @@
 							{/if}
 						</div>
 
-						<Section title="Tasks by step" meta="What each task waits on, offsets in working days (wd)." data-slot="template-tasks">
+						<Section title="Tasks by Step" meta="Offsets in working days (wd)." data-slot="template-tasks">
 							<div class="bg-card text-card-foreground overflow-hidden rounded-lg border" role="table" aria-label="Template tasks">
 								<div class={`${GRID} text-muted-foreground border-border border-b px-3 py-2 text-xs font-medium`} role="row">
 									<span role="columnheader">Step</span>
 									<span class="text-right" role="columnheader">Order</span>
 									<span role="columnheader">Task</span>
-									<span role="columnheader">Waits on</span>
+									<span role="columnheader">Depends on</span>
 									<span class="text-right" role="columnheader">Duration</span>
 									<span class="text-right" role="columnheader">Est. (min)</span>
 								</div>
@@ -214,7 +214,7 @@
 						</Section>
 					</div>
 				{:else if run.project && run.entityType}
-					<PageState state="empty" icon={LayoutTemplate} title="Pick a template" line="Its tasks show here by step, with what each waits on.">
+					<PageState state="empty" icon={LayoutTemplate} title="Pick a template" line="Its tasks show here by Step, with their dependencies.">
 						{#snippet action()}
 							{#if defaultId !== null}
 								<Button variant="outline" onclick={() => run.setTemplate(defaultId)}>Pick the project default</Button>
@@ -222,7 +222,7 @@
 						{/snippet}
 					</PageState>
 				{:else}
-					<PageState state="empty" icon={LayoutTemplate} title="Pick a project and an entity type" line="Then the templates for that type list on the left." />
+					<PageState state="empty" icon={LayoutTemplate} title="Pick a project and an entity type" line="The templates for that type then show on the left." />
 				{/if}
 			</section>
 		</div>

@@ -217,10 +217,7 @@ export function buildAccessWarning(summary: AccessSummary): PlanWarning | null {
 	const parts: string[] = [];
 	if (refusedCapabilities.length > 0) parts.push(`cannot ${refusedCapabilities.join(', ')}`);
 	if (refusedFields.length > 0) parts.push(`cannot write ${refusedFields.join(', ')}`);
-	const detail =
-		`Write access looks short: ${parts.join('; ')}. The corpus measured these refusals via sudo_as ` +
-		`(094); this check ran with the launcher session, a case that is unmeasured, so a response ` +
-		`this run does not recognize is left unknown, not assumed refused.`;
+	const detail = `Write access looks refused: ${parts.join('; ')}. The check is partial: a response it does not recognize counts as unknown.`;
 	return { code: 'access_short', detail, checks: summary.checks, fields: summary.fields };
 }
 

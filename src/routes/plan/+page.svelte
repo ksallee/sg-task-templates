@@ -89,7 +89,7 @@
 <svelte:head><title>Plan · SG Task Templates</title></svelte:head>
 
 {#if run.plans.length === 0 || !options || !run.template || !run.ctx}
-	<PageState state="empty" title="No plan yet" line="Choose the entities, then Plan.">
+	<PageState state="empty" title="No plan yet" line="Choose the entities, then Next.">
 		{#snippet action()}<Button href="/entities">Entities</Button>{/snippet}
 	</PageState>
 {:else}
@@ -99,11 +99,11 @@
 				<span>{run.project?.name ?? `Project ${run.project?.id}`}</span>
 				<span aria-hidden="true">·</span>
 				<a href="/template" class="text-foreground font-medium underline-offset-4 hover:underline">{run.template?.code}</a>
-				<ArrowRight class="size-3.5" aria-label="onto" />
+				<ArrowRight class="size-3.5" aria-label="to" />
 				<a href="/entities" class="text-foreground font-medium underline-offset-4 hover:underline" data-slot="plan-entities"
 					>{totals.entities} {entityNoun}</a
 				>
-				{#if totals.noop > 0}<span>· {totals.noop} no-op</span>{/if}
+				{#if totals.noop > 0}<span>· {totals.noop} with nothing to write</span>{/if}
 			{/snippet}
 			{#snippet actions()}
 				{#if blockers.length > 0}
@@ -115,7 +115,7 @@
 				</Button>
 			{/snippet}
 			{#if blockers.length > 0}
-				<Notice tone="destructive" title="Apply waits on:" data-slot="apply-blockers">
+				<Notice tone="destructive" title="Before Apply:" data-slot="apply-blockers">
 					{#each blockers as b, i (b)}{i > 0 ? ' · ' : ' '}{b}{/each}
 					{#snippet action()}
 						{#if conflictsOpen}
@@ -149,7 +149,7 @@
 			{#snippet footer()}
 				<p class="text-muted-foreground text-xs" data-slot="plan-warnings">
 					{#if run.access.state === 'loading'}Checking write access…
-					{:else if access && !access.looksShort}<span data-slot="access-ok">Write access: no refusal seen (094 checks).</span>
+					{:else if access && !access.looksShort}<span data-slot="access-ok">Write access: no refusal seen.</span>
 					{/if}
 				</p>
 			{/snippet}
@@ -209,7 +209,7 @@
 			<Dialog.Header>
 				<Dialog.Title>Delete {deletes.length} Task{deletes.length === 1 ? '' : 's'}?</Dialog.Title>
 				<Dialog.Description>
-					Deleting a Task unlinks its Versions and PublishedFiles and cuts its dependencies (089). Undo revives it.
+					Deleting a Task unlinks its Versions and PublishedFiles and removes its dependencies. Undo revives it.
 				</Dialog.Description>
 			</Dialog.Header>
 			<ul class="flex max-h-72 flex-col gap-1 overflow-y-auto text-sm" data-slot="delete-list">
