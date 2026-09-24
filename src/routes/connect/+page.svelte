@@ -82,6 +82,8 @@
 
 		{#if live.problem}
 			<p class="text-muted-foreground text-sm">{live.problem}</p>
+		{:else}
+			<Button size="sm" href="/template">Next: template</Button>
 		{/if}
 	{:catch error}
 		<p class="text-destructive text-sm">{error.message}</p>
