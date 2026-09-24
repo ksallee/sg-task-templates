@@ -11,7 +11,7 @@
  * probe/79-NNN) and #81 (103..109, probe/81-NNN). Comments name the entry each shape rests on.
  */
 
-import type { EntityRef, EntityRow } from 'sg-widgets-core';
+import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
 
 // ---------------------------------------------------------------------------------------------
 // 1. Wire
@@ -434,7 +434,13 @@ export type PlanWarning =
 	| { code: 'template_duplicate_key'; key: MatchKey; templateTaskIds: Id[] }
 	| { code: 'delete_with_usage'; taskId: Id; usage: TaskUsage }
 	| { code: 'rename'; taskId: Id; from: string | null; to: string | null; handRenamed: boolean }
-	| { code: 'access_short'; detail: string } // 094 pending
+	| {
+			code: 'access_short';
+			detail: string;
+			/** 094: the four probe checks and the schema `editable` read, for the plan screen. */
+			checks?: AccessCheck[];
+			fields?: Record<FieldName, SchemaFieldAccess>;
+	  }
 	| { code: 'unresolved_conflict'; templateTaskIds: Id[] }
 	/** A kept edge would close a loop after the apply (085, 107): removed by default. */
 	| { code: 'edge_closes_loop'; edgeId: Id; action: EdgeAction };
@@ -518,4 +524,53 @@ export interface Run {
 	startedAt: string;
 	finishedAt: string | null;
 	entities: Array<{ entity: EntityRef; status: EntityRunState }>;
+}
+
+// --- access preflight (094) ---------------------------------------------------------------------
+
+/** The four things a run needs to do, each checked before any write lands (094). */
+export type AccessCapability = 'update_task' | 'update_entity' | 'create_task' | 'delete_task';
+
+export type AccessResult = 'allowed' | 'refused' | 'unknown';
+
+/**
+ * What the I/O layer hands back for one probe call. `title` is whichever JSON:API field carries
+ * the discriminating text for that capability: `title` itself for the no-op update PUT and the
+ * invalid-status create; `detail` for the delete check's rolled-back `_batch` (094, recipe
+ * 0XX_check_permission_before_writing: a 404 there answers `title: "Not Found"`, so the
+ * classification reads `detail`). `null` on a 2xx, which has no error body. `status` is the HTTP
+ * status.
+ */
+export interface AccessResponse {
+	status: number;
+	title: string | null;
+}
+
+/** The four probe requests for one run (094). Built here; sent and read back by the I/O layer. */
+export interface AccessProbeRequests {
+	/** No-op PUT: the sample Task's current values for the fields the plan will write. */
+	updateTask: BatchRequest;
+	/** No-op PUT: the entity's current `task_template`. */
+	updateEntity: BatchRequest;
+	/** POST Task with an invalid `sg_status_list`: never lands, whoever the caller is. */
+	createTask: BatchRequest;
+	/** `_batch` [delete the sample Task, update of a missing id]: the sentinel rolls it back. */
+	deleteTask: BatchRequest[];
+}
+
+export interface AccessCheck {
+	capability: AccessCapability;
+	result: AccessResult;
+	/** `null` when the call was never made. */
+	response: AccessResponse | null;
+}
+
+/** `GET /schema/<Type>/fields?project_id=`'s `editable` per field (094): `false` = refused, `true` = maybe. */
+export type SchemaFieldAccess = 'refused' | 'maybe';
+
+export interface AccessSummary {
+	checks: AccessCheck[];
+	fields: Record<FieldName, SchemaFieldAccess>;
+	/** A refusal was seen somewhere: the write the plan needs looks short. Unknown never sets this. */
+	looksShort: boolean;
 }
