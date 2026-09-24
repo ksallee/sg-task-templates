@@ -123,11 +123,11 @@ export interface AccessSample {
 /**
  * What the access check (094, recipe 017) runs on: a Task the run will write (keep or claim) when
  * there is one, else any Task on a selected entity; null when none has a Task. The fields are the
- * template's non-empty policy fields, the ones the apply re-syncs (102), minus `step`: `fields.step`
- * holds the Step's id (read.ts), not the `{type, id}` a PUT takes.
+ * template's non-empty policy fields, the ones the apply re-syncs (102); access.ts sends `step` as a
+ * Step link (field_types/entity).
  */
 export function accessSample(plans: EntityPlan[], snapshots: EntitySnapshot[], template: Template): AccessSample | null {
-	const fields = nonEmptyPolicyFields(template).filter((f) => f !== 'step');
+	const fields = nonEmptyPolicyFields(template);
 	for (const p of plans) {
 		const row = p.rows.find((r) => r.kind === 'keep' || r.kind === 'claim');
 		if (row && (row.kind === 'keep' || row.kind === 'claim')) return { task: row.task, entity: p.entity, fields };

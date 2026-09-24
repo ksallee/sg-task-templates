@@ -301,6 +301,12 @@ export interface RunOptions {
 	omitStatus: string; // a project-valid Task status, e.g. 'omt'; never guessed
 	/** Per conflict, by template task id: the Task it takes, or null to create. Absent = pre-pick. */
 	conflictPicks: Record<Id, Id | null>;
+	/**
+	 * Per entity id, then by template task id: wins over `conflictPicks` for that entity. Template
+	 * task ids repeat on every entity of a run, so a run-wide pick cannot hold one entity's choice.
+	 * Absent = none.
+	 */
+	entityConflictPicks?: Record<Id, Record<Id, Id | null>>;
 	/** By TaskDependency id, for edges the apply deletes or replaces. Absent = 'keep'. */
 	edgeActions: Record<Id, EdgeAction>;
 	/** Offered only for created Tasks with no upstream edge (decisions, 097: they stay unpinned). */

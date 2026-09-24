@@ -69,6 +69,25 @@ describe('buildAccessProbeRequests', () => {
 		});
 	});
 
+	it('sends step as a Step link, not the bare id read.ts keeps (field_types/entity: a bare int is a 400)', () => {
+		const withStep = buildAccessProbeRequests({
+			task: { ...task, fields: { ...task.fields, step: 13 } },
+			entity,
+			entityCode: 'sh010',
+			project,
+			fields: ['step', 'duration']
+		});
+		expect(withStep.updateTask?.body).toEqual({ step: { type: 'Step', id: 13 }, duration: 60 });
+		const noStep = buildAccessProbeRequests({
+			task: { ...task, step: null, fields: { ...task.fields, step: null } },
+			entity,
+			entityCode: 'sh010',
+			project,
+			fields: ['step']
+		});
+		expect(noStep.updateTask?.body).toEqual({ step: null });
+	});
+
 	it('sends no update probe for no fields: an empty PUT answers 200 for everyone (094 candidate 5)', () => {
 		const none = buildAccessProbeRequests({ task, entity, entityCode: 'sh010', project, fields: [] });
 		expect(none.updateTask).toBeNull();

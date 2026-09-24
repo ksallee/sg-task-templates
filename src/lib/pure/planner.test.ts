@@ -11,6 +11,7 @@ import {
   planEntity,
   planRun,
   withConflictPick,
+  withEntityConflictPick,
   withExtraByName,
   withExtraOverride,
   withFieldPolicy,
@@ -343,6 +344,23 @@ describe("planEntity: conflicts", () => {
     ).toBe(true);
     expect(rowFor(p, 47297).kind).toBe("extra");
     expect(rowFor(p, 47299).kind).toBe("extra");
+  });
+
+  it("a per-entity pick applies to that entity only: template task ids repeat across entities", () => {
+    const o = withEntityConflictPick(opts, 7557, 47203, 47297);
+    expect(o.entityConflictPicks).toEqual({ 7557: { 47203: 47297 } });
+    const mine = planEntity(tt2, snap(tasks(), { usage }), ctx, o);
+    expect(rowFor(mine, 47297)).toMatchObject({ kind: "claim" });
+    expect(mine.warnings.some((w) => w.code === "unresolved_conflict")).toBe(false);
+    // Another entity with the same template task: untouched by it, no warning either.
+    const other = planEntity(tt2, snap(tasks(), { usage, id: 9000 }), ctx, o);
+    expect(rowFor(other, 47299)).toMatchObject({ kind: "claim" });
+    expect(other.warnings.some((w) => w.code === "unresolved_conflict")).toBe(false);
+  });
+
+  it("a per-entity pick wins over a run-wide one", () => {
+    const o = withEntityConflictPick(withConflictPick(opts, 47203, null), 7557, 47203, 47297);
+    expect(rowFor(planEntity(tt2, snap(tasks(), { usage }), ctx, o), 47297)).toMatchObject({ kind: "claim" });
   });
 
   it("warns and falls back to the pre-pick on a pick that is not a candidate", () => {
