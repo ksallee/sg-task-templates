@@ -59,8 +59,8 @@ describe('loadTemplatableTypes', () => {
 		expect(await loadTemplatableTypes(client, 1180)).toEqual(['Shot', 'CustomEntity07']);
 	});
 
-	it('finds none on the mock site, whose schema has no task_template', async () => {
-		expect(await loadTemplatableTypes(new MockClient(), 1)).toEqual([]);
+	it('finds the mock site’s types that carry task_template', async () => {
+		expect((await loadTemplatableTypes(new MockClient(), 1)).sort()).toEqual(['Asset', 'Sequence', 'Shot']);
 	});
 
 	it('rethrows any other failure', async () => {
@@ -137,12 +137,13 @@ describe('loadEntities', () => {
 		expect(filters).toEqual([inProject, ['task_template', 'is', null]]);
 	});
 
-	it('reads the mock site’s Shots, with no template', async () => {
+	it('reads the mock site’s Shots with their template link', async () => {
 		const mock = new MockClient();
 		const projectId = (mock.rowsOf('Project')[0] as { id: number }).id;
 		const out = await loadEntities(mock, projectId, 'Shot', { kind: 'all' });
 		expect(out.length).toBeGreaterThan(0);
-		expect(out.every((e) => e.taskTemplate === null && e.entityType === 'Shot')).toBe(true);
+		expect(out.every((e) => e.entityType === 'Shot')).toBe(true);
+		expect(out.every((e) => e.taskTemplate === null || e.taskTemplate.type === 'TaskTemplate')).toBe(true);
 	});
 });
 
