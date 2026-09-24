@@ -67,7 +67,7 @@ export async function revertEntity(rec: UndoRecord, deps: RevertDeps): Promise<R
 		if (edges.create.length) await client.batch(edges.create);
 
 		await deps.store?.saveEntity(rec.runId, entity, { state: 'undone', undo: rec });
-		return { kind: 'ok', entity, notes: plan.notes, left: edges.left };
+		return { kind: 'ok', entity, notes: [...plan.notes, ...edges.notes], left: edges.left };
 	} catch (e) {
 		return { kind: 'failed', entity, stage, error: errorOf(e) };
 	}

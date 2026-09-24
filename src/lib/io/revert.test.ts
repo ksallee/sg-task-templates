@@ -109,6 +109,12 @@ describe('revertEntity', () => {
 
 		expect(out.kind).toBe('ok');
 		expect(s.log).toEqual(['batch delete TaskDependency 3', 'revive TaskDependency 1', 'batch create TaskDependency']);
+		// The edge revert's own notes reach the result screen: e2 comes back under a new id, dates may move.
+		expect(out.kind === 'ok' && out.notes).toEqual([
+			{ code: 'history_kept' },
+			{ code: 'edges_recreated', edgeIds: [2] },
+			{ code: 'dates_may_move', taskIds: [10, 12] }
+		]);
 	});
 
 	it('stops at the failing call with the error title verbatim', async () => {

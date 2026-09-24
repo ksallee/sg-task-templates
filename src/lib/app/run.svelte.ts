@@ -16,6 +16,7 @@
  *   await run.buildPlans()            read snapshots in batches, plan, check access; nothing writes
  *   run.setOptions(next)              replan from the held snapshots with new options; no read
  *   run.client()                      the signed-in client, for the apply and the undo
+ *   await run.resumeRun(stored, rest) a stored run's picks and options, its remaining entities re-planned
  *
  * Every read here goes through `$lib/io/load.ts` and `$lib/io/access.ts`; the logic is in
  * `$lib/pure/entry.ts` and the planner. Nothing on these screens writes to the site.
@@ -37,7 +38,7 @@ import { liveWriter, prepareLive, project as storedProject, setProject as storeP
 import { accessSample, chunk, defaultRunOptions, entityListFilters, type EntryPoint } from '$lib/pure/entry';
 import { planRun } from '$lib/pure/planner';
 import { errorOf } from '$lib/pure/run';
-import type { AccessSummary, EntityPlan, EntitySnapshot, Id, ProjectContext, RunOptions, Template } from '$lib/pure/types';
+import type { AccessSummary, EntityPlan, EntitySnapshot, Id, ProjectContext, Run, RunOptions, Template } from '$lib/pure/types';
 
 export type { EntryPoint };
 
@@ -238,6 +239,24 @@ class RunState {
 		}
 		await this.#checkAccess(projectRef, template);
 		return true;
+	}
+
+	/**
+	 * Resume (brief 6): the picks of a stored run, then `remaining` re-planned from a fresh read,
+	 * with the run's options carried over. Resolves as `buildPlans` does.
+	 */
+	async resumeRun(stored: Run, remaining: EntityRef[]): Promise<boolean> {
+		await this.start();
+		const type = remaining[0]?.type ?? stored.entities[0]?.entity.type ?? null;
+		this.setProject({ id: stored.project.id, name: stored.project.name });
+		this.setEntityType(type);
+		this.setEntryPoint(stored.entryPoint);
+		this.setTemplate(stored.template.id);
+		await this.#templateCache.get(stored.project.id)?.catch(() => undefined);
+		this.setSelected(remaining);
+		const planned = await this.buildPlans();
+		if (planned) this.setOptions(stored.options);
+		return planned;
 	}
 
 	/** New options, same reads: the plan screen's every change goes through here (pure, no I/O). */
