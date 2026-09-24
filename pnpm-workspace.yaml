@@ -1,4 +1,4 @@
 allowBuilds:
   esbuild: true
 minimumReleaseAgeExclude:
-  - sg-widgets-core@0.1.0
+  - sg-widgets-core@0.2.0
