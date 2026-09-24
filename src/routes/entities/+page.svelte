@@ -146,7 +146,7 @@
 <svelte:head><title>Entities · SG Task Templates</title></svelte:head>
 
 {#await started}
-	<PageState state="loading" title="Reaching the site…" />
+	<PageState state="loading" title="Connecting to the site…" />
 {:then}
 	{#if run.problem}
 		<PageState state="error" title="Not connected" line={run.problem}>
