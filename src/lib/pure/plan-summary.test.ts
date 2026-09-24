@@ -4,7 +4,9 @@ import { matchKey } from './matching';
 import { planEntity, withFieldPolicy } from './planner';
 import { acceptPicks, withDeleteConfirmed, withExtraAction } from './plan-view';
 import {
+	OUTCOME_MEANING,
 	OUTCOME_ORDER,
+	outcomeMeaning,
 	entitySummary,
 	fieldLabel,
 	matchesKey,
@@ -246,6 +248,14 @@ describe('entitySummary', () => {
 		expect(s.groups.map((g) => g.outcome)).toEqual(['needs_choice', 'created']);
 		expect(s.line).toBe('3 created, 1 needs a choice');
 		expect(OUTCOME_ORDER[0]).toBe('needs_choice');
+	});
+
+	it('names the run\'s entity type in the created group\'s meaning, the entity when none is known', () => {
+		const p = plan(conflictSnap);
+		const created = (entityType: string | null) => entitySummary(p, input([p], opts0(), { entityType })).groups.find((g) => g.outcome === 'created')?.meaning;
+		expect(created('Shot')).toBe('missing on the Shot, created from the template');
+		expect(created(null)).toBe('missing on the entity, created from the template');
+		expect(outcomeMeaning('linked', 'Shot')).toBe(OUTCOME_MEANING.linked);
 	});
 
 	it('says so when there is nothing to write', () => {

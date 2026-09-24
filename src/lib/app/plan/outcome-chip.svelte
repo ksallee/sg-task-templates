@@ -19,11 +19,16 @@
 </script>
 
 <script lang="ts">
-	import { OUTCOME_LABEL, OUTCOME_MEANING } from '$lib/pure/plan-summary';
+	import { OUTCOME_LABEL, outcomeMeaning } from '$lib/pure/plan-summary';
 	import { TONE_DOT } from './tone';
 	import { cn } from '$lib/utils.js';
 
-	let { outcome, count, class: className }: { outcome: TaskOutcome; count?: number; class?: string } = $props();
+	let {
+		outcome,
+		count,
+		entityType = null,
+		class: className
+	}: { outcome: TaskOutcome; count?: number; entityType?: string | null; class?: string } = $props();
 	const tone = $derived(OUTCOME_TONE[outcome]);
 </script>
 
@@ -33,7 +38,7 @@
 		tone === 'destructive' ? 'border-destructive/60 text-destructive' : 'border-border text-foreground',
 		className
 	)}
-	title={OUTCOME_MEANING[outcome]}
+	title={outcomeMeaning(outcome, entityType)}
 	data-slot="outcome-chip"
 	data-outcome={outcome}
 >

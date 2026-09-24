@@ -3,7 +3,7 @@
  * templates a type offers, the run's starting options, and the sample the access check runs on. Pure, no I/O.
  */
 
-import type { WireGroup } from 'sg-widgets-core';
+import { nameSearchFilter, toApi3Hash, type WireGroup } from 'sg-widgets-core';
 import { nonEmptyPolicyFields } from './read';
 import type {
 	DependencyType,
@@ -14,28 +14,55 @@ import type {
 	Id,
 	PlanKind,
 	ProjectContext,
-	Run,
 	RunOptions,
 	Template
 } from './types';
 
-/** Brief 1 and 5: pick entities then a template, a template then every entity using it, or entities with none. */
-export type EntryPoint = Run['entryPoint'];
+/** The entities list's filter on `task_template`: any, this template, another one, none. */
+export type ListFilter = 'all' | 'using' | 'other' | 'none';
+
+const LIST_FILTERS: readonly ListFilter[] = ['all', 'using', 'other', 'none'];
 
 /**
- * The `_search` filter behind the entities list. `entities_first` lists the whole type in the project;
- * `template_first` those whose `task_template` is the template; `no_template` those with none (brief 5).
- * A non-blank search narrows on `code` with `contains`, which works on text fields (doors/findings-filter).
+ * The `_search` filter behind the entities list, on the project. `using` narrows to `task_template`
+ * is the template, `none` to is null, `other` to neither: `is_not null` beside `is_not` the template
+ * keeps unset rows out whether or not `is_not` matches them (the corpus measures that on duration
+ * only, doors/field_types). The search is sg-widgets' own (`nameSearchFilter`): every word must sit
+ * in `code`, one `contains` per word, all required (doors/findings-filter).
  */
-export function entityListFilters(projectId: Id, entry: EntryPoint, templateId: Id | null, search: string): WireGroup {
+export function entityListFilters(projectId: Id, filter: ListFilter, templateId: Id | null, search: string): WireGroup {
 	const conditions: WireGroup['conditions'] = [['project', 'is', { type: 'Project', id: projectId }]];
-	if (entry === 'template_first' && templateId !== null) {
-		conditions.push(['task_template', 'is', { type: 'TaskTemplate', id: templateId }]);
+	const template = templateId === null ? null : { type: 'TaskTemplate', id: templateId };
+	if (filter === 'using' && template) conditions.push(['task_template', 'is', template]);
+	if (filter === 'other') {
+		if (template) conditions.push(['task_template', 'is_not', template]);
+		conditions.push(['task_template', 'is_not', null]);
 	}
-	if (entry === 'no_template') conditions.push(['task_template', 'is', null]);
-	const text = search.trim();
-	if (text) conditions.push(['code', 'contains', text]);
+	if (filter === 'none') conditions.push(['task_template', 'is', null]);
+	const words = toApi3Hash(nameSearchFilter(search, ['code']));
+	if (words) conditions.push(...(words.logical_operator === 'and' ? words.conditions : [words]));
 	return { logical_operator: 'and', conditions };
+}
+
+/** The list opens on the template's entities when it has any, else on the whole type (#59). */
+export function openingFilter(using: number): ListFilter {
+	return using > 0 ? 'using' : 'all';
+}
+
+/**
+ * The filter a retired entry point implied (runs and picks saved before #59): every entity using it
+ * on Using this template, pick entities on All, no template on No template. Null for anything else.
+ */
+export function legacyFilter(entry: unknown): ListFilter | null {
+	if (entry === 'template_first') return 'using';
+	if (entry === 'entities_first') return 'all';
+	if (entry === 'no_template') return 'none';
+	return null;
+}
+
+/** A stored list filter when it is one of the four, else what a retired entry point implied, else null. */
+export function storedFilter(filter: unknown, legacyEntry?: unknown): ListFilter | null {
+	return LIST_FILTERS.find((f) => f === filter) ?? legacyFilter(legacyEntry);
 }
 
 /** A pick on the entities list. `name` is the code, when the read carried it. */

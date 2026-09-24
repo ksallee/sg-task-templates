@@ -111,7 +111,6 @@ class ApplySession {
 					id: crypto.randomUUID(),
 					project: { type: 'Project', id: project.id, name: project.name },
 					template: { id: template.id, code: template.code },
-					entryPoint: run.entryPoint,
 					user: user ? { type: user.type, id: user.id, name: typeof user.attributes?.name === 'string' ? user.attributes.name : undefined } : SCRIPT_USER,
 					options,
 					plans,

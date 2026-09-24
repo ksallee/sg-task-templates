@@ -34,10 +34,11 @@ manifest's `project` is the id to pick (1180 today); its `templates` are the `TT
    name), the entity type (Shot, Asset or Sequence: only types with a `task_template` field are
    offered; the list is read once per browser session, about one schema read per site type), then
    a template: the tasks and dependencies show on the right.
-3. Choose the entities: every entity using the template, pick from all of the type, or those with
-   no template (the project's default for the type is pre-selected, 088; Kevin sets Shot = T2 and
-   Asset = T4 in the project's Tracking Settings). Filter by code (`tts_` for the seeded ones),
-   select, then Next. Next reads the entities in batches of 25, plans them and runs the access check
+3. Next: entities. The list shows All, Using this template, Other template or No template, and
+   opens on Using this template when an entity uses it, else All; nothing is pre-selected. The
+   project's default for the type (088; Kevin sets Shot = T2 and Asset = T4 in the project's
+   Tracking Settings) is tagged Project default on Template and pre-selected. Filter by code, every
+   word required (`tts bulk` for the seeded bulk Shots), select, then Plan. Next reads the entities in batches of 25, plans them and runs the access check
    (probe 094: refused or rolled-back calls only, nothing lands). The plan screen shows the counts.
 
 Nothing up to the plan writes. `uv run --with requests python tools/seed.py` (a dry run) reports
