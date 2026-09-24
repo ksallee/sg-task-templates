@@ -29,6 +29,8 @@
 		"vitest": "^4.1.8"
 	},
 	"dependencies": {
+		"@fontsource-variable/geist": "^5.3.0",
+		"@fontsource-variable/geist-mono": "^5.3.0",
 		"@lucide/svelte": "^1.47.0",
 		"bits-ui": "^2.19.3",
 		"clsx": "^2.1.1",

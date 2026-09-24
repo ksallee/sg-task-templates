@@ -5,7 +5,9 @@
  * The scheme lands as the `.dark` class on `<html>`, which is what the token sheet keys on.
  * `app.html` applies it before the first paint from the same storage key, so there is no flash.
  */
-export type Mode = 'light' | 'dark' | 'system';
+import { resolveDark, type Mode } from '$lib/pure/scheme';
+
+export type { Mode };
 
 export const MODES: ReadonlyArray<{ value: Mode; label: string }> = [
 	{ value: 'light', label: 'Light' },
@@ -38,7 +40,7 @@ export function mode(): Mode {
 
 /** Whether the page is dark now, given the mode and the system. */
 export function isDark(current: Mode = mode()): boolean {
-	return current === 'dark' || (current === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+	return resolveDark(current, matchMedia('(prefers-color-scheme: dark)').matches);
 }
 
 /** Put the scheme on the document. The same rule as the inline script in `app.html`. */

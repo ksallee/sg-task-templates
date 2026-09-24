@@ -20,6 +20,16 @@
 
 	let dark = $state(isDark());
 
+	// In `system` mode the OS can flip the scheme under the page; the icon and label follow it.
+	$effect(() => {
+		const media = matchMedia('(prefers-color-scheme: dark)');
+		const follow = (): void => {
+			dark = isDark();
+		};
+		media.addEventListener('change', follow);
+		return () => media.removeEventListener('change', follow);
+	});
+
 	function toggleScheme(): void {
 		const next = dark ? 'light' : 'dark';
 		setMode(next);
