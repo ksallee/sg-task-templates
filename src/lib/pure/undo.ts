@@ -11,9 +11,9 @@
  *      ones, 098): old `template_task` on each claimed Task and each unlinked conflict loser, one
  *      Task per old template task (entity first makes the old template re-create them, 096), then
  *      the entity's old `task_template` (its re-sync overwrites its Tasks' fields and edges,
- *      096/102/109/111), then the second Task on an old template task (112), then delete the
+ *      096/102/109/111), then the second Task on an old template task (112, recipe 023), then delete the
  *      created Tasks (their edges retire, 089/104), then the apply's edges that write leaves (104,
- *      111), then the pre-merge fields, `content` included (112), then the omitted statuses.
+ *      111, recipes 019 and 022), then the pre-merge fields, `content` included (112), then the omitted statuses.
  *   3. Read the edges live, then `buildEdgeRevert(rec, live)`: remove batch, revive each edge
  *      (095), then the create batch. Edges are matched to the before-snapshot by pair (ends, type,
  *      offset), not by id: the old template's write erases every edge whose downstream Task it
@@ -250,7 +250,7 @@ type Relink = { taskId: Id; previousTemplateTask: Id | null };
  * template's apply wires one Task per template task; with two linked, it picks, unstably, mostly
  * the one without edges. So only one Task per old template task is linked when it runs: the one
  * that held edges before the apply (then the lowest id); the others are relinked after it, where a
- * `template_task` write alone changes nothing (096). A Task left linked through the apply, or
+ * `template_task` write alone changes nothing (096). Recipe 023. A Task left linked through the apply, or
  * revived (110), is linked at the write already: a relink joins it after, unless only the relink
  * held edges. Several with edges, or that case: unmeasured (112), flagged, not guessed.
  */

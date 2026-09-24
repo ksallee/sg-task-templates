@@ -7,8 +7,8 @@
  *   2. Domain: flat records the planner works on. `read.ts` is the only code that turns layer 1
  *      into layer 2.
  *
- * Corpus tag `corpus/2026-09-24`, plus the sg-groundtruth #79 probes (092..101, branches
- * probe/79-NNN) and #81 (103..109, probe/81-NNN). Comments name the entry each shape rests on.
+ * Corpus tag `corpus/2026-09-24.1` (findings through 112, recipes through 023). Comments name
+ * the entry each shape rests on.
  */
 
 import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
