@@ -19,11 +19,19 @@ Read it first.
 - Default theme only (`src/app.css`, sg-widgets' default). Light and dark switch in the navbar,
   following the system preference at first.
 - No LLM in the app. Deterministic.
+- Design passes use Anthropic's frontend-design skill with the sg-widgets theme fixed.
+  `docs/design.md` holds the app's rules.
+
+## Copy
+
+Kevin's voice, in the app and in the docs: short sentences, plain words, terse. No dashes, no
+metaphors, no "not X, Y", no filler.
 
 ## Layout
 
 - Pure modules in `src/lib/pure/`, each with its test beside it as `<module>.test.ts`.
-- `docs/development.md`: running the app and the deploy.
+- `docs/development.md`: running the app, the ports, the seeded sandbox and the deploy.
+- `docs/design.md`: the design rules.
 
 ## Process
 
