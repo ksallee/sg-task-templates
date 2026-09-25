@@ -197,11 +197,21 @@ describe('policySummary', () => {
 });
 
 describe('extrasSummary', () => {
-	it('counts the extra names, leave by default, then each name set otherwise', () => {
-		const names = [{ name: 'retime', count: 5 }, { name: 'paint', count: 2 }, { name: 'roto', count: 1 }];
-		expect(extrasSummary(names, opts0())).toBe('3 names not in the template: leave');
-		expect(extrasSummary(names, { ...opts0(), extraByName: { retime: 'delete', paint: 'leave' } })).toBe('3 names not in the template: leave · retime: delete');
-		expect(extrasSummary([{ name: '', count: 1 }], { ...opts0(), extraByName: { '': 'omit' } })).toBe('1 name not in the template: leave · (no name): omit');
+	it('names each extra name set otherwise, as written, then how many are left', () => {
+		const names = [
+			{ name: 'retime', label: 'Retime', count: 5 },
+			{ name: 'paint', label: 'Paint', count: 2 },
+			{ name: 'roto', label: 'roto', count: 1 }
+		];
+		expect(extrasSummary(names, opts0())).toBe('Not in template: 3 names leave');
+		expect(extrasSummary(names, { ...opts0(), extraByName: { retime: 'delete', paint: 'leave' } })).toBe(
+			'Not in template: Retime delete, 2 other names leave'
+		);
+		expect(extrasSummary(names, { ...opts0(), extraByName: { retime: 'delete', paint: 'omit' } })).toBe(
+			'Not in template: Retime delete, Paint omit, 1 other name leaves'
+		);
+		expect(extrasSummary([{ name: '', label: '', count: 1 }], { ...opts0(), extraByName: { '': 'omit' } })).toBe('Not in template: (no name) omit');
+		expect(extrasSummary([{ name: 'comp', label: 'Comp', count: 2 }], opts0())).toBe('Not in template: Comp leave');
 		expect(extrasSummary([], opts0())).toBe('No Tasks outside the template');
 	});
 });

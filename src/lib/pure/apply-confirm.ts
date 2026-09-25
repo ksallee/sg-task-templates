@@ -35,7 +35,9 @@ export function applyConfirm(
 	plans: EntityPlan[],
 	opts: RunOptions,
 	entityType: string | null,
-	labels: Record<FieldName, string>
+	labels: Record<FieldName, string>,
+	/** Task status display names by code; a code without one shows as is. */
+	statusNames: Record<string, string> = {}
 ): ApplyConfirm {
 	const writable = writablePlans(plans);
 	let created = 0;
@@ -82,7 +84,7 @@ export function applyConfirm(
 	const headline = `Apply to ${noun}${totals.length ? `: ${totals.join(', ')}` : ''}.`;
 
 	const sections: ConfirmSection[] = [];
-	if (omits) sections.push({ title: 'Omitted', lines: [{ text: `${plural(omits, 'Task', 'Tasks')} not in the template ${omits === 1 ? 'gets' : 'get'} status ${opts.omitStatus}.`, loud: false }] });
+	if (omits) sections.push({ title: 'Omitted', lines: [{ text: `${plural(omits, 'Task', 'Tasks')} not in the template ${omits === 1 ? 'gets' : 'get'} status ${statusNames[opts.omitStatus] || opts.omitStatus}.`, loud: false }] });
 	if (renames.length) sections.push({ title: "Renamed by hand, gets the template's name", lines: renames });
 	if (overwrites.size)
 		sections.push({

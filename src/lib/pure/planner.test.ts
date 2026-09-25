@@ -878,6 +878,18 @@ describe("planEntity: entity level", () => {
     ).toBe(false);
   });
 
+  it("an edge on an extra set to delete is removed with it, never kept (089, 103)", () => {
+    // comp(1) waits on lighting(9), an extra; lighting is deleted.
+    const up: Edge = { id: 8, downstream: 1, upstream: 9, type: "start-to-start", offsetDays: null };
+    const s = snap([...linked(), task(9, "lighting", 14)], { edges: [tplEdge, up] });
+    const p = planEntity(tt2, s, ctx, { ...opts, extraByName: { lighting: "delete" }, edgeActions: { 8: "keep" } });
+    expect(p.edges.affected).toEqual([]);
+    expect(p.edges.withDeleted).toEqual([{ edge: up, task: 9 }]);
+    const left = planEntity(tt2, s, ctx, opts);
+    expect(left.edges.affected).toMatchObject([{ existing: { id: 8 }, cause: "outside_upstream", action: "keep" }]);
+    expect(left.edges.withDeleted).toEqual([]);
+  });
+
   it("warns on a kept edge that would close a loop, removed by default (085, 107)", () => {
     // tt2 adds comp(1) on paint(3). Site: roto(2) on comp(1), paint(3) on roto(2): 3 -> 1 -> 2 -> 3.
     const a: Edge = { id: 6, downstream: 2, upstream: 1, type: "finish-to-start-next-day", offsetDays: null };
@@ -915,8 +927,8 @@ describe("planRun and bulk helpers", () => {
 
   it("lists extra names across entities with counts, for the bulk setter", () => {
     expect(extraNames(planRun(tt2, [s1, s2], ctx, opts))).toEqual([
-      { name: "cleanup", count: 2 },
-      { name: "lookdev", count: 1 },
+      { name: "cleanup", label: "Cleanup", count: 2 },
+      { name: "lookdev", label: "lookdev", count: 1 },
     ]);
   });
 

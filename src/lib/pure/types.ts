@@ -242,6 +242,8 @@ export interface ProjectContext {
 	project: EntityRef;
 	defaultTaskStatus: string; // Task.sg_status_list default_value for the project
 	validTaskStatuses: string[]; // valid_values minus hidden_values (field_types/status_list)
+	/** Display names by code (`display_values`, 009). Absent or missing a code: show the code. */
+	taskStatusNames?: Record<string, string>;
 }
 
 // --- matching -----------------------------------------------------------------------------------
@@ -461,6 +463,11 @@ export interface EdgePlan {
 	wouldViolate: Id[];
 	/** Edges with no end linked to the template after apply: the apply leaves them alone (102). */
 	untouched?: Edge[];
+	/**
+	 * Edges with an end on a Task the batch deletes: they go with it (089, 103), never kept, never
+	 * re-created. `task` is the deleted end. Absent = none.
+	 */
+	withDeleted?: Array<{ edge: Edge & { id: Id }; task: Id }>;
 }
 
 export type PlanWarning =

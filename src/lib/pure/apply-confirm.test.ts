@@ -135,6 +135,8 @@ describe('applyConfirm', () => {
 			{ title: "Renamed by hand, gets the template's name", lines: [{ text: 'sh7 · comp v2 to Comp', loud: false }] },
 			{ title: 'Overwritten from the template', lines: [{ text: 'Description on 2 Tasks', loud: false }] }
 		]);
+		const named = applyConfirm([busy, handRenamed], options(), 'Shot', labels, { omt: 'Omit' });
+		expect(named.sections[0].lines[0].text).toBe('1 Task not in the template gets status Omit.');
 	});
 
 	it('leaves the Task name out of the overwrites: only hand renames are risky', () => {

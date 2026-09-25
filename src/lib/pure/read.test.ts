@@ -307,6 +307,7 @@ describe('taskStatusContext', () => {
 		expect(ctx.validTaskStatuses).not.toContain('dis');
 		expect(ctx.validTaskStatuses).toContain('wtg');
 		expect(ctx.validTaskStatuses).toHaveLength(9);
+		expect(ctx.taskStatusNames).toEqual({ omt: 'Omit' }); // display_values (009)
 	});
 });
 

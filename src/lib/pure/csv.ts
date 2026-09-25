@@ -6,7 +6,9 @@
  *   2. one row per plan row: keep, claim, create, extra, and one `conflict` row per template task
  *      of a conflict (Q-E), next to the keep/claim/create it resolves to;
  *   3. one row per edge pair: `edge-add` (a template edge that survives the run), `edge-replace`,
- *      `edge-delete`, `edge-outside` (one end not linked to the template, 109).
+ *      `edge-delete` (also an edge on a deleted Task, 103), `edge-outside` (one end not linked to
+ *      the template, 109).
+ * With the run options, a conflict the user resolved prints as `Picked`, not `Needs a choice`.
  * Tasks print as `name #id`, a created Task as `name (new)`, refs by name. Each warning prints once,
  * on the row it is about. Values print as they are (no formula guard, Kevin). RFC 4180 quoting,
  * CRLF line endings, a UTF-8 BOM for spreadsheet apps.
@@ -14,7 +16,7 @@
 
 import { KIND_LABEL, KINDS } from './kinds';
 import { keyParts } from './matching';
-import { EXTRA_REASON, PICK_REASON } from './plan-view';
+import { EXTRA_REASON, PICK_REASON, conflictResolved } from './plan-view';
 import type {
 	AffectedEdge,
 	ConflictRow,
@@ -28,6 +30,7 @@ import type {
 	MatchKey,
 	PlanRow,
 	PlanWarning,
+	RunOptions,
 	TaskUsage,
 	Template,
 	TemplateTask
@@ -73,6 +76,7 @@ export const PLAN_CSV_HEADERS: Record<Column, string> = {
 /** Outcome cells: the entity row, then each dependency row. Task rows use `KIND_LABEL`. */
 const ACTION_LABEL: Record<string, string> = {
 	apply: 'Apply',
+	picked: 'Picked',
 	noop: 'Nothing to write',
 	'edge-add': 'Dependency added',
 	'edge-replace': 'Dependency replaced',
@@ -168,7 +172,7 @@ function warningLabel(w: PlanWarning, stepOf: (key: MatchKey) => StepRef): strin
 
 // --- one entity ---------------------------------------------------------------------------------
 
-function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldName, string>): Row[] {
+function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldName, string>, opts?: RunOptions): Row[] {
 	const { entityType, name, id } = plan.entity;
 	const entity = name ? `${entityType} ${name} #${id}` : `${entityType} #${id}`;
 	const blank = (action: string): Row => {
@@ -220,9 +224,17 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 	const head = blank(plan.noop ? 'noop' : 'apply');
 	head.template_task = `${template.code} #${template.id}`;
 	const c = plan.counts;
+	// A conflict the user resolved reads as picked; without options every conflict is still open.
+	const picked = (row: ConflictRow) => opts !== undefined && conflictResolved(row, opts, plan.entity.id);
+	const pickedCount = plan.rows.filter((r) => r.kind === 'conflict' && picked(r)).length;
+	const counts = KINDS.flatMap((k) => {
+		if (k !== 'conflict' || pickedCount === 0) return [`${KIND_LABEL[k]} ${c[k]}`];
+		const open = c[k] - pickedCount;
+		return [...(open > 0 ? [`${KIND_LABEL[k]} ${open}`] : []), `${ACTION_LABEL.picked} ${pickedCount}`];
+	});
 	head.reason = plan.noop
 		? `already on ${template.code}: nothing to write`
-		: KINDS.map((k) => `${KIND_LABEL[k]} ${c[k]}`).join(', ') +
+		: counts.join(', ') +
 			(plan.needsClearFirst ? `; already on ${template.code}: cleared then set` : '');
 	const rows: Row[] = [head];
 
@@ -258,10 +270,10 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 				r.reason = 'no Task with this name and Step';
 				const { start, due } = row.templateDates;
 				r.dates =
-					(start === null && due === null
+					start === null && due === null
 						? 'no template dates'
-						: `template dates ${start ?? '∅'} to ${due ?? '∅'}`) +
-					(row.datesClearable ? '; can be cleared' : '; cannot be cleared (upstream dependency)');
+						: `template dates ${start ?? '∅'} to ${due ?? '∅'}` +
+							(row.datesClearable ? '; can be cleared' : '; cannot be cleared (upstream dependency)');
 				break;
 			}
 			case 'extra': {
@@ -282,7 +294,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 	const choice = (taskId: Id | null) => (taskId === null ? 'create a new Task' : idLabel(taskId));
 	const conflictRows = (row: ConflictRow): Row[] =>
 		row.templateTasks.map((tt) => {
-			const r = blank('conflict');
+			const r = blank(picked(row) ? 'picked' : 'conflict');
 			r.task = row.candidates.map((x) => taskLabel(x.task)).join(', ');
 			r.template_task = taskLabel(tt);
 			r.key = keyLabel(row.key, tt.step);
@@ -323,10 +335,6 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 		rows.push(r);
 	}
 
-	// An extra that is deleted takes its edges with it (103).
-	const deleted = new Set<Id>();
-	for (const r of plan.rows) if (r.kind === 'extra' && r.action === 'delete') deleted.add(r.task.id);
-	const deletedEnd = (e: Edge) => [e.upstream, e.downstream].find((t) => deleted.has(t));
 	const edgeRow = (action: string, e: Edge): Row => {
 		const r = blank(action);
 		r.edge_upstream = idLabel(e.upstream);
@@ -351,13 +359,7 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 			r.reason = `replaced by the template's dependency${reversed ? ', reversed' : ''}`;
 		} else if (aff.cause === 'not_in_template') {
 			r.reason = 'not in the template: the apply removes it';
-		} else {
-			const gone = deletedEnd(e);
-			if (gone !== undefined) {
-				r.reason = `deleted with the Task not in the template ${idLabel(gone)}`;
-				r.decision = '';
-			} else r.reason = 'upstream Task outside the template: the apply removes it';
-		}
+		} else r.reason = 'upstream Task outside the template: the apply removes it';
 		if (aff.closesLoop) r.reason += '; keeping it would close a loop';
 		take(r, (w) => w.code === 'edge_closes_loop' && w.edgeId === e.id);
 		return r;
@@ -366,9 +368,14 @@ function entityRows(plan: EntityPlan, template: Template, labels?: Record<FieldN
 
 	for (const e of plan.edges.toExtras) {
 		const r = edgeRow('edge-outside', e);
-		const gone = deletedEnd(e);
-		r.reason =
-			gone !== undefined ? `deleted with the Task not in the template ${idLabel(gone)}` : 'downstream Task outside the template: kept';
+		r.reason = 'downstream Task outside the template: kept';
+		rows.push(r);
+	}
+
+	// An edge on a Task the batch deletes goes with it (103): never re-created, no choice.
+	for (const { edge: e, task } of plan.edges.withDeleted ?? []) {
+		const r = edgeRow('edge-delete', e);
+		r.reason = `removed with ${idLabel(task)}, which is deleted`;
 		rows.push(r);
 	}
 
@@ -393,10 +400,10 @@ const cell = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` :
 const line = (cells: readonly string[]) => cells.map(cell).join(',');
 
 /** `labels`: Task field display names by code name; fields print as "Description (sg_description)". */
-export function planToCsv(plans: EntityPlan[], template: Template, labels?: Record<FieldName, string>): string {
+export function planToCsv(plans: EntityPlan[], template: Template, labels?: Record<FieldName, string>, opts?: RunOptions): string {
 	const out = [line(PLAN_CSV_COLUMNS.map((c) => PLAN_CSV_HEADERS[c]))];
 	for (const plan of plans) {
-		for (const r of entityRows(plan, template, labels)) out.push(line(PLAN_CSV_COLUMNS.map((c) => r[c])));
+		for (const r of entityRows(plan, template, labels, opts)) out.push(line(PLAN_CSV_COLUMNS.map((c) => r[c])));
 	}
 	return `${BOM}${out.join('\r\n')}\r\n`;
 }

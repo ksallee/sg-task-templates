@@ -403,6 +403,54 @@ describe('planEdges: kept edges that would close a loop (085, 107)', () => {
 	});
 });
 
+describe('planEdges: an edge on a Task the batch deletes (089, 103)', () => {
+	it('an outside-upstream edge on a deleted extra goes with it: removed, never keep, nothing moves', () => {
+		const up = e(101, 104);
+		const plan = planEdges({
+			template: template([], [1]),
+			tasks: [t(101), t(104)],
+			edges: [up],
+			mapping: map123,
+			edgeActions: { [up.id!]: 'keep' },
+			deleted: [104]
+		});
+		expect(plan.affected).toEqual([]);
+		expect(plan.withDeleted).toEqual([{ edge: up, task: 104 }]);
+		expect(plan.mayMove).toEqual([]);
+	});
+
+	it('an edge down to a deleted extra goes with it, not listed as kept', () => {
+		const down = e(104, 101);
+		const plan = planEdges({ template: template([], [1]), tasks: [t(101), t(104)], edges: [down], mapping: map123, deleted: [104] });
+		expect(plan.toExtras).toEqual([]);
+		expect(plan.withDeleted).toEqual([{ edge: down, task: 104 }]);
+	});
+
+	it('an edge between two extras, one deleted, goes with it', () => {
+		const both = e(105, 104);
+		const plan = planEdges({ template: template([], [1]), tasks: [t(101), t(104), t(105)], edges: [both], mapping: map123, deleted: [104] });
+		expect(plan.untouched).toEqual([]);
+		expect(plan.withDeleted).toEqual([{ edge: both, task: 104 }]);
+	});
+
+	it('a deleted Task no longer carries a cascade: nothing below it moves', () => {
+		// Template adds 101 on 102; site: 104 (deleted) on 101, 105 on 104.
+		const plan = planEdges({
+			template: template([e(1, 2)], [1, 2]),
+			tasks: [t(101), t(102), t(104), t(105)],
+			edges: [e(104, 101), e(105, 104)],
+			mapping: map123,
+			deleted: [104]
+		});
+		expect(plan.mayMove).toEqual([101]);
+	});
+
+	it('empty when nothing is deleted', () => {
+		const plan = planEdges({ template: template([], [1]), tasks: [t(101), t(104)], edges: [e(101, 104)], mapping: map123 });
+		expect(plan.withDeleted).toEqual([]);
+	});
+});
+
 describe('planEdges: left alone', () => {
 	it('lists an edge where an extra depends on a mapped Task, never touches it (101 control, 109)', () => {
 		const ctl = e(104, 101);
