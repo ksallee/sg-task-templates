@@ -37,9 +37,16 @@ manifest's `project` is the id to pick (1180 today); its `templates` are the `TT
 
     uv run --no-project --python 3.11 --with requests python tools/seed.py
 
-A dry run: it reports each scenario as missing, pristine, drifted or orphan, and writes nothing.
-`--write` creates what is missing. `--reset S04` (or `S04,S13,BULK`, or `all`) deletes a scenario
-and recreates it, after an apply. The docstring at the top of `tools/seed.py` lists the rest.
+A dry run: it reports each scenario as missing, pristine, drifted or orphan, and writes nothing. A
+drifted scenario lists every drifted entity, one line each, with a count per kind.
+
+    uv run --no-project --python 3.11 --with requests python tools/seed.py --write
+    uv run --no-project --python 3.11 --with requests python tools/seed.py --reset S04,S13,BULK
+
+`--write` creates what is missing. `--reset` takes scenario ids, comma-separated, or `all`: it
+deletes those scenarios and recreates them, after an apply. It writes on its own, no `--write`
+needed. It rewrites `fixtures/seed-manifest.json`: commit it. The docstring at the top of
+`tools/seed.py` lists the rest.
 
 1. Point the dev token route at the same site. `.env.local` at the repo root (gitignored) takes the
    three `FPT_API_*` lines from `../sg-groundtruth/.env.local`:

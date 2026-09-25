@@ -44,6 +44,7 @@ it agrees with these expectations.
   no existing pair is added.
 """
 import copy
+from collections import Counter
 
 TYPES = {"FS": "finish-to-start-next-day", "SS": "start-to-start", "FF": "finish-to-finish"}
 
@@ -644,3 +645,83 @@ def summary(plan):
         lines.append(f"{sc['id']:<9} {len(ents):>8}  {sc['apply']:<5}  {tot['keep']:>4} {tot['claim']:>5} "
                      f"{tot['create']:>6} {tot['extra']:>5} {tot['conflict']:>8}  {sc['name']}")
     return "\n".join(lines)
+
+
+# -- drift report (seed.py's dry run) ----------------------------------------------------------------------
+
+DRIFT_GROUP_OVER = 12
+_DRIFT_KINDS = (("task_template", "task_template"), ("fields", "task fields"), ("added", "tasks added"),
+                ("gone", "tasks gone"), ("edges", "edges"), ("versions", "versions"), ("pfs", "published files"),
+                ("unreadable", "unreadable"))
+
+
+def _plus_minus(a, b):
+    """Rows added and removed between two lists of rows, as (added, removed)."""
+    ca, cb = Counter(map(tuple, a or [])), Counter(map(tuple, b or []))
+    return sum((cb - ca).values()), sum((ca - cb).values())
+
+
+def _entity_drift(s, n):
+    """One entity's drift: (counts per kind, the detail text). Empty counts when it is unchanged."""
+    k = dict.fromkeys((x for x, _ in _DRIFT_KINDS), 0)
+    if n is None:
+        k["unreadable"] = 1
+        return k, "entity unreadable"
+    parts = []
+    if s["task_template"] != n.get("task_template"):
+        k["task_template"] = 1
+        parts.append(f"task_template {s['task_template']} -> {n.get('task_template')}")
+    st, nt = s["tasks"], n.get("tasks", {})
+    fields, changes, changed = {}, [], 0
+    for tid in sorted(set(st) & set(nt)):
+        diff = [f for f in sorted(set(st[tid]) | set(nt[tid])) if st[tid].get(f) != nt[tid].get(f)]
+        changed += bool(diff)
+        for f in diff:
+            fields[f] = fields.get(f, 0) + 1
+            changes.append(f"{f} {st[tid].get(f)!r} -> {nt[tid].get(f)!r}")
+    k["fields"] = len(changes)
+    k["added"] = len(set(nt) - set(st))
+    k["gone"] = len(set(st) - set(nt))
+    if changed:
+        what = changes[0] if len(changes) == 1 else ", ".join(f"{f} x{c}" for f, c in sorted(fields.items()))
+        parts.append(f"{changed} task{'s' * (changed > 1)} changed ({what})")
+    for key, word in (("added", "added"), ("gone", "gone")):
+        if k[key]:
+            parts.append(f"{k[key]} task{'s' * (k[key] > 1)} {word}")
+    for key, word in (("edges", "edges"), ("versions", "versions"), ("pfs", "published files")):
+        add, rem = _plus_minus(s.get(key), n.get(key))
+        k[key] = add + rem
+        if add or rem:
+            parts.append(f"{word} " + " ".join(x for x in (f"+{add}" * bool(add), f"-{rem}" * bool(rem)) if x))
+    return k, "; ".join(parts)
+
+
+def drift_report(before, now, codes, group_over=DRIFT_GROUP_OVER):
+    """The dry run's drift lines for one scenario: a total with a count per kind, then every drifted entity.
+
+    `before` is the manifest's snapshot and `now` the read-back, both {entity id: snapshot}; `codes` maps
+    an entity id to its code. Every drifted entity is named, none is cut. Past `group_over` drifted
+    entities, those with the same detail share one line."""
+    total = dict.fromkeys((x for x, _ in _DRIFT_KINDS), 0)
+    rows = []
+    for eid in before:
+        k, text = _entity_drift(before[eid], now.get(eid))
+        if any(k.values()):
+            rows.append((codes.get(eid, eid), eid, text))
+            for x in total:
+                total[x] += k[x]
+    rows.sort()
+    head = f"{len(rows)} of {len(before)} entities drifted"
+    kinds = ", ".join(f"{word} {total[k]}" for k, word in _DRIFT_KINDS if total[k])
+    lines = [head + (f": {kinds}" if kinds else "")]
+    if len(rows) <= group_over:
+        return lines + [f"{code} ({eid}): {text}" for code, eid, text in rows]
+    groups = {}
+    for code, eid, text in rows:
+        groups.setdefault(text, []).append((code, eid))
+    for text, members in groups.items():
+        if len(members) == 1:
+            lines.append(f"{members[0][0]} ({members[0][1]}): {text}")
+        else:
+            lines.append(f"{len(members)} entities: {text}: {', '.join(c for c, _ in members)}")
+    return lines

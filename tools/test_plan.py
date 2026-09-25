@@ -476,3 +476,65 @@ def test_expectations_file_carries_the_seed_spec():
     assert [x["label"] for x in f["templates"]["T3"]["tasks"]][0] == "Previs@Layout"
     assert f["hands"]["S06"]["tts_cf_pubs"]["hand:Comp#1"] == {"step": ["Comp", "Shot"],
                                                              "created_at": "2026-01-05T09:00:00Z"}
+
+
+# -- drift report ---------------------------------------------------------------------------------------
+
+def snap(tt=1, tasks=None, edges=None, versions=None, pfs=None):
+    return {"task_template": tt, "tasks": tasks or {}, "edges": edges or [], "versions": versions or [],
+            "pfs": pfs or []}
+
+
+def task(**k):
+    t = {"content": "Comp", "status": "wtg", "due_date": None}
+    t.update(k)
+    return t
+
+
+def test_drift_lists_every_drifted_entity():
+    before = {str(i): snap(tasks={"1": task()}) for i in range(1, 16)}
+    now = {k: snap(tasks={"1": task()}) for k in before}
+    for k in ("1", "2", "12"):
+        now[k] = snap(tasks={"1": task(status="ip")})
+    codes = {str(i): f"tts_bulk_{i:03}" for i in range(1, 16)}
+    lines = _plan.drift_report(before, now, codes)
+    text = "\n".join(lines)
+    assert lines[0] == "3 of 15 entities drifted: task fields 3"
+    for c in ("tts_bulk_001", "tts_bulk_002", "tts_bulk_012"):
+        assert c in text
+    assert "tts_bulk_003" not in text
+    assert "tts_bulk_001 (1): 1 task changed (status 'wtg' -> 'ip')" in lines
+
+
+def test_drift_counts_each_kind():
+    before = {"7": snap(tt=1, tasks={"1": task(), "2": task(), "3": task()}, edges=[[1, 2, "end_to_start", 0]],
+                        versions=[[5, 1]])}
+    now = {"7": snap(tt=2, tasks={"1": task(status="ip", due_date="2026-01-02"), "2": task(content="X"),
+                                   "4": task()}, edges=[], versions=[[5, 1], [6, 2]], pfs=[[9, 1]])}
+    lines = _plan.drift_report(before, now, {"7": "tts_claim"})
+    assert lines[0] == ("1 of 1 entities drifted: task_template 1, task fields 3, tasks added 1, tasks gone 1, "
+                        "edges 1, versions 1, published files 1")
+    assert lines[1] == ("tts_claim (7): task_template 1 -> 2; 2 tasks changed (content x1, due_date x1, "
+                        "status x1); 1 task added; 1 task gone; edges -1; versions +1; published files +1")
+
+
+def test_drift_entity_gone_from_now():
+    lines = _plan.drift_report({"7": snap(tasks={"1": task()})}, {}, {"7": "tts_x"})
+    assert lines[1] == "tts_x (7): entity unreadable"
+
+
+def test_drift_groups_same_detail_when_long_and_keeps_every_code():
+    before = {str(i): snap(tasks={"1": task()}) for i in range(1, 31)}
+    now = {k: snap(tasks={"1": task(status="ip")}) for k in before}
+    now["30"] = snap(tt=3, tasks={"1": task()})
+    codes = {str(i): f"b{i:02}" for i in range(1, 31)}
+    lines = _plan.drift_report(before, now, codes)
+    assert lines[0] == "30 of 30 entities drifted: task_template 1, task fields 29"
+    assert len(lines) == 3
+    assert lines[1].startswith("29 entities: 1 task changed (status 'wtg' -> 'ip'): b01, b02,")
+    assert all(f"b{i:02}" in lines[1] for i in range(1, 30))
+    assert lines[2] == "b30 (30): task_template 1 -> 3"
+
+
+def test_drift_none():
+    assert _plan.drift_report({"1": snap()}, {"1": snap()}, {"1": "a"}) == ["0 of 1 entities drifted"]
