@@ -135,10 +135,10 @@ describe('apply, result, retry, undo', () => {
 
 		let stored = (await store.loadRun('run-1'))!;
 		const names = nameBook(plans);
-		expect(resultRows(stored, outcomes, names, new Set(['Shot:2'])).map((r) => [r.label, r.kind, r.canRetry, r.canUndo])).toEqual([
-			['sh1', 'clean', false, true],
-			['sh2', 'failed', true, false],
-			['sh3', 'clean', false, true]
+		expect(resultRows(stored, outcomes, names, new Set(['Shot:2'])).map((r) => [r.label, r.kind, r.retry, r.canUndo])).toEqual([
+			['sh1', 'clean', null, true],
+			['sh2', 'failed', 'replan', false],
+			['sh3', 'clean', null, true]
 		]);
 
 		refuse.clear();
@@ -218,6 +218,30 @@ describe('resume', () => {
 		expect(first.state === 'failed' && first.undo?.claimed).toEqual([{ taskId: 10, previousTemplateTask: 400 }]);
 		expect(opened.remaining).toEqual([shot(2), shot(3)]);
 		expect(await openStoredRun(store, 'nope', s.read)).toBeNull();
+	});
+
+	it('a dead run: an entity that never sent its batch, or whose batch never landed, is pending again (QA item 5)', async () => {
+		const s = site();
+		const store = await openUndoStore(undefined);
+		await store.saveRun(run3());
+		const batch: BatchRequest[] = [{ request_type: 'update', entity: 'Shot', record_id: 1, data: { task_template: { type: 'TaskTemplate', id: TEMPLATE } } }];
+		await store.saveEntity('run-1', shot(1), { state: 'applying' }, { before: await s.read(shot(1)), batch, appliedAt: 'x' });
+		await store.saveEntity('run-1', shot(2), { state: 'applying' });
+		const opened = (await openStoredRun(store, 'run-1', s.read))!;
+		expect(opened.run.entities.map((e) => e.status.state)).toEqual(['pending', 'pending', 'pending']);
+		expect(opened.remaining).toEqual([shot(1), shot(2), shot(3)]);
+		expect(opened.live).toBe(false);
+	});
+
+	it('a run another tab is applying is left as it is', async () => {
+		const s = site();
+		const store = await openUndoStore(undefined);
+		await store.saveRun(run3());
+		await store.saveEntity('run-1', shot(1), { state: 'applying' });
+		const opened = (await openStoredRun(store, 'run-1', s.read, async () => true))!;
+		expect(opened.live).toBe(true);
+		expect(opened.run.entities[0].status.state).toBe('applying');
+		expect(opened.remaining).toEqual([]);
 	});
 });
 

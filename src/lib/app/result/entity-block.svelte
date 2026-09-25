@@ -9,7 +9,7 @@
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import { KIND_DOT } from '$lib/app/count-chip.svelte';
 	import LineState from '$lib/app/line-state.svelte';
-	import Notice from '$lib/app/notice.svelte';
+	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import { kindMeaning } from '$lib/pure/kinds';
 	import type { ResultBlock } from '$lib/pure/result-blocks';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -20,6 +20,7 @@
 		block,
 		entityType = null,
 		busy = false,
+		liveElsewhere = false,
 		onretry,
 		onundo
 	}: {
@@ -27,6 +28,8 @@
 		entityType?: string | null;
 		/** A run or an undo in flight: the actions wait. */
 		busy?: boolean;
+		/** Another tab is applying this run. */
+		liveElsewhere?: boolean;
 		onretry: () => void;
 		onundo: () => void;
 	} = $props();
@@ -44,7 +47,16 @@
 </script>
 
 {#snippet retry()}
-	<Button size="sm" variant="outline" onclick={onretry} disabled={busy}>Retry</Button>
+	<Button size="sm" variant="outline" onclick={onretry} disabled={busy}>{block.retry === 'replan' ? 'Plan again' : 'Retry'}</Button>
+{/snippet}
+
+{#snippet changes(title: string, lines: string[], slot: string)}
+	<div class="flex flex-col gap-0.5 text-xs" data-slot={slot}>
+		<p class="font-medium">{title}</p>
+		<ul class="marker:text-muted-foreground flex list-disc flex-col gap-0.5 pl-4">
+			{#each lines as text, i (i)}<li>{text}</li>{/each}
+		</ul>
+	</div>
 {/snippet}
 
 <section
@@ -88,15 +100,31 @@
 		{:else if block.kind === 'not_applied'}
 			<p class="text-muted-foreground text-xs">The run stopped before this {entity}.</p>
 		{:else if block.kind === 'landing'}
-			<p class="text-muted-foreground text-xs">Applying.</p>
+			<p class="text-muted-foreground text-xs">{liveElsewhere ? 'Applying in another tab.' : 'Applying.'}</p>
 		{/if}
 	</header>
 
 	{#if block.error}
-		<Notice tone="destructive" class="px-2.5 py-1.5 text-xs" data-slot="block-error" action={block.canRetry ? retry : undefined}>
-			{block.error}
-		</Notice>
-	{:else if block.canRetry}
+		<div class="border-destructive/50 bg-destructive/10 flex flex-col gap-2 rounded-md border px-2.5 py-1.5 text-xs" role="alert" data-slot="block-error">
+			<div class="flex flex-wrap items-start gap-x-3 gap-y-2">
+				<p class="flex min-w-0 flex-1 items-start gap-2"><CircleAlert class="text-destructive mt-px size-3.5 shrink-0" aria-hidden="true" />{block.error}</p>
+				{#if block.retry}{@render retry()}{/if}
+			</div>
+			{#if block.drift.length || block.written.length || block.detail || (block.canUndo && block.retry === null && block.written.length > 0)}
+			<div class="flex flex-col gap-2 pl-5.5">
+				{#if block.drift.length}{@render changes('Changed on Flow PT since the plan', block.drift, 'block-drift')}{/if}
+				{#if block.written.length}{@render changes('Written on Flow PT', block.written, 'block-written')}{/if}
+				{#if block.canUndo && block.retry === null && block.written.length}<p>Undo it, then plan it again.</p>{/if}
+				{#if block.detail}
+					<details class="text-muted-foreground" data-slot="block-detail">
+						<summary class="cursor-pointer select-none">Flow PT said</summary>
+						<p class="mt-1 break-words">{block.detail}</p>
+					</details>
+				{/if}
+			</div>
+			{/if}
+		</div>
+	{:else if block.retry}
 		<div>{@render retry()}</div>
 	{/if}
 	{#if block.differences.length}

@@ -5,7 +5,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 	import type { FieldHop, FieldOption, FieldPathOption, FieldSchema, SgContext } from 'sg-widgets-core';
-	import { repeatedLabels } from '$lib/components/repeated-labels';
 	import {
 		currentType,
 		deriveFieldOptions,
@@ -14,6 +13,7 @@
 		iconNameFor,
 		NO_MATCH_LABEL,
 		pickerKeyIntent,
+		repeatedLabels,
 		resolveFieldPathOptions,
 		searchFieldOptions,
 		searchFieldPathOptions,

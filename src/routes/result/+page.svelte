@@ -25,7 +25,8 @@
 	import { entityLabel } from '$lib/pure/apply-view';
 	import EntityBlock from '$lib/app/result/entity-block.svelte';
 	import { resultBlocks, runTotals, unchangedLine } from '$lib/pure/result-blocks';
-	import { UNDO_STAGE_LABEL, describeNote, mergeNotes, nameBook, resultRows, type FileRun, type ResultKind } from '$lib/pure/result-view';
+	import { UNDO_STAGE_LABEL, describeNote, mergeNotes, nameBook, resultRows, storedRunItems, type FileRun, type ResultKind } from '$lib/pure/result-view';
+	import { localTime } from '$lib/pure/time';
 	import type { UndoRecord } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
 
@@ -34,6 +35,7 @@
 	const ready = (async () => {
 		await run.start();
 		if (runId) missing = !(await session.show(runId));
+		else if (!session.current) await session.refreshStored();
 	})();
 
 	const names = $derived(nameBook(session.plans, run.fieldLabels));
@@ -42,7 +44,15 @@
 	const totals = $derived(runTotals(blocks));
 	const unchanged = $derived(session.source ? unchangedLine(session.source, run.entityType) : null);
 	const undoable = $derived(rows.filter((r) => r.canUndo));
-	const failedRetry = $derived(rows.filter((r) => r.kind === 'failed' && r.canRetry).map((r) => r.key));
+	const failedRetry = $derived(rows.filter((r) => r.kind === 'failed' && r.retry !== null));
+	const storedRuns = $derived(storedRunItems(session.stored));
+	let opening = $state<string | null>(null);
+
+	async function openRun(id: string): Promise<void> {
+		opening = id;
+		missing = !(await session.show(id));
+		opening = null;
+	}
 	const tally = $derived(
 		rows.reduce<Partial<Record<ResultKind, number>>>((t, r) => ({ ...t, [r.kind]: (t[r.kind] ?? 0) + 1 }), {})
 	);
@@ -64,7 +74,6 @@
 	let fileInput = $state<HTMLInputElement | null>(null);
 
 	const entities = (n: number) => `${n} ${n === 1 ? 'entity' : 'entities'}`;
-	const time = (iso: string) => iso.slice(0, 16).replace('T', ' ');
 	/** Undo is the one destructive action here, drawn as a secondary in the destructive tone. */
 	const undoTone = 'text-destructive hover:text-destructive border-destructive/40 hover:bg-destructive/10';
 
@@ -129,7 +138,7 @@
 				<span aria-hidden="true">·</span>
 				<span class="text-foreground font-medium">{current.template.code}</span>
 				<span aria-hidden="true">·</span>
-				<span class="tabular-nums">started {time(current.startedAt)}</span>
+				<span class="tabular-nums">started {localTime(current.startedAt)}</span>
 				{#if current.user.name}<span aria-hidden="true">·</span><span>by {current.user.name}</span>{/if}
 			{:else}
 				<span>What an apply wrote, and its undo.</span>
@@ -144,11 +153,11 @@
 				<Button
 					variant="outline"
 					class={undoTone}
-					disabled={undoable.length === 0 || session.undoing || session.phase === 'running'}
+					disabled={undoable.length === 0 || session.undoing || session.phase === 'running' || session.liveElsewhere}
 					onclick={() => confirmUndo(`Undo the run on ${entities(undoable.length)}?`, session.records())}
 				>
 					<RotateCcw data-icon="inline-start" />
-					{session.undoing ? (session.undoProgress ? `Undoing ${session.undoProgress.finished} of ${session.undoProgress.total}…` : 'Undoing…') : 'Undo run'}
+					{session.undoing ? 'Undoing…' : 'Undo run'}
 				</Button>
 			{/if}
 		{/snippet}
@@ -163,8 +172,9 @@
 					{#if tally.undone}<LineState state="undone" count={tally.undone} />{/if}
 					{#if tally.not_applied}<LineState state="not_applied" count={tally.not_applied} />{/if}
 					{#if failedRetry.length}
-						<Button size="sm" variant="outline" onclick={() => void retry(failedRetry)} disabled={session.phase === 'running'}>
-							Retry {failedRetry.length === 1 ? 'the failed one' : `the ${failedRetry.length} failed`}
+						<Button size="sm" variant="outline" onclick={() => void retry(failedRetry.map((r) => r.key))} disabled={session.phase === 'running'}>
+							{failedRetry.some((r) => r.retry === 'replan') ? 'Plan' : 'Retry'}
+							{failedRetry.length === 1 ? 'the failed one' : `the ${failedRetry.length} failed`}{failedRetry.some((r) => r.retry === 'replan') ? ' again' : ''}
 						</Button>
 					{/if}
 				</div>
@@ -180,6 +190,7 @@
 				Undoing: {session.undoProgress.finished} of {entities(session.undoProgress.total)} done.
 			</p>
 		{/if}
+		{#if session.liveElsewhere}<Notice tone="info">Another tab is applying this run. This page updates as it goes.</Notice>{/if}
 		{#if missing}<Notice tone="destructive">No stored run {runId} in this browser.</Notice>{/if}
 		{#if fileError}<Notice tone="destructive" data-slot="upload-error">{fileError}</Notice>{/if}
 		{#if session.error}<Notice tone="destructive">{session.error}</Notice>{/if}
@@ -200,12 +211,36 @@
 			{#if session.undone.length}
 				<div class="flex w-full max-w-3xl flex-col gap-6 px-6 pt-6">{@render undoOutcome()}</div>
 			{/if}
-			<PageState state="empty" icon={History} title="No run in this tab" line="Apply a plan, or undo a run from its undo file.">
-				{#snippet action()}
-					{@render fromFile('outline')}
-					<Button href="/plan">Go to the plan</Button>
-				{/snippet}
-			</PageState>
+			{#if storedRuns.length}
+				<div class="flex w-full max-w-3xl flex-col gap-3 px-6 py-6" data-slot="stored-runs">
+					<div class="flex flex-wrap items-center gap-2">
+						<h2 class="mr-auto text-sm font-semibold">Runs in this browser</h2>
+						{@render fromFile('outline')}
+					</div>
+					<ul class="bg-card text-card-foreground divide-border divide-y rounded-lg border">
+						{#each storedRuns as item (item.id)}
+							<li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2" data-slot="stored-run">
+								<div class="flex min-w-0 flex-1 flex-col">
+									<span class="truncate text-sm font-medium">{item.title}</span>
+									<span class="text-muted-foreground text-xs tabular-nums">
+										{item.started}{item.by ? ` · by ${item.by}` : ''} · {item.summary}{item.unfinished ? ' · did not finish' : ''}
+									</span>
+								</div>
+								<Button size="sm" variant="outline" onclick={() => void openRun(item.id)} disabled={opening !== null}>
+									{opening === item.id ? 'Opening…' : 'Open'}
+								</Button>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{:else}
+				<PageState state="empty" icon={History} title="No run in this browser" line="Apply a plan, or undo a run from its undo file.">
+					{#snippet action()}
+						{@render fromFile('outline')}
+						<Button href="/plan">Go to the plan</Button>
+					{/snippet}
+				</PageState>
+			{/if}
 		{:else}
 			<div class="grid w-full grid-cols-1 items-start gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-3" data-slot="result">
 				{#if session.undone.length}<div class="col-span-full">{@render undoOutcome()}</div>{/if}
@@ -213,7 +248,8 @@
 					<EntityBlock
 						{block}
 						entityType={run.entityType}
-						busy={session.undoing || session.phase === 'running'}
+						busy={session.undoing || session.phase === 'running' || session.liveElsewhere}
+						liveElsewhere={session.liveElsewhere}
 						onretry={() => void retry([block.key])}
 						onundo={() => block.record && confirmUndo(`Undo ${block.label}?`, [block.record], [block.key])}
 					/>

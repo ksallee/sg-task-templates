@@ -4,12 +4,14 @@ import {
 	describeDifference,
 	describeNote,
 	fileRuns,
+	storedRunItems,
 	mergeNotes,
 	nameBook,
 	resultRows,
 	undoFileName,
 	undoPreviewNotes
 } from './result-view';
+import { localTime } from './time';
 import type { EntityPlan, EntityRef, EntityTask, Run, TemplateTask, UndoRecord } from './types';
 
 const shot = (id: number): EntityRef => ({ type: 'Shot', id, name: `sh${id}` });
@@ -236,7 +238,7 @@ describe('resultRows', () => {
 			{ entity: shot(3), result: { kind: 'failed' as const, entity: shot(3), error: { status: 400, message: 'Bad' } } }
 		];
 		const rows = resultRows(r, outcomes, nameBook([plan]), new Set(['Shot:3']));
-		expect(rows.map((x) => [x.label, x.kind, x.differences, x.error, x.canUndo, x.canRetry])).toEqual([
+		expect(rows.map((x) => [x.label, x.kind, x.differences, x.error, x.canUndo, x.retry !== null])).toEqual([
 			['sh1', 'clean', [], null, true, false],
 			['sh2', 'differences', ['comp was not deleted.'], null, true, false],
 			['sh3', 'failed', [], 'Bad', false, true],
@@ -245,6 +247,45 @@ describe('resultRows', () => {
 			['sh6', 'landed', [], null, true, false],
 			['sh7', 'failed', [], 'Interrupted', true, false]
 		]);
+	});
+});
+
+describe('resultRows: what a failure wrote, what changed, what it offers', () => {
+	const refused = { status: 400, message: 'Invalid field value, update failed [5 - Update failed for [TaskDependency.dependent_task]: Value is not legal.]' };
+	const rec = record(shot(1));
+	const rowOf = (status: Run['entities'][number]['status'], retryable = true) =>
+		resultRows(run([{ entity: shot(1), status }]), [], nameBook([plan]), new Set(retryable ? ['Shot:1'] : []))[0];
+
+	it('changed since the plan: plain words, the changes, plan again', () => {
+		const r = rowOf({ state: 'failed', error: refused, undo: null, stage: 'changed', drift: [{ code: 'task_removed', task: { id: 47844, name: 'Roto' } }] });
+		expect([r.error, r.detail, r.drift, r.written, r.retry, r.canUndo]).toEqual([
+			'The Shot changed on Flow PT since the plan. Nothing was written.',
+			null,
+			['1 Task deleted: Roto #47844.'],
+			[],
+			'replan',
+			false
+		]);
+	});
+
+	it('after-apply refused: what phase 1 wrote, the server text as detail, undo and a retry from the read-back', () => {
+		const r = rowOf({ state: 'failed', error: refused, undo: rec, stage: 'after_apply', written: [{ code: 'task_added', task: { id: 48920, name: 'Roto' } }] });
+		expect([r.error, r.detail, r.written, r.retry, r.canUndo]).toEqual([
+			'Applied, then Flow PT refused the date and dependency fixes.',
+			refused.message,
+			['1 Task created: Roto #48920.'],
+			'resume',
+			true
+		]);
+	});
+
+	it('a refusal that left something written (someone else, 113 says the batch did not): undo first, no retry', () => {
+		const r = rowOf({ state: 'failed', error: refused, undo: rec, stage: 'apply', written: [{ code: 'task_added', task: { id: 5, name: 'X' } }] });
+		expect([r.retry, r.canUndo]).toEqual([null, true]);
+	});
+
+	it('no retry from a tab that did not plan it', () => {
+		expect(rowOf({ state: 'failed', error: refused, undo: null, stage: 'apply', written: [] }, false).retry).toBeNull();
 	});
 });
 
@@ -276,5 +317,18 @@ describe('fileRuns', () => {
 	it('a run the store marks all undone has nothing to undo', () => {
 		const [run] = fileRuns([rec('r1', 1, 'a'), rec('r1', 2, 'b')], { r1: stored(['undone', 'undone']) });
 		expect(run.records).toEqual([]);
+	});
+});
+
+describe('storedRunItems', () => {
+	it('each stored run in one line: template, local start, who, what it holds', () => {
+		const r = run([
+			{ entity: shot(1), status: { state: 'done', undo: record(shot(1)) } },
+			{ entity: shot(2), status: { state: 'undone', undo: record(shot(2)) } },
+			{ entity: shot(3), status: { state: 'pending' } }
+		]);
+		expect(storedRunItems([{ ...r, user: { type: 'HumanUser', id: 9, name: 'Kevin' } }])).toEqual([
+			{ id: r.id, title: 'T', started: localTime(r.startedAt), by: 'Kevin', summary: '1 applied, 1 undone, 1 not started', unfinished: true }
+		]);
 	});
 });

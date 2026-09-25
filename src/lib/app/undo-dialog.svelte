@@ -35,7 +35,11 @@
 		<Dialog.Header>
 			<Dialog.Title>{title}</Dialog.Title>
 			<Dialog.Description>
-				Restores {records.length === 1 ? 'this entity' : `${records.length} entities`} to {records.length === 1 ? 'its' : 'their'} state before the apply. Each entity is undone separately: one can fail while the others succeed.
+				{#if records.length === 1}
+					Restores this entity to its state before the apply.
+				{:else}
+					Restores {records.length} entities to their state before the apply. Each is undone on its own: one can fail while the others succeed.
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		<div class="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">

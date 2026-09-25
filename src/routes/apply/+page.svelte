@@ -17,7 +17,8 @@
 	import PageState from '$lib/app/page-state.svelte';
 	import Section from '$lib/app/section.svelte';
 	import UndoDownloadOnly from '$lib/app/undo-download-only.svelte';
-	import { lineCounts } from '$lib/pure/apply-view';
+	import { applyTitle, canCancel, lineCounts } from '$lib/pure/apply-view';
+	import { localTime } from '$lib/pure/time';
 	import { Button } from '$lib/components/ui/button/index.js';
 
 	const started = run.start();
@@ -27,7 +28,6 @@
 	const total = $derived(session.lines.length);
 	const done = $derived(counts.landed + counts.failed);
 	const showRun = $derived(session.phase === 'running' || (session.phase === 'done' && session.source === run.plans && session.current !== null));
-	const time = (iso: string) => iso.slice(0, 16).replace('T', ' ');
 </script>
 
 <svelte:head><title>Apply · SG Task Templates</title></svelte:head>
@@ -43,19 +43,23 @@
 		<PageState state="loading" title="Starting the run" />
 	{:else if showRun && session.current}
 		{@const current = session.current}
-		<PageHeader title={session.phase === 'running' ? 'Applying' : 'Applied'}>
+		<PageHeader title={applyTitle(session.phase === 'running' ? 'running' : 'done', counts)}>
 			{#snippet context()}
 				<span>{current.project.name ?? `Project ${current.project.id}`}</span>
 				<span aria-hidden="true">·</span>
 				<span class="text-foreground font-medium">{current.template.code}</span>
 				<span aria-hidden="true">·</span>
-				<span class="tabular-nums">started {time(current.startedAt)}</span>
+				<span class="tabular-nums">started {localTime(current.startedAt)}</span>
 			{/snippet}
 			{#snippet actions()}
 				{#if session.phase === 'running'}
-					<Button variant="outline" onclick={() => session.cancel()} disabled={session.stopping}>
-						{session.stopping ? 'Stopping after current…' : 'Cancel after current'}
-					</Button>
+					{#if canCancel(counts) || session.stopping}
+						<Button variant="outline" onclick={() => session.cancel()} disabled={session.stopping}>
+							{session.stopping ? 'Stopping after current…' : 'Cancel after current'}
+						</Button>
+					{:else}
+						<span class="text-muted-foreground text-sm" data-slot="cancel-none">Every entity has started.</span>
+					{/if}
 				{:else}
 					<Button onclick={() => goto('/result')}>See the result <ArrowRight data-icon="inline-end" /></Button>
 				{/if}
