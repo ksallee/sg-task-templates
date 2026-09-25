@@ -524,6 +524,8 @@ export interface EntityResultOk {
 	entity: EntityRef;
 	/** Task ids the server created, matched to their template task by `template_task` (083). */
 	created: Id[];
+	/** The same Tasks by the template task each was created from, for the result screen's names. */
+	createdFor: Array<{ templateTaskId: Id; taskId: Id }>;
 	/** Edges the apply added, matched by their mapped ends (015, 099). */
 	addedEdges: Array<Edge & { id: Id }>;
 	differences: ResultDifference[];

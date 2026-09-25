@@ -3,14 +3,11 @@ import { matchKey } from './matching';
 import {
 	describeDifference,
 	describeNote,
-	groupRows,
 	mergeNotes,
 	nameBook,
 	resultRows,
 	undoFileName,
-	undoPreviewNotes,
-	type ResultKind,
-	type ResultRow
+	undoPreviewNotes
 } from './result-view';
 import type { EntityPlan, EntityRef, EntityTask, Run, TemplateTask, UndoRecord } from './types';
 
@@ -231,10 +228,10 @@ describe('resultRows', () => {
 			{ entity: shot(7), status: { state: 'failed', error: { status: null, message: 'Interrupted' }, undo: rec(7) } }
 		]);
 		const outcomes = [
-			{ entity: shot(1), result: { kind: 'ok' as const, entity: shot(1), created: [], addedEdges: [], differences: [] } },
+			{ entity: shot(1), result: { kind: 'ok' as const, entity: shot(1), created: [], createdFor: [], addedEdges: [], differences: [] } },
 			{
 				entity: shot(2),
-				result: { kind: 'ok' as const, entity: shot(2), created: [], addedEdges: [], differences: [{ code: 'delete_missing' as const, taskId: 10 }] }
+				result: { kind: 'ok' as const, entity: shot(2), created: [], createdFor: [], addedEdges: [], differences: [{ code: 'delete_missing' as const, taskId: 10 }] }
 			},
 			{ entity: shot(3), result: { kind: 'failed' as const, entity: shot(3), error: { status: 400, message: 'Bad' } } }
 		];
@@ -248,33 +245,6 @@ describe('resultRows', () => {
 			['sh6', 'landed', [], null, true, false],
 			['sh7', 'failed', [], 'Interrupted', true, false]
 		]);
-	});
-});
-
-describe('groupRows', () => {
-	it('groups rows by outcome, what needs a look first, empty groups left out, run order kept inside', () => {
-		const row = (n: number, kind: ResultKind): ResultRow => ({
-			key: `Shot:${n}`,
-			entity: shot(n),
-			label: `sh${n}`,
-			kind,
-			differences: [],
-			error: null,
-			record: null,
-			canUndo: false,
-			canRetry: false
-		});
-		const rows = [row(1, 'clean'), row(2, 'failed'), row(3, 'differences'), row(4, 'clean'), row(5, 'landed'), row(6, 'undone'), row(7, 'not_applied'), row(8, 'landing')];
-		expect(groupRows(rows).map((g) => [g.kind, g.title, g.rows.map((r) => r.label)])).toEqual([
-			['failed', 'Failed', ['sh2']],
-			['differences', 'Applied with differences', ['sh3']],
-			['landing', 'Applying', ['sh8']],
-			['clean', 'Applied', ['sh1', 'sh4']],
-			['landed', 'Applied earlier', ['sh5']],
-			['undone', 'Undone', ['sh6']],
-			['not_applied', 'Not applied', ['sh7']]
-		]);
-		expect(groupRows([])).toEqual([]);
 	});
 });
 

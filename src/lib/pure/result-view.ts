@@ -201,28 +201,6 @@ export function resultRows(run: Run, outcomes: OutcomeLike[], names: NameBook, r
 	});
 }
 
-export interface ResultGroup {
-	kind: ResultKind;
-	title: string;
-	rows: ResultRow[];
-}
-
-/** Outcome groups in the order the screen shows them: what needs a look first. */
-export const RESULT_GROUPS: ReadonlyArray<{ kind: ResultKind; title: string }> = [
-	{ kind: 'failed', title: 'Failed' },
-	{ kind: 'differences', title: 'Applied with differences' },
-	{ kind: 'landing', title: 'Applying' },
-	{ kind: 'clean', title: 'Applied' },
-	{ kind: 'landed', title: 'Applied earlier' },
-	{ kind: 'undone', title: 'Undone' },
-	{ kind: 'not_applied', title: 'Not applied' }
-];
-
-/** The rows by outcome, run order kept inside a group, empty groups left out. */
-export function groupRows(rows: ResultRow[]): ResultGroup[] {
-	return RESULT_GROUPS.map((g) => ({ ...g, rows: rows.filter((r) => r.kind === g.kind) })).filter((g) => g.rows.length > 0);
-}
-
 /** `undo-<template>-<started at>.json`, safe on every file system. */
 export function undoFileName(run: Pick<Run, 'template' | 'startedAt'>): string {
 	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, '-');

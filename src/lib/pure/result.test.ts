@@ -130,6 +130,7 @@ describe('diffEntity: recipe 015, everything landed', () => {
 		const after = snapshot(shotAfter);
 		const result = diffEntity(plan, before, after);
 		expect(result.created).toEqual([47298]);
+		expect(result.createdFor).toEqual([{ templateTaskId: 47202, taskId: 47298 }]);
 		expect(result.addedEdges).toEqual([{ id: 9101, downstream: 47297, upstream: 47296, type: 'start-to-start', offsetDays: 1 }]);
 		expect(result.differences).toEqual([]);
 	});
