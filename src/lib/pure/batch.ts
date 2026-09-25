@@ -209,7 +209,8 @@ const samePair = (a: EdgeSpec, b: EdgeSpec) =>
 /**
  * Phase 2, from the read-back: date clearing on created Tasks (opt-in, 097), then each
  * `transientAdded` copy: delete the template's copy, found by pair, and re-create the kept edge
- * (085 allows one row per pair). Empty when there is nothing to do.
+ * (085 allows one row per pair). A kept edge with an end gone from the read-back is left: the
+ * result reports it as not re-created. Empty when there is nothing to do.
  */
 export function buildAfterApply(plan: EntityPlan, opts: RunOptions, after: AfterApply): BatchRequest[] {
 	const out: BatchRequest[] = [];
@@ -229,9 +230,12 @@ export function buildAfterApply(plan: EntityPlan, opts: RunOptions, after: After
 			out.push(update('Task', t.id, { start_date: null, due_date: null }));
 		}
 	}
+	const alive = new Set(after.tasks.map((t) => t.id));
 	for (const t of plan.edges.transientAdded ?? []) {
 		const a = plan.edges.affected.find((x) => x.existing.id === t.keptEdge);
 		if (!a || a.action !== 'keep' || closesLoop(a)) continue;
+		// 113: an edge on a retired Task is 400 and takes the batch down. Both ends from the read-back.
+		if (!alive.has(a.existing.downstream) || !alive.has(a.existing.upstream)) continue;
 		const live = after.edges.find((e) => samePair(e, a.existing));
 		if (live?.id === a.existing.id) continue; // the apply left it
 		if (live?.id != null) out.push({ request_type: 'delete', entity: 'TaskDependency', record_id: live.id });

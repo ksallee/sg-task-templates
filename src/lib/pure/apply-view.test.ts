@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { matchKey } from './matching';
 import {
 	applyEvent,
+	applyTitle,
+	canCancel,
 	cancelPending,
+	countsLine,
+	failureText,
 	entityLabel,
 	initialLines,
 	lineCounts,
@@ -188,5 +192,62 @@ describe('resumedRun', () => {
 		expect(next.finishedAt).toBeNull();
 		expect(next.options.omitStatus).toBe('hld');
 		expect(next.entities.map((e) => e.status.state)).toEqual(['done', 'pending']);
+	});
+});
+
+describe('the run in words', () => {
+	const counts = (o: Partial<ReturnType<typeof lineCounts>> = {}) => ({ pending: 0, landing: 0, landed: 0, failed: 0, cancelled: 0, undone: 0, ...o });
+
+	it('countsLine says only what is non-zero', () => {
+		expect(countsLine(counts({ landing: 3 }))).toBe('3 applying');
+		expect(countsLine(counts({ landed: 2, failed: 1, pending: 4 }))).toBe('2 applied, 1 failed, 4 not started');
+		expect(countsLine(counts())).toBe('nothing applied');
+	});
+
+	it('countsLine takes other words for a state', () => {
+		expect(countsLine(counts({ landing: 1 }), { landing: 'applying when the tab closed' })).toBe('1 applying when the tab closed');
+	});
+
+	it('the title says a failure', () => {
+		expect(applyTitle('running', counts({ landing: 2 }))).toBe('Applying');
+		expect(applyTitle('done', counts({ landed: 3 }))).toBe('Applied');
+		expect(applyTitle('done', counts({ landed: 2, failed: 1 }))).toBe('Applied, 1 failed');
+		expect(applyTitle('done', counts({ failed: 2 }))).toBe('Failed');
+		expect(applyTitle('done', counts({ landed: 1, cancelled: 3 }))).toBe('Applied, 3 cancelled');
+	});
+
+	it('cancel after current stops something only while entities wait', () => {
+		expect(canCancel(counts({ landing: 4 }))).toBe(false);
+		expect(canCancel(counts({ landing: 4, pending: 1 }))).toBe(true);
+	});
+});
+
+describe('failureText', () => {
+	const error = { status: 400, message: 'Invalid field value, update failed [5 - Update failed for [TaskDependency.dependent_task]: Value is not legal.]' };
+
+	it('says in plain words where it stopped and whether anything was written; the server text is the detail', () => {
+		expect(failureText({ error, stage: 'apply', written: [] }, 'Shot')).toEqual({ text: 'Flow PT refused the write. Nothing was written.', detail: error.message });
+		expect(failureText({ error, stage: 'apply', written: null }, 'Shot')).toEqual({ text: 'Flow PT refused the write. Reading the Shot after it failed.', detail: error.message });
+		expect(failureText({ error, stage: 'after_apply' }, 'Shot').text).toBe('Applied, then Flow PT refused the date and dependency fixes.');
+		expect(failureText({ error, stage: 'read_back' }, 'Shot').text).toBe('Applied, then reading the Shot back failed.');
+		expect(failureText({ error, stage: 'read' }, 'Shot').text).toBe('Reading the Shot before the write failed. Nothing was written.');
+		expect(failureText({ error, stage: 'changed', drift: [] }, 'Shot')).toEqual({ text: 'The Shot changed on Flow PT since the plan. Nothing was written.', detail: null });
+		expect(failureText({ error, stage: 'interrupted', written: [] }, 'Shot')).toEqual({ text: 'The tab closed while this Shot was applying. Nothing was written.', detail: null });
+		expect(failureText({ error, stage: 'interrupted', written: [{ code: 'task_added', task: { id: 1, name: 'x' } }] }, 'Shot').text).toBe(
+			'The tab closed while this Shot was applying.'
+		);
+	});
+
+	it('our own message is plain already; a run stored before stages shows its message', () => {
+		expect(failureText({ error: { status: null, message: '"gone" is not a Task status in this project.' }, stage: 'validate' }, 'Shot')).toEqual({
+			text: '"gone" is not a Task status in this project.',
+			detail: null
+		});
+		expect(failureText({ error }, 'Shot')).toEqual({ text: error.message, detail: null });
+	});
+
+	it('lines from the runner and from the store use it', () => {
+		const lines = applyEvent(initialLines([plan(3)]), { entity: plan(3).entity, state: 'failed', stage: 'apply', written: [], error });
+		expect(lines[0].error).toBe('Flow PT refused the write. Nothing was written.');
 	});
 });

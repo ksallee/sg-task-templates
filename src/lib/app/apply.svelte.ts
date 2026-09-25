@@ -9,10 +9,13 @@
  *   session.cancel()                 cancel after current: the in-flight entities finish, no more start
  *   session.current, .lines,         the run on screen, one line per entity, this session's outcomes
  *   .outcomes, .phase
- *   await session.retry(keys)        retry failed entities this session planned (apply.ts retryFailed)
+ *   await session.retry(keys)        retry failed entities: phase 1 landed, from the read-back; else 'plan':
+ *                                    the entities are read and planned again on /plan (never the old batch)
  *   await session.undo(keys?)        undo some entities, or every landed one (revert.ts)
  *   session.download()               the run's undo records as a JSON file
- *   await session.undoFile(file)     undo a run from an uploaded file (another session's)
+ *   await session.readFile(file)     an uploaded undo file, run by run, nothing undone yet (fileRuns)
+ *   await session.undoFromFile(recs) undo those records once confirmed; undone ones are refused
+ *   session.undoProgress             entities undone so far of the undo in flight
  *   await session.show(runId)        a stored run on the result screen (recovered first)
  *   session.unfinished               stored runs with no finish, for the resume banner
  *   await session.continueRun(id)    recover, re-plan what never landed (the plan loading from the call on)
@@ -21,7 +24,7 @@
  * Logic is in `$lib/pure/apply-view.ts` and `$lib/pure/result-view.ts`; I/O in `$lib/io/`.
  */
 
-import { applyRun, retryFailed, type EntityOutcome } from '$lib/io/apply';
+import { applyRun, plannedMap, retryFailed, type EntityOutcome } from '$lib/io/apply';
 import type { RevertOutcome } from '$lib/io/revert';
 import { openStoredRun, snapshotReader, undoRecords } from '$lib/io/session';
 import { downloadUndoFile, openUndoStore, readUndoFile, type UndoStore } from '$lib/io/undo-store';
@@ -36,9 +39,9 @@ import {
 	writablePlans,
 	type EntityLine
 } from '$lib/pure/apply-view';
-import { undoFileName } from '$lib/pure/result-view';
+import { fileRuns, undoFileName, type FileRun } from '$lib/pure/result-view';
 import { entityKey, errorOf, undoRecordsOf } from '$lib/pure/run';
-import type { EntityPlan, EntityRef, ProjectContext, Run, UndoRecord } from '$lib/pure/types';
+import type { EntityPlan, EntityRef, EntitySnapshot, ProjectContext, Run, UndoRecord } from '$lib/pure/types';
 import { run } from './run.svelte';
 
 export type Phase = 'idle' | 'running' | 'done';
@@ -59,6 +62,7 @@ class ApplySession {
 	/** The last undo: per entity outcome, and whether it is running. */
 	undoing = $state(false);
 	undone = $state.raw<RevertOutcome[]>([]);
+	undoProgress = $state<{ finished: number; total: number } | null>(null);
 
 	unfinished = $state.raw<Run[]>([]);
 
@@ -73,6 +77,7 @@ class ApplySession {
 
 	#store: Promise<UndoStore> | null = null;
 	#plans: EntityPlan[] = [];
+	#snapshots: EntitySnapshot[] = [];
 	#ctx: ProjectContext | null = null;
 	#stop = false;
 
@@ -134,6 +139,7 @@ class ApplySession {
 		this.resuming = null;
 		this.source = run.plans;
 		this.#plans = plans;
+		this.#snapshots = run.snapshots;
 		this.#ctx = ctx;
 		this.#stop = false;
 		this.stopping = false;
@@ -149,6 +155,7 @@ class ApplySession {
 				client,
 				read: snapshotReader(client, template),
 				store,
+				planned: plannedMap(this.#snapshots),
 				shouldStop: () => this.#stop,
 				onProgress: (p) => {
 					this.lines = applyEvent(this.lines, p);
@@ -168,37 +175,50 @@ class ApplySession {
 		this.stopping = true;
 	}
 
-	async retry(keys: string[]): Promise<void> {
+	/**
+	 * Retry failed entities. One whose phase 1 landed (read_back, after_apply) goes on from a fresh
+	 * read-back. Any other is never sent again as planned: it is read and planned again on /plan,
+	 * which shows it before Apply ('plan'; the caller opens /plan).
+	 */
+	async retry(keys: string[]): Promise<'plan' | 'done'> {
 		const current = this.current;
 		const ctx = this.#ctx;
 		const template = run.template;
-		if (!current || !ctx || !template || this.phase === 'running') return;
+		if (!current || !ctx || !template || this.phase === 'running') return 'done';
 		const store = await this.open();
-		const client = run.client();
 		const wanted = new Set(keys);
-		const failed = this.outcomes
-			.filter((o) => wanted.has(entityKey(o.entity)) && o.result.kind === 'failed')
-			.flatMap((outcome) => {
-				const plan = this.#plans.find((p) => entityKey(p.entity) === entityKey(outcome.entity));
-				return plan ? [{ plan, outcome }] : [];
-			});
-		if (!failed.length) return;
+		const failed = this.outcomes.filter((o) => wanted.has(entityKey(o.entity)) && o.result.kind === 'failed');
+		const resumable = failed.filter((o) => o.prepared && (o.stage === 'read_back' || o.stage === 'after_apply'));
+		const replan = failed.filter((o) => !resumable.includes(o)).map((o) => o.entity);
+		if (replan.length) {
+			run.setSelected(replan);
+			void run.buildPlans();
+			return 'plan';
+		}
+		const items = resumable.flatMap((outcome) => {
+			const plan = this.#plans.find((p) => entityKey(p.entity) === entityKey(outcome.entity));
+			return plan ? [{ plan, stage: outcome.stage, prepared: outcome.prepared }] : [];
+		});
+		if (!items.length) return 'done';
+		const client = run.client();
+		const again = new Set(items.map((i) => entityKey(i.plan.entity)));
 		this.phase = 'running';
-		this.lines = this.lines.map((l) => (wanted.has(l.key) ? { ...l, state: 'pending', error: null } : l));
+		this.lines = this.lines.map((l) => (again.has(l.key) ? { ...l, state: 'pending', error: null } : l));
 		try {
-			const again = await retryFailed(current, failed, ctx, {
+			const outcomes = await retryFailed(current, items, ctx, {
 				client,
 				read: snapshotReader(client, template),
 				store,
 				onProgress: (p) => (this.lines = applyEvent(this.lines, p))
 			});
-			const byKey = new Map(again.map((o) => [entityKey(o.entity), o]));
+			const byKey = new Map(outcomes.map((o) => [entityKey(o.entity), o]));
 			this.outcomes = this.outcomes.map((o) => byKey.get(entityKey(o.entity)) ?? o);
 		} catch (e) {
 			this.error = errorOf(e).message;
 		}
 		await this.#reload(store);
 		this.phase = 'done';
+		return 'done';
 	}
 
 	/** Undo the given entities of the current run, or every landed one. */
@@ -208,9 +228,17 @@ class ApplySession {
 		await this.#undo(records);
 	}
 
-	/** Undo a run from a file: its records, whatever session wrote them. Throws on a bad file. */
-	async undoFile(file: Blob): Promise<void> {
+	/** An uploaded undo file, run by run, with what the store marks undone. Throws on a bad file. Undoes nothing. */
+	async readFile(file: Blob): Promise<FileRun[]> {
 		const records = await readUndoFile(file);
+		const store = await this.open();
+		const stored: Record<string, Run | null> = {};
+		for (const id of new Set(records.map((r) => r.runId))) stored[id] = await store.loadRun(id);
+		return fileRuns(records, stored);
+	}
+
+	/** Undo records from a file, once confirmed. Shows the stored run when there is one. */
+	async undoFromFile(records: UndoRecord[]): Promise<void> {
 		const store = await this.open();
 		const stored = records[0] ? await store.loadRun(records[0].runId) : null;
 		if (stored) {
@@ -225,14 +253,32 @@ class ApplySession {
 		const store = await this.open();
 		await run.start();
 		const client = run.client();
+		// The store is the truth: another tab or a file may have undone some since this tab read it.
+		const live: UndoRecord[] = [];
+		for (const rec of records) {
+			const stored = await store.loadRun(rec.runId);
+			const status = stored?.entities.find((e) => entityKey(e.entity) === entityKey(rec.entity))?.status;
+			if (status?.state !== 'undone') live.push(rec);
+		}
+		if (!live.length) {
+			await this.#reload(store);
+			return;
+		}
 		this.undoing = true;
 		this.error = null;
+		this.undoProgress = { finished: 0, total: live.length };
 		try {
-			this.undone = await undoRecords(records, { client, read: snapshotReader(client, null), store });
+			this.undone = await undoRecords(live, {
+				client,
+				read: snapshotReader(client, null),
+				store,
+				onProgress: (p) => (this.undoProgress = { finished: p.finished, total: p.total })
+			});
 		} catch (e) {
 			this.error = errorOf(e).message;
 		}
 		this.undoing = false;
+		this.undoProgress = null;
 		await this.#reload(store);
 	}
 

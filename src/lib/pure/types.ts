@@ -12,6 +12,7 @@
  */
 
 import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
+import type { SnapshotChange } from './drift';
 
 // ---------------------------------------------------------------------------------------------
 // 1. Wire
@@ -660,11 +661,29 @@ export interface UndoFile {
 
 // --- run -------------------------------------------------------------------------------------------
 
+/**
+ * Where a failed entity stopped. `validate`, `read`, `changed`: nothing sent. `apply`: the batch was
+ * refused (113: atomic, nothing in it lands). `read_back`: it landed, the read after failed.
+ * `after_apply`: it landed, the second batch (date clears, kept edges) was refused. `interrupted`:
+ * the tab closed while it was applying, found on reopen.
+ */
+export type FailedStage = 'validate' | 'read' | 'changed' | 'apply' | 'read_back' | 'after_apply' | 'interrupted';
+
 export type EntityRunState =
 	| { state: 'pending' }
 	| { state: 'applying' }
 	| { state: 'done'; undo: UndoRecord }
-	| { state: 'failed'; error: { status: number | null; message: string }; undo: UndoRecord | null }
+	| {
+			state: 'failed';
+			error: { status: number | null; message: string };
+			undo: UndoRecord | null;
+			/** Where it stopped. Absent on runs stored before it was kept. */
+			stage?: FailedStage;
+			/** What the read-back found written: [] nothing, null unread. Absent when nothing was sent. */
+			written?: SnapshotChange[] | null;
+			/** Stage `changed`: what changed on Flow PT between the plan's read and the one before the write. */
+			drift?: SnapshotChange[];
+	  }
 	| { state: 'undone'; undo: UndoRecord };
 
 export interface Run {
