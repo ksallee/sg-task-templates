@@ -26,19 +26,22 @@ export function snapshotReader(client: SgClient, template: Template | null): Rea
 }
 
 /**
- * A stored run, opened after a reload or from another tab (brief 6): every entity left applying
- * with a prepared batch gets its record rebuilt from a fresh read first (`recoverInterrupted`), so
- * undo covers it and a re-plan skips it. `remaining`: what never landed.
+ * A stored run, opened after a reload or from another tab (brief 6). A run another tab is applying
+ * (`isLive`, liveness.ts) is shown as it is: nothing recovers or re-plans it. A dead one is recovered
+ * first (`recoverInterrupted`): entities left applying are pending again or failed with their
+ * record, so undo covers what landed and a re-plan takes the rest. `remaining`: what never landed.
  */
 export async function openStoredRun(
 	store: UndoStore,
 	runId: string,
-	read: ReadEntity
-): Promise<{ run: Run; remaining: EntityRef[] } | null> {
+	read: ReadEntity,
+	isLive: (runId: string) => Promise<boolean> = async () => false
+): Promise<{ run: Run; remaining: EntityRef[]; live: boolean } | null> {
 	const stored = await store.loadRun(runId);
 	if (!stored) return null;
+	if (stored.finishedAt === null && (await isLive(runId))) return { run: stored, remaining: [], live: true };
 	const run = stored.finishedAt === null ? await recoverInterrupted(stored, read, store) : stored;
-	return { run, remaining: remainingEntities(run) };
+	return { run, remaining: remainingEntities(run), live: false };
 }
 
 /**

@@ -2,7 +2,7 @@
 	The step indicator (docs/design.md): Connect → Template → Entities → Plan → Apply → Result,
 	numbered. Current: primary ring. Done: a check, still a link. Open: a link. Blocked: dimmed, not
 	a link, the reason in its title. The states come from `$lib/pure/flow.ts`. Below sm the chevrons
-	go and the numbers tighten, so six steps fit a phone.
+	go and the numbers tighten, so six steps fit a phone. Labels from lg; the site from xl, so the two never meet.
 -->
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
@@ -30,7 +30,7 @@
 					>
 						{#if step.state === 'done'}<Check class="size-3" />{:else}{i + 1}{/if}
 					</span>
-					<span class="hidden md:inline">{step.label}</span>
+					<span class="hidden lg:inline">{step.label}</span>
 				{/snippet}
 				{#if step.state === 'blocked'}
 					<span

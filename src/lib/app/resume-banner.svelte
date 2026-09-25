@@ -8,7 +8,8 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { session } from '$lib/app/apply.svelte';
-	import { lineCounts, linesFromRun } from '$lib/pure/apply-view';
+	import { countsLine, lineCounts, linesFromRun } from '$lib/pure/apply-view';
+	import { localTime } from '$lib/pure/time';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import Notice from './notice.svelte';
 
@@ -38,8 +39,8 @@
 	<div class="border-border flex shrink-0 flex-col gap-2 border-b px-6 py-2" data-slot="resume-banner">
 		{#each runs as { run: r, counts } (r.id)}
 			<Notice tone="warning" title="An apply did not finish. ">
-				<span class="font-medium">{r.template.code}</span>, started {r.startedAt.slice(0, 16).replace('T', ' ')}:
-				<span class="tabular-nums">{counts.landed} applied, {counts.landing} applying when it stopped, {counts.failed} failed, {counts.pending} not started.</span>
+				<span class="font-medium">{r.template.code}</span>, started {localTime(r.startedAt)}:
+				<span class="tabular-nums">{countsLine(counts, { landing: 'applying when it stopped' })}.</span>
 				{#snippet action()}
 					<Button size="sm" variant="ghost" onclick={() => void session.close(r.id)} disabled={busy !== null}>Close</Button>
 					<Button size="sm" variant="outline" href={`/result?run=${r.id}`}>Review and undo</Button>

@@ -4,7 +4,9 @@
  * carries before it runs. Pure, no I/O.
  */
 
-import { entityLabel } from './apply-view';
+import { countsLine, entityLabel, failureText, lineCounts, linesFromRun } from './apply-view';
+import { localTime } from './time';
+import { describeChanges } from './drift';
 import { valueLabel } from './plan-view';
 import { entityKey } from './run';
 import { buildRevert, tasksToRevive } from './undo';
@@ -155,9 +157,19 @@ export interface ResultRow {
 	kind: ResultKind;
 	differences: string[];
 	error: string | null;
+	/** The server's text behind `error`, for a fold. */
+	detail: string | null;
+	/** What the read-back found written on Flow PT; what changed there since the plan. Sentences. */
+	written: string[];
+	drift: string[];
 	record: UndoRecord | null;
 	canUndo: boolean;
-	canRetry: boolean;
+	/**
+	 * `resume`: phase 1 landed, a retry goes on from a fresh read-back. `replan`: nothing written, the
+	 * entity is read and planned again on /plan. Null: not from this tab, or something is written
+	 * that only undo takes back.
+	 */
+	retry: 'resume' | 'replan' | null;
 }
 
 /** An apply outcome as the screen needs it (apply.ts `EntityOutcome`). */
@@ -183,9 +195,12 @@ export function resultRows(run: Run, outcomes: OutcomeLike[], names: NameBook, r
 			kind: 'not_applied',
 			differences: [],
 			error: null,
+			detail: null,
+			written: [],
+			drift: [],
 			record,
 			canUndo: (status.state === 'done' || status.state === 'failed') && record !== null,
-			canRetry: false
+			retry: null
 		};
 		if (status.state === 'done') {
 			const diff = outcome?.result.kind === 'ok' ? outcome.result.differences : null;
@@ -193,8 +208,12 @@ export function resultRows(run: Run, outcomes: OutcomeLike[], names: NameBook, r
 			row.differences = (diff ?? []).map((d) => describeDifference(d, names));
 		} else if (status.state === 'failed') {
 			row.kind = 'failed';
-			row.error = status.error.message;
-			row.canRetry = retryable.has(key);
+			const words = failureText(status, entity.type);
+			row.error = words.text;
+			row.detail = words.detail;
+			row.written = describeChanges(status.written ?? [], names.field);
+			row.drift = describeChanges(status.drift ?? [], names.field);
+			if (retryable.has(key)) row.retry = status.stage === 'after_apply' ? 'resume' : record === null ? 'replan' : null;
 		} else if (status.state === 'undone') row.kind = 'undone';
 		else if (status.state === 'applying') row.kind = 'landing';
 		return row;
@@ -240,4 +259,28 @@ export function fileRuns(records: UndoRecord[], stored: Record<string, Run | nul
 			records: recs.filter((r) => !undone.has(entityKey(r.entity)))
 		};
 	});
+}
+
+// --- stored runs ----------------------------------------------------------------------------------
+
+export interface StoredRunItem {
+	id: string;
+	title: string;
+	/** Local time. */
+	started: string;
+	by: string | null;
+	summary: string;
+	unfinished: boolean;
+}
+
+/** The runs this browser stored, for /result when this tab has none (QA item 8). */
+export function storedRunItems(runs: Run[]): StoredRunItem[] {
+	return runs.map((r) => ({
+		id: r.id,
+		title: r.template.code,
+		started: localTime(r.startedAt),
+		by: r.user.name ?? null,
+		summary: countsLine(lineCounts(linesFromRun(r))),
+		unfinished: r.finishedAt === null
+	}));
 }

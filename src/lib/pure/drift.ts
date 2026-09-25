@@ -94,10 +94,14 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 const label = (t: TaskName) => `${t.name} #${t.id}`;
 const templateName = (t: EntityRef | null) => (t ? (t.name ?? `template #${t.id}`) : 'none');
 
-/** The changes as sentences, each kind once. `labels`: field display names by API name (the schema's). */
-export function describeChanges(changes: SnapshotChange[], labels: Record<string, string> = {}): string[] {
+/** The changes as sentences, each kind once. `labels`: display names of fields under policy, by API name (the schema's). */
+export function describeChanges(changes: SnapshotChange[], labels: Record<string, string> | ((f: string) => string) = {}): string[] {
 	const out: string[] = [];
-	const field = (f: string) => labels[f]?.trim() || FIELD_WORD[f] || f;
+	const given = (f: string) => (typeof labels === 'function' ? labels(f) : labels[f])?.trim();
+	const field = (f: string) => {
+		const g = given(f);
+		return g && g !== f ? g : (FIELD_WORD[f] ?? f);
+	};
 	for (const c of changes)
 		if (c.code === 'template')
 			out.push(c.from ? `Template ${templateName(c.from)} changed to ${templateName(c.to)}.` : `Template set to ${templateName(c.to)}.`);

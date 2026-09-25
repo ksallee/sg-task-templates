@@ -35,7 +35,7 @@
 			{/if}
 		</div>
 		{#if actions}
-			<div class="flex shrink-0 flex-wrap items-center gap-2" data-slot="page-actions">{@render actions()}</div>
+			<div class="flex max-w-full min-w-0 flex-wrap items-center gap-2" data-slot="page-actions">{@render actions()}</div>
 		{/if}
 	</div>
 	{#if children}{@render children()}{/if}
