@@ -4,7 +4,8 @@
  *
  *   await session.open()             open the undo store (IndexedDB, else memory: `persistent` false)
  *   session.persistent               false = undo is download-only for this tab
- *   await session.start()            apply `run.plans` (the writable ones), about four in flight
+ *   await session.start()            apply `run.plans` (the writable ones), about four in flight;
+ *   session.starting                 true from the call until the run's first line shows
  *   session.cancel()                 cancel after current: the in-flight entities finish, no more start
  *   session.current, .lines,         the run on screen, one line per entity, this session's outcomes
  *   .outcomes, .phase
@@ -14,7 +15,7 @@
  *   await session.undoFile(file)     undo a run from an uploaded file (another session's)
  *   await session.show(runId)        a stored run on the result screen (recovered first)
  *   session.unfinished               stored runs with no finish, for the resume banner
- *   await session.continueRun(id)    recover, re-plan what never landed, then /plan and /apply again
+ *   await session.continueRun(id)    recover, re-plan what never landed (the plan loading from the call on)
  *   await session.close(id)          mark a stored run finished: no longer offered
  *
  * Logic is in `$lib/pure/apply-view.ts` and `$lib/pure/result-view.ts`; I/O in `$lib/io/`.
@@ -61,6 +62,9 @@ class ApplySession {
 
 	unfinished = $state.raw<Run[]>([]);
 
+	/** Between the confirm and the run's first line: the undo store and the user are read. */
+	starting = $state(false);
+
 	/** The `run.plans` the last start wrote: the apply screen shows that run while the plans stand. */
 	source = $state.raw<EntityPlan[] | null>(null);
 
@@ -99,11 +103,22 @@ class ApplySession {
 		const ctx = run.ctx;
 		const options = run.options;
 		const project = run.project;
-		if (this.phase === 'running' || !template || !ctx || !options || !project) return;
-		const store = await this.open();
+		if (this.phase === 'running' || this.starting || !template || !ctx || !options || !project) return;
+		this.starting = true;
+		this.error = null;
+		let store: UndoStore;
+		let user: Awaited<ReturnType<typeof whoAmI>> | null;
+		try {
+			store = await this.open();
+			user = await whoAmI().catch(() => null);
+		} catch (e) {
+			this.error = errorOf(e).message;
+			return;
+		} finally {
+			this.starting = false;
+		}
 		const plans = writablePlans(run.plans);
 		const client = run.client();
-		const user = await whoAmI().catch(() => null);
 		const resuming = this.resuming?.template.id === template.id ? this.resuming : null;
 		const header = resuming
 			? resumedRun(resuming, plans, options)
@@ -252,20 +267,31 @@ class ApplySession {
 		this.unfinished = runs.filter((r) => r.id !== live);
 	}
 
-	/** Recover, then re-plan what never landed. Resolves true when there is a plan to review. */
-	async continueRun(runId: string): Promise<boolean> {
-		const store = await this.open();
-		await run.start();
-		if (run.problem) return false;
-		const opened = await openStoredRun(store, runId, snapshotReader(run.client(), null));
-		if (!opened) return false;
-		if (!opened.remaining.length) {
-			await store.finishRun(runId, new Date().toISOString());
-			await this.refreshUnfinished();
-			return false;
+	/**
+	 * Recover, then re-plan what never landed. The plan shows as loading from the call on, so /plan
+	 * can open at once. 'closed' when nothing is left to apply; 'failed' leaves the error on the plan.
+	 */
+	async continueRun(runId: string): Promise<'planned' | 'failed' | 'closed'> {
+		run.markPlanning();
+		try {
+			const store = await this.open();
+			await run.start();
+			if (run.problem) throw new Error(run.problem);
+			const opened = await openStoredRun(store, runId, snapshotReader(run.client(), null));
+			if (!opened || !opened.remaining.length) {
+				if (opened) {
+					await store.finishRun(runId, new Date().toISOString());
+					await this.refreshUnfinished();
+				}
+				run.clearPlanning();
+				return 'closed';
+			}
+			this.resuming = opened.run;
+			return (await run.resumeRun(opened.run, opened.remaining)) ? 'planned' : 'failed';
+		} catch (error) {
+			run.planningFailed(error);
+			return 'failed';
 		}
-		this.resuming = opened.run;
-		return run.resumeRun(opened.run, opened.remaining);
 	}
 
 	async close(runId: string): Promise<void> {

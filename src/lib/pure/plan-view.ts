@@ -501,13 +501,27 @@ export const EXTRA_ACTIONS: readonly ExtraAction[] = ['leave', 'omit', 'delete']
 
 type Stage = { state: 'idle' | 'ready' | 'error' } | { state: 'loading'; done?: number; total?: number };
 
-/** What the plan waits on while it builds, for its loading state; null once nothing is pending. */
-export function planningStep(planning: Stage, access: Stage, entityType: string | null): string | null {
-	if (planning.state === 'loading') {
-		if (planning.total === undefined) return 'Reading Tasks';
-		const noun = entityType ? `${entityType}${planning.total === 1 ? '' : 's'}` : planning.total === 1 ? 'entity' : 'entities';
-		return `Reading Tasks: ${planning.done ?? 0} of ${planning.total} ${noun}`;
-	}
-	if (planning.state === 'ready' && access.state === 'loading') return 'Checking write access';
-	return null;
+/** The reads' progress for the plan's loading state; null once the plan can show. */
+export function planningStep(planning: Stage, entityType: string | null): string | null {
+	if (planning.state !== 'loading') return null;
+	if (planning.total === undefined) return 'Reading Tasks';
+	const noun = entityType ? `${entityType}${planning.total === 1 ? '' : 's'}` : planning.total === 1 ? 'entity' : 'entities';
+	return `Reading Tasks: ${planning.done ?? 0} of ${planning.total} ${noun}`;
+}
+
+export interface ApplyGate {
+	blocked: boolean;
+	/** The line by Apply: the access check while it runs, else the first blocker. */
+	reason: string | null;
+	checking: boolean;
+}
+
+/** Apply's state: the plan shows before the access check (094) ends, and Apply waits for it. */
+export function applyGate(blockers: string[], access: Stage): ApplyGate {
+	const checking = access.state === 'loading';
+	return {
+		blocked: checking || blockers.length > 0,
+		reason: checking ? 'Checking write access' : (blockers[0] ?? null),
+		checking
+	};
 }
