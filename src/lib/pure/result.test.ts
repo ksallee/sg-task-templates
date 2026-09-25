@@ -469,7 +469,7 @@ describe('pairResults', () => {
 	});
 
 	it('throws when the rows are not one per request (recipe 002)', () => {
-		expect(() => pairResults(reqs, rows.slice(0, 2))).toThrow();
+		expect(() => pairResults(reqs, rows.slice(0, 2))).toThrow('Flow PT answered 2 results for 3 writes.');
 	});
 });
 

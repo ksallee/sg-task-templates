@@ -52,7 +52,7 @@
 <svelte:head><title>Connect · SG Task Templates</title></svelte:head>
 
 {#await live}
-	<PageState state="loading" title="Connecting to the site…" />
+	<PageState state="loading" title="Connecting to Flow PT…" />
 {:then state}
 	{@const editing = editingSite || state.siteUrl === ''}
 	<PageHeader title="Connect" context="Name the Flow PT site and sign in as yourself. Nothing is written before the Apply screen.">
@@ -147,5 +147,5 @@
 		</div>
 	</div>
 {:catch error}
-	<PageState state="error" title="Could not connect to the site" line={error.message} />
+	<PageState state="error" title="Could not connect to Flow PT" line={error.message} />
 {/await}

@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	// The launcher answers `{"message": ...}`, never the `errors[]` envelope of `/api/v1`.
 	if (!res.ok || !answer?.sessionRequestId || !answer.url) {
 		return json(
-			{ message: answer?.message ?? 'The site did not return a session request.' },
+			{ message: answer?.message ?? 'Flow PT did not return a session request.' },
 			{ status: res.ok ? 502 : res.status }
 		);
 	}

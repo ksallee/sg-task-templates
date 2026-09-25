@@ -22,7 +22,7 @@
 	import EntityList from '$lib/app/plan/entity-list.svelte';
 	import { planToCsv } from '$lib/pure/csv';
 	import { planTotals } from '$lib/pure/entry';
-	import { acceptPicks, accessWarningText, applyBlockers, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
+	import { acceptPicks, accessWarningText, applyBlockers, openConflicts, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
 	import { matchesKey, planSummary, type SummaryKey } from '$lib/pure/plan-summary';
 	import type { EntityTask, Id, RunOptions as Options } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -66,7 +66,7 @@
 	const selectedTasks = $derived(run.snapshots.find((s) => s.entity.id === selected?.entity.id)?.tasks ?? []);
 	const blockers = $derived(options && run.ctx ? applyBlockers(run.plans, options, run.ctx, access) : []);
 	const deletes = $derived(pendingDeletes(run.plans));
-	const conflictsOpen = $derived(blockers.some((b) => b.includes('conflict')));
+	const conflictsOpen = $derived(options ? openConflicts(run.plans, options) > 0 : false);
 	const entityNoun = $derived(totals.entities === 1 ? (run.entityType ?? 'entity') : run.entityType ? `${run.entityType}s` : 'entities');
 	const filtered = $derived(activeLine !== null || text.trim() !== '');
 

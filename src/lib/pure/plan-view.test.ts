@@ -8,6 +8,7 @@ import {
 	acceptPicks,
 	accessWarningText,
 	applyBlockers,
+	openConflicts,
 	clearableCreates,
 	conflictResolved,
 	edgeView,
@@ -228,6 +229,15 @@ describe('clearableCreates', () => {
 		// Layout (dated, no upstream) is created on the conflict entity; Anim has an upstream edge.
 		expect(clearableCreates([plan(conflictSnap)])).toBe(1);
 		expect(clearableCreates([plan(extraSnap)])).toBe(0); // Layout is claimed there
+	});
+});
+
+describe('openConflicts', () => {
+	it('counts unresolved conflicts over every entity, zero once the pre-picks are accepted', () => {
+		expect(openConflicts([plan(conflictSnap), plan(conflictSnap)], opts0())).toBe(2);
+		const o = acceptPicks(opts0(), [plan(conflictSnap)]);
+		expect(openConflicts([plan(conflictSnap, o)], o)).toBe(0);
+		expect(openConflicts([plan(extraSnap)], opts0())).toBe(0);
 	});
 });
 

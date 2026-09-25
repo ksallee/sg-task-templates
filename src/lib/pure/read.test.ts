@@ -159,7 +159,7 @@ describe('templateTaskFromRow', () => {
 			attributes: { content: 'x' },
 			relationships: { task_template: { data: null } }
 		};
-		expect(() => templateTaskFromRow(row)).toThrow();
+		expect(() => templateTaskFromRow(row)).toThrow('Template task 1 has no template.');
 	});
 });
 

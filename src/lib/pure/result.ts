@@ -26,7 +26,7 @@ import type {
 
 /** Pair each `_batch` response row with the request at its position (recipe 002: rows are ordered, not keyed). */
 export function pairResults(reqs: BatchRequest[], rows: BatchResultRow[]): Array<{ req: BatchRequest; id: Id }> {
-	if (rows.length !== reqs.length) throw new Error(`pairResults: ${rows.length} rows for ${reqs.length} requests`);
+	if (rows.length !== reqs.length) throw new Error(`Flow PT answered ${rows.length} results for ${reqs.length} writes.`);
 	return reqs.map((req, i) => {
 		const row = rows[i];
 		const id = 'data' in row ? (row.data as EntityRow).id : row.id;

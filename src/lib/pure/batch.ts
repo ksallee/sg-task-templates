@@ -163,7 +163,7 @@ export function extraRequests(plan: EntityPlan, opts: RunOptions, ctx: ProjectCo
 		if (row.kind !== 'extra') continue;
 		if (row.action === 'omit') {
 			if (!ctx.validTaskStatuses.includes(opts.omitStatus)) {
-				throw new Error(`omit status "${opts.omitStatus}" is not a valid Task status in this project`);
+				throw new Error(`"${opts.omitStatus}" is not a Task status in this project. Pick the status omitted Tasks take.`);
 			}
 			if (row.task.status !== opts.omitStatus) {
 				out.push(update('Task', row.task.id, { sg_status_list: opts.omitStatus }));

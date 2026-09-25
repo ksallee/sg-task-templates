@@ -454,7 +454,7 @@ describe('buildRevert', () => {
 	});
 
 	it('refuses to build the batch before every deleted Task is revived (110: the write would re-create it)', () => {
-		expect(() => buildRevert(record(), after.edges, [])).toThrow(/revive/i);
+		expect(() => buildRevert(record(), after.edges, [])).toThrow('Tasks 14 must be restored before the undo writes the old template.');
 		expect(() => buildRevert(record(withDeletedA), after.edges, [99])).toThrow(/14/);
 		expect(() => buildRevert(record(), after.edges, [14])).not.toThrow();
 	});
@@ -807,17 +807,18 @@ describe('serializeUndo / parseUndoJson', () => {
 	});
 
 	it('rejects an unknown file version', () => {
-		expect(() => parseUndoJson(JSON.stringify({ version: 99, records: [] }))).toThrow(/version/);
+		expect(() => parseUndoJson(JSON.stringify({ version: 99, records: [] }))).toThrow('This undo file is from another version (99).');
 	});
 
 	it('rejects an unknown record version', () => {
 		const text = JSON.stringify({ version: UNDO_FILE_VERSION, records: [{ ...record(), version: 2 }] });
-		expect(() => parseUndoJson(text)).toThrow(/version/);
+		expect(() => parseUndoJson(text)).toThrow('Entity 1 in this undo file is from another version.');
 	});
 
 	it('rejects text that is not an undo file', () => {
-		expect(() => parseUndoJson('not json')).toThrow();
-		expect(() => parseUndoJson('[]')).toThrow();
+		expect(() => parseUndoJson('not json')).toThrow('This file is not an undo file.');
+		expect(() => parseUndoJson('[]')).toThrow('This undo file is from another version (none).');
+		expect(() => parseUndoJson(JSON.stringify({ version: UNDO_FILE_VERSION }))).toThrow('This file is not an undo file.');
 		expect(() => parseUndoJson(JSON.stringify({ version: 1, records: [{ version: 1 }] }))).toThrow();
 	});
 });
