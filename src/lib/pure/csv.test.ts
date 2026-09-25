@@ -401,7 +401,7 @@ describe('planToCsv: conflicts', () => {
 		expect(c.template_task).toBe('paint #47203');
 		expect(c.task).toBe('Paint  #47299, paint #47297');
 		expect(c.usage).toBe('#47299: 1 version; #47297: none');
-		expect(c.reason).toBe('pre-pick: it has Versions or PublishedFiles');
+		expect(c.reason).toBe('pre-pick: it has Versions or Published Files');
 		expect(c.decision).toBe('pick (the pre-pick): Paint  #47299');
 	});
 

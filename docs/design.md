@@ -91,7 +91,7 @@ label; *marker* a small tag beside it; *detail* only in the Task's fold or the D
 | create, has upstream | Its dates follow the upstream Task; not clearable. | no | detail |
 | extra, leave | On the Shot, not in the template: stays as it is. | no, default | label **not in template**; headline |
 | extra, omit | Stays, its status becomes the omit status. | yes (choice) | label **omitted**; headline |
-| extra, delete | Removed; Versions and PublishedFiles lose their Task link (089). Undo revives it. | yes, confirm | label **deleted**, marker *has publishes* (loud); headline, with the count that has publishes |
+| extra, delete | Removed; Versions and Published Files are orphaned (089). Undo revives it. | yes, confirm | label **deleted**, marker *has publishes* (loud); headline, with the count that has publishes |
 | extra, reason not in template | Why it is extra. | no | detail |
 | extra, reason link wins | Same name as a template task another Task is already linked to. | no | detail |
 | extra, reason conflict loser | Lost a conflict; unlinked when it was linked there (106). | no | detail |

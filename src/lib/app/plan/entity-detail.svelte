@@ -140,7 +140,7 @@
 									{/if}
 								</span>
 								<span class="text-muted-foreground text-xs tabular-nums">
-									{c.usage.versions} Versions · {c.usage.publishedFiles} PublishedFiles · created {c.task.createdAt.slice(0, 10)}
+									{c.usage.versions} Versions · {c.usage.publishedFiles} Published Files · created {c.task.createdAt.slice(0, 10)}
 								</span>
 							</span>
 						</button>

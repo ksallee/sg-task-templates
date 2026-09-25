@@ -14,7 +14,7 @@ run.
 
 Flow PT's own apply matches Tasks by a hidden link, never by name. Switch a Shot to an overlapping
 template and every old Task is flagged. Keep them and you get duplicates. Delete them and their
-publishes lose their Task. Studios ask for a merge on the forum
+Versions are orphaned. Studios ask for a merge on the forum
 ([20654](https://community.shotgridsoftware.com/t/20654),
 [3237](https://community.shotgridsoftware.com/t/3237),
 [18613](https://community.shotgridsoftware.com/t/18613)). No merge option has shipped.
