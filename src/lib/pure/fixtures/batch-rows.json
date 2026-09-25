@@ -1,0 +1,19 @@
+[
+	{
+		"data": {
+			"type": "Task",
+			"id": 47296,
+			"attributes": {},
+			"relationships": {}
+		},
+		"links": {},
+		"status": {}
+	},
+	{
+		"request_type": "delete",
+		"type": "Task",
+		"id": 47295,
+		"uuid": "906c4522-a701-11f1-b496-0a58a9feac02",
+		"did_delete": true
+	}
+]
