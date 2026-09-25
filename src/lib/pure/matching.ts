@@ -78,7 +78,7 @@ export function candidatesFor(template: Template, tasks: EntityTask[]): Map<Id, 
 const hasUsage = (u: TaskUsage | undefined) => !!u && (u.versions > 0 || u.publishedFiles > 0);
 
 /**
- * Order candidates best first: has Versions or PublishedFiles; then a status other than the
+ * Order candidates best first: has Versions or Published Files; then a status other than the
  * project default (null counts as default); then oldest `created_at`; then lowest id. `reason`
  * is the first criterion that separated the top two.
  */

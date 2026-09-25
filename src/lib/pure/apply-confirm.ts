@@ -11,7 +11,7 @@ import type { EntityPlan, FieldChange, FieldName, RunOptions } from './types';
 
 export interface ConfirmLine {
 	text: string;
-	/** A delete that unlinks Versions or PublishedFiles (089). */
+	/** A delete that unlinks Versions or Published Files (089). */
 	loud: boolean;
 }
 
@@ -60,7 +60,7 @@ export function applyConfirm(
 				if (r.action === 'delete') {
 					const { versions, publishedFiles } = r.usage;
 					deletes.push({
-						text: `${name} · ${r.task.content} #${r.task.id}: ${plural(versions, 'Version', 'Versions')}, ${plural(publishedFiles, 'PublishedFile', 'PublishedFiles')}`,
+						text: `${name} · ${r.task.content} #${r.task.id}: ${plural(versions, 'Version', 'Versions')}, ${plural(publishedFiles, 'Published File', 'Published Files')}`,
 						loud: versions + publishedFiles > 0
 					});
 				}

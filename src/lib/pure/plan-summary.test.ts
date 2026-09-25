@@ -170,9 +170,9 @@ describe('taskLines: one outcome per Task', () => {
 		const lines = taskLines(p, input([p], o));
 		const paint = byTask(lines, 11);
 		expect(paint.outcome).toBe('deleted');
-		expect(paint.markers).toContainEqual({ key: 'usage', label: '2 Versions, 3 PublishedFiles', tone: 'destructive' });
+		expect(paint.markers).toContainEqual({ key: 'usage', label: '2 Versions, 3 Published Files', tone: 'destructive' });
 		expect(paint.details.map((d) => d.text)).toContain(
-			'Deleted once you confirm. Its 2 Versions and 3 PublishedFiles are orphaned; undo revives it.'
+			'Deleted once you confirm. Its 2 Versions and 3 Published Files are orphaned; undo revives it.'
 		);
 		expect(byTask(lines, 13).outcome).toBe('omitted');
 		expect(byTask(lines, 13).details.map((d) => d.text)).toContain('Status wtg becomes omt.');
@@ -223,7 +223,7 @@ describe('taskLines: conflicts', () => {
 		expect(choice[0].name).toBe('Comp');
 		expect(choice[0].details.map((d) => d.text)).toEqual([
 			'2 Tasks match comp @ Anim: pick the Task to link, or create a new one.',
-			'Pre-pick: comp #2, it has Versions or PublishedFiles.'
+			'Pre-pick: comp #2, it has Versions or Published Files.'
 		]);
 		expect(lines.some((l) => l.taskId === 1 || l.taskId === 2)).toBe(false);
 	});
@@ -304,10 +304,10 @@ describe('planSummary: the run summary', () => {
 	it('names deletes with publishes and the pending confirmation', () => {
 		const o = withExtraAction(opts0(), 11, 'delete');
 		const s = planSummary(input([plan(extraSnap, o)], o));
-		expect(s.lines.find((l) => l.key === 'deleted')!.text).toBe('1 Task deleted, 1 with Versions or PublishedFiles (to confirm)');
+		expect(s.lines.find((l) => l.key === 'deleted')!.text).toBe('1 Task deleted, 1 with Versions or Published Files (to confirm)');
 		const c = withDeleteConfirmed(o, true);
 		expect(planSummary(input([plan(extraSnap, c)], c)).lines.find((l) => l.key === 'deleted')!.text).toBe(
-			'1 Task deleted, 1 with Versions or PublishedFiles'
+			'1 Task deleted, 1 with Versions or Published Files'
 		);
 	});
 

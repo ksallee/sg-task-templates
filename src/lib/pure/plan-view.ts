@@ -177,7 +177,7 @@ export function extrasSummary(names: Array<{ name: string; count: number }>, opt
 /** Why the pre-pick chose its Task (matching.ts `prePick`), in words. */
 export const PICK_REASON: Record<PickReason, string> = {
 	only: 'the only candidate',
-	usage: 'it has Versions or PublishedFiles',
+	usage: 'it has Versions or Published Files',
 	status: 'its status is not the default',
 	oldest: 'the oldest',
 	id: 'the lowest id'

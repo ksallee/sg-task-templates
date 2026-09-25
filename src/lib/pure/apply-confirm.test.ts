@@ -132,7 +132,7 @@ describe('applyConfirm', () => {
 		});
 		const c = applyConfirm([busy, handRenamed], options({ deleteConfirmed: true }), 'Shot', labels);
 		expect(c.sections).toEqual([
-			{ title: 'Deleted', lines: [{ text: 'sh1 · old #12: 1 Version, 0 PublishedFiles', loud: true }] },
+			{ title: 'Deleted', lines: [{ text: 'sh1 · old #12: 1 Version, 0 Published Files', loud: true }] },
 			{ title: 'Omitted', lines: [{ text: '1 Task not in the template gets status omt.', loud: false }] },
 			{ title: "Renamed by hand, gets the template's name", lines: [{ text: 'sh7 · comp v2 to Comp', loud: false }] },
 			{ title: 'Overwritten from the template', lines: [{ text: 'Description on 2 Tasks', loud: false }] }
@@ -163,8 +163,8 @@ describe('applyConfirm', () => {
 	it('a delete with no publishes is listed, not loud', () => {
 		const p = plan(9, { rows: [{ kind: 'extra', task: task(30, 'tmp'), action: 'delete', usage: { versions: 0, publishedFiles: 2 }, reason: 'not_in_template' }, { kind: 'extra', task: task(31, 'tmp2'), action: 'delete', usage: { versions: 0, publishedFiles: 0 }, reason: 'not_in_template' }] });
 		expect(applyConfirm([p], options({ deleteConfirmed: true }), 'Shot', {}).sections[0].lines).toEqual([
-			{ text: 'sh9 · tmp #30: 0 Versions, 2 PublishedFiles', loud: true },
-			{ text: 'sh9 · tmp2 #31: 0 Versions, 0 PublishedFiles', loud: false }
+			{ text: 'sh9 · tmp #30: 0 Versions, 2 Published Files', loud: true },
+			{ text: 'sh9 · tmp2 #31: 0 Versions, 0 Published Files', loud: false }
 		]);
 	});
 });
