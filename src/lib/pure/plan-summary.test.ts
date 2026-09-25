@@ -172,7 +172,7 @@ describe('taskLines: one outcome per Task', () => {
 		expect(paint.outcome).toBe('deleted');
 		expect(paint.markers).toContainEqual({ key: 'usage', label: '2 Versions, 3 PublishedFiles', tone: 'destructive' });
 		expect(paint.details.map((d) => d.text)).toContain(
-			'Deleted once you confirm. Its 2 Versions and 3 PublishedFiles lose their Task link; undo revives it.'
+			'Deleted once you confirm. Its 2 Versions and 3 PublishedFiles are orphaned; undo revives it.'
 		);
 		expect(byTask(lines, 13).outcome).toBe('omitted');
 		expect(byTask(lines, 13).details.map((d) => d.text)).toContain('Status wtg becomes omt.');

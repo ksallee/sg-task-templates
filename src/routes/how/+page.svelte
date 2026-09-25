@@ -227,8 +227,8 @@
 					</div>
 				</dl>
 				<p>
-					A Task with Versions or published files can be deleted, with a warning that shows the counts. They stay, with no
-					Task. Undo revives the Task and links them to it again.
+					A Task with Versions or published files can be deleted, with a warning that shows the counts. They stay,
+					orphaned. Undo revives the Task and links them to it again.
 				</p>
 			</section>
 
