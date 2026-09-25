@@ -5,13 +5,10 @@ Task with the template task's name and step is kept, with its status, assignees 
 what is missing is created; nothing is deleted unless asked, and never silently. Every change is shown
 per entity before it is written. Built on `../sg-widgets`, public on GitHub, a Svelte app like sg-notes.
 
-Status, 2026-09-24: grilling done. Corpus probes are on probe branches under sg-groundtruth
-[#79](https://github.com/ksallee/sg-groundtruth/issues/79), merge
-[PR #80](https://github.com/ksallee/sg-groundtruth/pull/80) open. Client gaps: sg-widgets
-[PR #331](https://github.com/ksallee/sg-widgets/pull/331) open. Repo created
-([#1](https://github.com/ksallee/sg-task-templates/issues/1),
-[PR #2](https://github.com/ksallee/sg-task-templates/pull/2)). Deploy at the end, to
-`sg-task-templates.vercel.app`.
+Status, 2026-09-25: built. Every screen (connect, template, entities, plan, apply, result), undo and
+resume, the plan CSV, the seed tool, Home and How it works, the stamp. Left for release: a pass on the
+result page, Kevin's QA on `dev`, the promote to `main`, the Vercel project, and screenshots of every
+state for How it works ([#56](https://github.com/ksallee/sg-task-templates/issues/56)).
 
 ## Why
 
@@ -33,34 +30,43 @@ Full evidence and the other app ideas: `~/Desktop/SG APPS.md`, raw threads in
 
 ## What the API does (read before deciding anything)
 
-From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then these.
+From sg-groundtruth `main`, tag `corpus/2026-09-24.1`. Read `corpus/INDEX.md` first, then these.
 
 | entry | rule the app rests on |
 |---|---|
 | `findings/entity_types/TaskTemplate.md` | A template's Tasks are Task rows with `task_template` set and `project` null. Deleting a template deletes its Tasks. The template's `entity_type` is not enforced. |
 | `findings/083_task_template_on_create` | Creating an entity with `task_template` makes the Tasks in the same call: step, status, sort order, duration, estimate, description, milestone, assignees, dependencies with type and offset. Dates copy as the same calendar dates. |
-| `findings/084_task_template_reapply` | Writing `task_template` only adds: one Task per template task no Task points at through `template_task`. Never removes, never merges by name. Runs only when the value changes. No mode. Corrected by 096 and 102 below: the apply also re-syncs fields and edges on every Task already linked to the template, not only new Tasks. |
-| `recipes/015_apply_task_template_without_duplicates` | The merge: point each same-name, same-step Task's `template_task` at its template task in one batch, then clear and set `task_template`. The server creates only what is missing, and copies dependencies onto claimed Tasks too. Corrected by 096 and 102 below: the final `task_template` write also re-syncs fields and edges on every linked Task, not only newly claimed ones. |
+| `findings/084_task_template_reapply` | Writing `task_template` creates one Task per template task no Task points at through `template_task`. Never removes, never merges by name. Runs only when the value changes. No mode. It also re-syncs the Tasks already linked: 096 and 102. |
+| `recipes/015_apply_task_template_without_duplicates` | The merge: point each same-name, same-step Task's `template_task` at its template task, then clear and set `task_template`. The server creates only what is missing. |
 | `findings/085_task_dependency_types`, `recipes/016_create_tasks_with_dependencies` | Four dependency types; `offset_days` in working days, may be negative; `task` is the downstream Task, `dependent_task` the upstream one. |
 | `findings/086_batch_tasks_with_dependencies` | One `_batch` cannot link rows it creates. |
-| `findings/087_dependency_cascade` | Unpinned downstream Tasks move with their upstream; pinned ones stay and flag `dependency_violation`. Writing a Task's own dates pins it; corrected by 093: only a `start_date` write does. |
+| `findings/087_dependency_cascade` | Unpinned downstream Tasks move with their upstream; pinned ones stay and flag `dependency_violation`. |
 | `findings/088_project_template_defaults` | The default per entity type is `Project.tracking_settings.default_task_template.<Type>`. Whether API create applies it is unmeasured. |
 | `findings/089_task_delete_side_effects` | Deleting a Task orphans `Version.sg_task` and `PublishedFile.task` and cuts the dependency chain. Revive restores all of it. |
 | `findings/090_template_task_events` | Every apply is in the event log under the writer; filter on `attribute_name` `template_task`. |
 | `recipes/002_batch`, `reports/001` | A batch is atomic and ordered; a create inside a batch skips validation. |
 | `findings/052`, `recipes/012` | Sign in as a person with the App Session Launcher. |
-| `probe/79-092` (probe branch, #79, not yet on dev) | An added dependency edge (direct, or the apply's copy on claim) reschedules unpinned downstream Tasks at once; a pinned one holds and flags `dependency_violation`. The claim alone moves nothing. |
-| `probe/79-093` (probe branch, #79, not yet on dev) | On a dependent Task, a `start_date` write pins it, null or a real date. A `due_date` write never pins; it recomputes `duration`. `pinned: false` recomputes both dates from upstream. |
-| `probe/79-095` (probe branch, #79, not yet on dev) | Remove an edge with `DELETE /entity/task_dependencies/<id>`, never through `upstream_tasks`/`downstream_tasks` (erases it, no revive). Undo revives the same id, type and offset; dates recompute from upstream, not restored. Reviving after the same pair is re-created is a 400. |
-| `probe/79-096` (probe branch, #79, not yet on dev) | Writing `task_template` re-syncs fields and edges on Tasks already linked to it (full list at 102). Corrects 084 and recipe 015. |
-| `probe/79-097` (probe branch, #79, not yet on dev) | A Task with no upstream edge never pins. Cleared dates stay null. |
-| `probe/79-098` (probe branch, #79, not yet on dev) | One `_batch` (claim, `task_template` null, `task_template` T) sees each request's earlier writes and gives the same result as separate calls: one batch per entity, write-backs included. |
-| `recipes/020_apply_task_template_in_one_batch` (sg-groundtruth PR #80) | Recipe 015 as one `_batch` per entity: claims, `task_template` null, `task_template` T, then the write-backs (098). |
-| `probe/79-099` (probe branch, #79, not yet on dev) | Every `task_template` write reconciles all template edges against `template_task` links: kept+claimed, kept+kept and kept+created pairs all get the missing edge. |
-| `probe/79-100` (probe branch, #79, not yet on dev) | Writing `duration` on a dependent Task does not pin it; it recomputes dates from upstream and cascades downstream. |
-| `probe/79-101` (probe branch, #79, not yet on dev) | On apply, a template edge replaces an existing edge of another type or the reverse edge; the old edge is erased, not revivable, so undo must re-create it from the recorded type and offset. Edges to Tasks outside the template are kept. |
-| `probe/79-102` (probe branch, #79, not yet on dev) | Writing `task_template`=T re-syncs every Task linked to T, claimed-this-run included. Fields: the list under Decided 4 below. Edges between T-linked Tasks: missing template edge added, other type or offset replaced by T's, non-template edge deleted. Edges to other Tasks kept. Writing `null` or another template touches no T-linked Task. Corrects 084 and recipe 015. |
-| `probe/79-094` (probe branch, #79, not yet on dev) | Access pre-check that writes nothing. `GET /schema/<Type>/fields?project_id=` gives `editable` per field: `false` is a refusal, `true` only maybe. Then three writes the server refuses before landing: a no-op PUT, a create with a bad `sg_status_list`, a `_batch` [delete, update of a missing id]. Recipe `017_check_permission_before_writing`. Partial: measured via `sudo_as`. |
+| `findings/092_dependency_edge_reschedule` | An added edge (direct, or the apply's copy) reschedules unpinned downstream Tasks at once; a pinned one holds and flags `dependency_violation`. The claim alone moves nothing. |
+| `findings/093_clear_dates_pin` | On a dependent Task, a `start_date` write pins it, null or a real date. A `due_date` write never pins; it recomputes `duration`. `pinned: false` recomputes both dates from upstream. |
+| `findings/094_permission_preflight`, `recipes/017_check_permission_before_writing` | Access check that writes nothing. `GET /schema/<Type>/fields?project_id=` gives `editable` per field: `false` is a refusal, `true` only maybe. Then three writes the server refuses before landing: a no-op PUT, a create with a bad `sg_status_list`, a `_batch` [delete, update of a missing id]. Partial: measured via `sudo_as`. |
+| `findings/095_dependency_remove_undo`, `recipes/018_remove_and_restore_a_dependency` | Remove an edge with `DELETE /entity/task_dependencies/<id>`, never through `upstream_tasks` or `downstream_tasks` (erased, no revive). Revive brings back the same id, type and offset; dates recompute from upstream. Reviving after the same pair is re-created is a 400. |
+| `findings/096_task_template_unmerge`, `recipes/019_undo_task_template_merge` | Writing `task_template` re-syncs Tasks already linked to it. Undo order: old `template_task` on claimed Tasks, old `task_template` on the entity, delete created Tasks, write back fields and edges. |
+| `findings/097_null_dates_unpin` | A Task with no upstream edge never pins. Cleared dates stay null. |
+| `findings/098_template_merge_in_one_batch`, `recipes/020_apply_task_template_in_one_batch` | One `_batch` (claims, `task_template` null, `task_template` T, write-backs) sees each request's earlier writes: one batch per entity. |
+| `findings/099_template_apply_edge_copy_kept` | Every `task_template` write reconciles all template edges against `template_task` links: kept+claimed, kept+kept and kept+created pairs all get the missing edge. |
+| `findings/100_duration_write_pin` | Writing `duration` does not pin; it recomputes dates from upstream and cascades downstream. |
+| `findings/101_template_edge_conflict` | A template edge replaces an edge of another type or the reverse edge. The old one is erased, not revivable: re-create it from the recorded type and offset. |
+| `findings/102_task_template_resync` | Writing `task_template`=T re-syncs every Task linked to T. Fields: the list under Decided 4. Edges between T-linked Tasks: missing template edge added, other type or offset replaced by T's, non-template edge deleted. Writing `null` or another template touches no T-linked Task. |
+| `findings/103_batch_delete_revive`, `recipes/021_undo_a_batch_delete` | A delete inside `_batch` retires a Task or edge as `DELETE` does. Revive restores the same id, fields, edges and `Version.sg_task`. |
+| `findings/104_template_unmerge_in_one_batch`, `recipes/022_undo_task_template_merge_in_one_batch` | Undo works as one `_batch`. It must not delete edges its own `task_template` write removes: a 404 rolls the batch back. |
+| `findings/105_offset_days_null_vs_zero` | `offset_days` null and 0 differ to the server. The apply replaces an edge whose offset differs only that way. |
+| `findings/106_template_task_linked_twice` | Two Tasks on one template task: the server wires only one, and which one is unpredictable. The apply unlinks the losers of a choice first. |
+| `findings/107_dependency_three_task_loop` | Loops of three or more Tasks are refused; a batch that makes one rolls back. |
+| `findings/108_task_template_resync_empties` | On re-sync, a numeric 0 on the template overwrites; an unticked milestone keeps the Task's tick; `""` on a template text field acts empty. `duration` only on a Task with no dates. |
+| `findings/109_template_apply_outside_edge` | On apply, every edge where a T-linked Task depends on a Task not linked to T is erased. Edges where the outside Task is downstream are kept. |
+| `findings/110_template_task_after_revive` | Revive restores `template_task`. Undo revives deleted Tasks before it writes the old template. |
+| `findings/111_template_undo_outside_edge` | Undo's write of the old template erases every edge whose downstream Task it holds and it lacks. Undo re-creates pre-merge edges by pair, not by id. |
+| `findings/112_template_unmerge_linked_twice`, `recipes/023_undo_task_template_merge_with_a_task_linked_twice` | Undo with two Tasks on one old template task: relink the Task that had the edges before the template write, the other after it. The field write-back includes `content`. |
 
 ## Decided
 
@@ -68,129 +74,134 @@ From sg-groundtruth, tag `corpus/2026-09-24`. Read `corpus/INDEX.md` first, then
   Public repo `ksallee/sg-task-templates`, MIT.
 - **Sign-in as a person** through the App Session Launcher, token in the browser, no script key, no
   server holding secrets. Writes land in the event log under the person.
-- **The merge is recipe 015.** The app never re-implements what the server's apply already does
-  (copying fields and dependencies onto new Tasks).
+- **The merge is recipe 015, as one batch per entity (recipe 020).** The app never re-implements what
+  the server's apply already does (copying fields and dependencies onto new Tasks).
 - **Preview before write, always.** Nothing is written from a screen that has not shown the plan.
 - **Live only, no mock**, as sg-notes. A dev-only token route for headless drives.
 - **Widgets are registry copies** from sg-widgets. What the client lacks grows in sg-widgets, issue and
-  PR there, never a private extension here: `delete` and `batch` are missing today.
+  PR there, never a private extension here.
 - **No LLM in the app.** Deterministic. Nothing that looks like configurable automations or an agent
   writing app config (flowpilot overlap, see `~/Desktop/SG APPS.md`).
+- **Design.** sg-widgets' default theme, fixed. Design passes use Anthropic's frontend-design skill.
+  Jeremy is not on this project. `docs/design.md` holds the rules.
 
-## Decided in the grilling session (2026-09-24)
+## Decided in the grilling session (2026-09-24) and after
 
 1. **Scope of a run**
    - One project per run.
    - Every entity type with a `task_template` field, read from the schema, custom entities included.
-   - Two entry points, one planner: pick entities then a template (20654), or pick a template then
-     "every entity using it" (18613).
+     Task is left out: its `task_template` marks template tasks.
+   - One path: pick the template, then the entities. The entities list has one filter: All, Using
+     this template, Other template or No template (#59). It opens on Using this template when an
+     entity uses it, else All. Nothing is pre-selected.
 2. **Matching**
    - Key: `content` trimmed, casefolded, inner whitespace runs collapsed to one space, plus step id.
-     The plan shows the normalized match (Kevin, 2026-09-24).
-   - A Task linked to another template's task with the same key is claimed. The plan shows the old
-     link and the undo record keeps it.
-   - Two Tasks on one entity with the same key: a conflict the user resolves, with a pre-pick: the one
-     with Versions or PublishedFiles, then a status other than the default, then the oldest. Except: if
-     one of the two is already linked to this template's task, the link wins outright, no conflict; the
-     other same-key Task is an extra, left by default (Kevin, 2026-09-24).
-   - The template itself with two tasks of one key: a conflict the user resolves in the plan, not
-     first-by-sort-order (Kevin, 2026-09-24).
-3. **Extras** (Tasks on the entity that the template lacks)
-   - Listed under each entity. One action each: **leave** (default), **omit** (status) or **delete**.
-     Bulk-set by name.
+     The plan shows the normalized match.
+   - A Task linked to another template's task with the same key is linked to this one. The plan
+     shows the old link and the undo record keeps it.
+   - Two Tasks on one entity with the same key: the user picks one, with a pre-pick: the one with
+     Versions or PublishedFiles, then a status other than the default, then the oldest. Accept all
+     pre-picks takes them all in one click. If one of the two is already linked to this template's
+     task, the link wins and there is no choice; the other Task is not in the template, left by
+     default.
+   - The template itself with two tasks of one key: the user picks in the plan.
+   - The apply unlinks the Tasks not picked before the template write (106).
+3. **Tasks not in the template**
+   - Listed under each entity. One action each: **leave** (default), **omit** (a status) or
+     **delete**. Bulk-set by name.
    - Delete asks for a second confirmation. A Task with Versions or PublishedFiles linked can be
      deleted, with a loud warning that shows the counts (089). Undo revives it.
-   - An edge between an extra and a claimed/kept Task: listed for information, never removed; the apply
-     keeps it (Kevin, 2026-09-24; probe 101).
-4. **Kept and claimed Tasks**
-   - What the apply does to linked Tasks (probe 102). Overwritten when the template's value is
+4. **Linked Tasks**
+   - What the apply does to linked Tasks (102, 108). Overwritten when the template's value is
      non-empty: `content`, `step`, `est_in_mins`, `sg_description`, `sg_sort_order`,
-     `task_reviewers`, `milestone`, custom fields (seen: `sg_priority_1`); `duration` only on a Task
-     with no dates. Kept: `sg_status_list`. `start_date`/`due_date` kept when set, filled then
-     cascaded when empty. Filled only if empty: `task_assignees`. An empty template value never
-     clears a field.
-   - Per-field policy, per run, over every overwritten field above, custom fields included: keep
-     (default) / overwrite / fill if empty where that makes sense. Keep = read the field before the
-     apply, write it back after, in the same batch (probe 098). Milestone and other booleans: keep /
-     overwrite only (Kevin, 2026-09-24).
+     `task_reviewers`, `milestone`, custom fields; `duration` only on a Task with no dates. Kept:
+     `sg_status_list`. `start_date` and `due_date` kept when set, filled then cascaded when empty.
+     Filled only if empty: `task_assignees`. An empty template value never clears a field.
+   - Per-field policy, per run, over every overwritten field, custom fields included: keep (default),
+     overwrite, or fill if empty. Keep reads the field before the apply and writes it back after, in
+     the same batch (098). Milestone and other booleans: keep or overwrite only.
    - `content` (the Task's name): default is overwrite, to the template's name; keep on opt-in. The
-     plan flags every rename, loudly when a linked Task was renamed by hand (Kevin, 2026-09-24).
-   - Dependencies: the apply adds every missing template edge between linked Tasks (kept+kept,
-     kept+claimed, kept+created; probe 099). Between linked Tasks it also deletes non-template edges
-     and replaces edges of another type, offset or direction (probe 102). The server does this
-     regardless. The plan lists each deleted or replaced edge with keep (default) / remove. Keep
-     re-creates it after the apply, in the same batch, as a new edge id. That may move dates (probe
-     092); the plan shows it (Kevin, 2026-09-24). These edges are erased, not revivable, so a
-     re-create (kept, or on undo) uses the recorded type and offset (probes 101, 102).
+     plan flags every rename, loudly when a linked Task was renamed by hand.
+   - Dependencies: the apply adds every missing template edge between linked Tasks (099). It deletes
+     non-template edges between linked Tasks, replaces edges of another type, offset or direction
+     (101, 102, 105), and erases edges where a linked Task depends on an outside Task (109). The plan
+     lists each with keep (default) or remove. Keep re-creates it after the apply, in the same batch,
+     as a new edge id, from the recorded type and offset. That may move dates (092); the plan shows
+     it.
    - Template dates on created Tasks: shown in the plan, with an opt-in to clear them, offered only on
-     Tasks with no upstream edge; those stay unpinned with null dates (Kevin, 2026-09-24; probe 097).
-   - Tasks whose dates may move because of new edges are shown. Pinned Tasks are never touched; the
-     plan shows those that would flag `dependency_violation`.
-5. **Default template**: in v1 as a filter. The entities list shows All, Using this template, Other
-   template or No template, opening on Using this template when an entity uses it, else All, nothing
-   pre-selected; the template from `tracking_settings.default_task_template.<Type>` (088) is tagged
-   Project default and pre-selected (Kevin, 2026-09-24, #59). Same apply path; nothing
-   relies on the unmeasured API-create behaviour.
+     Tasks with no upstream edge; those stay unpinned with null dates (097).
+   - Tasks whose dates may move are shown. Pinned Tasks are never touched; the plan shows those that
+     would flag `dependency_violation`.
+5. **Default template**: the template in `tracking_settings.default_task_template.<Type>` (088) is
+   tagged Project default and pre-selected. Same apply path; nothing relies on the unmeasured
+   API-create behaviour.
 6. **Writing**
-   - One batch per entity, write-backs included: a `task_template` write sees claims made earlier in
-     the same batch, so one `_batch` per entity is enough (changed 2026-09-24, probe 098). A failure
-     stops that entity only; the run continues and the result lists failures with a retry.
-   - Small concurrency (about 4 entities in flight), async in the browser, with progress.
-   - Undo in v1. Per run, per entity as it lands: previous `template_task`, previous values of every
-     field under policy, removed or replaced edges, previous status of omitted Tasks, deleted Task ids,
-     created Task ids. Revert runs in 096's order: old `template_task` on claimed Tasks, then old
-     `task_template` on the entity, then delete created Tasks, then write back pre-merge fields and
-     edges; the entity ends back on its old template (Kevin, 2026-09-24). An edge the apply deleted or
-     replaced is re-created from its recorded type and offset (probes 101, 102). An edge removed by
-     `DELETE` is revived (095). A deleted Task is revived (048).
+   - One `_batch` per entity, write-backs included (098). A failure stops that entity only; the run
+     continues and the result lists failures with a retry.
+   - About 4 entities in flight, async in the browser, with progress. Cancel stops after those in
+     flight.
+   - Apply opens a confirm dialog: one line of totals, then only what is risky (deletes with their
+     publish counts, omits, hand-renamed Tasks, fields overwritten). Confirm starts the run.
+   - Undo per run and per entity, after a confirmation that lists what undo cannot put back. The
+     record per entity: previous `template_task`, previous values of every field under policy,
+     `content` included, removed or replaced edges, previous status of omitted Tasks, deleted Task
+     ids, created Task ids. The revert is one `_batch` (recipe 022): revive deleted Tasks first
+     (110), old `template_task` on linked Tasks, the entity's old `task_template`, the second Task
+     on a shared old template task (112, recipe 023), delete created Tasks, then fields and statuses.
+     Edges are revived (095) or re-created by pair from the record (111). Dates are not restored:
+     writing them pins (087, 093).
    - The undo record lives in IndexedDB and downloads as JSON. Undo works from either.
-   - A tab closed mid-run: on reopen the unfinished run is offered. Re-plan the remaining entities from
-     a fresh read, then continue or undo.
+   - A tab closed mid-run: on reopen a banner offers the run. Continue re-plans what never landed
+     from a fresh read. Review and undo opens it on the result screen.
 7. **Who uses it**
    - Anyone, writing as themselves. No level gate: permission rules are not readable (027).
-   - Before the plan, an access pre-check (recipe `017_check_permission_before_writing`, probe 094):
-     `GET /schema/<Type>/fields?project_id=` for `editable`, backed by a no-op PUT, a deliberately bad
-     create and a delete run as one `_batch`, all refusable without writing anything. Warns if it looks
-     short. Failed writes are reported per entity.
+   - An access check (recipe 017, probe 094) that writes nothing. The plan shows at once; the check
+     runs beside it and Apply waits on it. It warns if access looks short. Failed writes are
+     reported per entity.
    - A template whose `entity_type` differs from the entity: warning in the plan, allowed.
-8. **Output**: the plan as CSV, for review before applying; the result as the undo record JSON.
+8. **Output**: the plan as CSV, for review before applying, values as they are (no formula guard);
+   the result as the undo record JSON.
 9. **Views**
-   - Screens: connect, template, entities, plan, apply and result.
-   - Plan: entity list on the left with five counts, filterable; detail pane on the right with that
-     entity's Tasks and actions; bulk actions on top. The counts: **keep**, already linked to this
-     template's task; **claim**, same key, link written; **create**, missing, the apply makes it;
-     **extra**, on the entity, not in the template; **conflict**, two candidates, the user picks.
-   - Default theme only. Light and dark switch in the navbar, following the system preference at
-     first. The docs say any sg-widgets theme can be swapped in.
+   - Home (what it does, as a before and after picture) and How it works (the rules, one section
+     each). Then the flow: connect, template, entities, plan, apply and result, with a step indicator
+     in the header.
+   - Plan: a run summary on top (If you apply; each line filters the entities), run options
+     collapsed to one line, the entity list on the left, the picked entity's Tasks on the right.
+     Each Task shows one outcome: **Already linked** (linked to this template's task before the
+     apply), **Linked** (matched by name and Step, link written), **Created** (missing, the apply
+     makes it), **Not in template** (not changed unless requested), **Needs a choice** (several Tasks
+     match one template task). The code names them keep, claim, create, extra, conflict.
+   - The app's mark is a stamp over its imprint, in the favicon and the header.
+   - Light and dark switch in the navbar, following the system preference at first. The docs say
+     any sg-widgets theme can be swapped in.
 10. **Later, not v1**: combining several templates on one entity; relative offsets and date shift
     (idea E); cross-project runs. No Qt version.
 
 ## Corpus gaps
 
-sg-groundtruth [#79](https://github.com/ksallee/sg-groundtruth/issues/79) (probe branches
-`probe/79-NNN`, merge PR #80 open): answered: 092, 093, 094, 095, 096, 097, 098, 099, 100, 101, 102.
-094 partial: measured via `sudo_as` as an Artist, not a real App Session Launcher session.
+- 094 partial: measured via `sudo_as` as an Artist, not a real App Session Launcher session.
+- Undo with two Tasks on one old template task, both with edges: unmeasured (112).
 
-## Client gaps (sg-widgets)
+## Client
 
-sg-widgets [#330](https://github.com/ksallee/sg-widgets/issues/330): `delete`, `revive` (048) and
-`batch` on `SgClient`. [PR #331](https://github.com/ksallee/sg-widgets/pull/331), open.
+`sg-widgets-core` 0.3.0 from npm: `delete`, `revive` and `batch` on `SgClient`
+([sg-widgets #330](https://github.com/ksallee/sg-widgets/issues/330)).
 
-## Next
+## Next: release
 
-- Repo created: `ksallee/sg-task-templates`, `dev` and `main`
-  ([#1](https://github.com/ksallee/sg-task-templates/issues/1),
-  [PR #2](https://github.com/ksallee/sg-task-templates/pull/2)).
-- Deploy at the end, once the app works: a Vercel project at `sg-task-templates.vercel.app`, deployed
-  from `main`.
+1. A pass on the result page.
+2. Screenshots of every state for How it works (#56).
+3. Kevin QAs `dev` against the seeded sandbox.
+4. Promote `dev` to `main`: a PR, merge commit.
+5. The Vercel project, `sg-task-templates.vercel.app`, deployed from `main`, with only
+   `PUBLIC_FPT_SITE_URL` set (`docs/development.md`).
 
 ## Engineering rules
 
-- Pure functions in their own modules: the planner (template + entity Tasks → plan), matching, the
-  batch builder, the result reader. No I/O in them.
+- Pure functions in their own modules (`src/lib/pure/`): the planner, matching, edges, the batch
+  builder, undo, the result reader, the view logic. No I/O in them.
 - Components only when needed. Pages and views as thin as possible, with as little logic as possible.
 - Unit tests for every pure module, written first, fixtures shaped like the corpus responses.
-  Integration or E2E tests where a flow needs them (apply against the sandbox project).
 - API behaviour comes from the corpus. A gap is a probe in sg-groundtruth first: one issue, a PR to
   `dev`.
 - Process as everywhere: issue, branch from `dev`, PR onto `dev`, squash; `main` by a merge-commit PR
@@ -199,11 +210,9 @@ sg-widgets [#330](https://github.com/ksallee/sg-widgets/issues/330): `delete`, `
 ## Sources
 
 - `../sg-groundtruth`: the corpus. `corpus/INDEX.md` first, then the table above.
-- `../sg-notes`: the host pattern to copy. `BRIEF.md`, `docs/development.md` (deploy),
-  `src/routes/live/` (the launcher routes and the dev token route), `src/lib/live.ts`,
-  `docs/seams.md`.
+- `../sg-notes`: the host pattern. `docs/development.md` (deploy), `src/routes/live/` (the launcher
+  routes and the dev token route), `src/lib/live.ts`.
 - `../sg-widgets`: the client and the widgets. Its `CLAUDE.md`; the registry install one-liner.
-- `../llm-ui-annotation`: the overlay for annotating the running app in dev, if wanted.
 - `~/Desktop/SG APPS.md` and `~/Desktop/SG APPS research/`: the forum evidence.
 
 Clean room: never read `~/dev/fpt-ai`, `~/dev/fpt-api`, `~/dev/flow-data-api-docs`,
