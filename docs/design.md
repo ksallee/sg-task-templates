@@ -32,9 +32,9 @@ are this app's. The app reads as sg-notes' sibling.
   text-muted-foreground` (project · type · template), actions on the right with the primary last.
   One next step lives here, never in a footer; a choice between paths is a row of choice cards
   where the choice is made. `border-b`, `px-6 py-4`.
-- **Grid.** Workbench screens (template, entities, plan, result) are full width: a left rail `w-80`
+- **Grid.** Workbench screens (template, entities, plan) are full width: a left rail `w-80`
   and a detail pane, both scrolling on their own. Forms and summaries (connect, apply) sit in one
-  column `max-w-3xl`, `px-6`.
+  column `max-w-3xl`, `px-6`; the result, one block per entity, in one column `max-w-4xl`.
 - **Type.** Page title `text-lg font-semibold`. Section title `text-sm font-semibold`, its count or
   note beside it `text-xs text-muted-foreground`. Group heading in a list `text-xs font-medium
   text-muted-foreground`. Body `text-sm`. Meta `text-xs text-muted-foreground`. Codes and keys

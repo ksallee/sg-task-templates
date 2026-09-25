@@ -73,7 +73,7 @@ export function diffEntity(
 	plan: EntityPlan,
 	before: EntitySnapshot,
 	after: EntitySnapshot
-): { created: Id[]; addedEdges: Array<Edge & { id: Id }>; differences: ResultDifference[] } {
+): Pick<EntityResultOk, 'created' | 'createdFor' | 'addedEdges' | 'differences'> {
 	const differences: ResultDifference[] = [];
 	const created: Id[] = [];
 	const createdByTemplateTaskId = new Map<Id, Id>();
@@ -168,7 +168,8 @@ export function diffEntity(
 		}
 	}
 
-	return { created, addedEdges, differences };
+	const createdFor = [...createdByTemplateTaskId].map(([templateTaskId, taskId]) => ({ templateTaskId, taskId }));
+	return { created, createdFor, addedEdges, differences };
 }
 
 /** `diffEntity`, wrapped as the `EntityResult` the result screen and the retry read. */

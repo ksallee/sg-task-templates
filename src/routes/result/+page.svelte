@@ -1,9 +1,9 @@
 <!--
-	Result: per entity, landed (clean, or with the differences the read-back found), failed with a
-	retry, undone, or never applied, grouped by outcome in the left rail; the picked entity's
-	details on the right. Undo per run and per entity after a confirmation that lists what undo
-	cannot put back; the undo record as JSON, down and up. `?run=<id>` shows a stored run (the
-	resume banner's "Review and undo"). Logic in `$lib/pure/result-view.ts`.
+	Result: the run's summary, then one block per entity with its Tasks by Pipeline Step, failures
+	and differences inline; entities with nothing to write in one line. Undo per run (top right) and
+	per entity (its block's menu) after a confirmation that lists what undo cannot put back; the
+	undo file down and up. `?run=<id>` shows a stored run (the resume banner's "Review and undo").
+	Logic in `$lib/pure/result-view.ts` and `$lib/pure/result-blocks.ts`.
 -->
 <script lang="ts">
 	import { page } from '$app/state';
@@ -20,10 +20,11 @@
 	import Section from '$lib/app/section.svelte';
 	import UndoDialog from '$lib/app/undo-dialog.svelte';
 	import { entityLabel } from '$lib/pure/apply-view';
-	import { UNDO_STAGE_LABEL, describeNote, groupRows, mergeNotes, nameBook, resultRows, type ResultKind } from '$lib/pure/result-view';
+	import EntityBlock from '$lib/app/result/entity-block.svelte';
+	import { resultBlocks, runTotals, unchangedLine } from '$lib/pure/result-blocks';
+	import { UNDO_STAGE_LABEL, describeNote, mergeNotes, nameBook, resultRows, type ResultKind } from '$lib/pure/result-view';
 	import type { UndoRecord } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { cn } from '$lib/utils.js';
 
 	const runId = page.url.searchParams.get('run');
 	let missing = $state(false);
@@ -34,17 +35,18 @@
 
 	const names = $derived(nameBook(session.plans, run.fieldLabels));
 	const rows = $derived(session.current ? resultRows(session.current, session.outcomes, names, session.retryable) : []);
-	const groups = $derived(groupRows(rows));
+	const blocks = $derived(resultBlocks(rows, session.plans, session.outcomes, session.current?.options.omitStatus ?? ''));
+	const totals = $derived(runTotals(blocks));
+	const unchanged = $derived(session.source ? unchangedLine(session.source, run.entityType) : null);
 	const undoable = $derived(rows.filter((r) => r.canUndo));
 	const failedRetry = $derived(rows.filter((r) => r.kind === 'failed' && r.canRetry).map((r) => r.key));
-	const tally = $derived(Object.fromEntries(groups.map((g) => [g.kind, g.rows.length])) as Partial<Record<ResultKind, number>>);
+	const tally = $derived(
+		rows.reduce<Partial<Record<ResultKind, number>>>((t, r) => ({ ...t, [r.kind]: (t[r.kind] ?? 0) + 1 }), {})
+	);
 	const undoneOk = $derived(session.undone.filter((o) => o.kind === 'ok'));
 	const undoneFailed = $derived(session.undone.filter((o) => o.kind === 'failed'));
 	const undoneNotes = $derived(mergeNotes(undoneOk.map((o) => (o.kind === 'ok' ? o.notes : []))).map((n) => describeNote(n, names)));
 	const leftEdges = $derived(undoneOk.reduce((n, o) => n + (o.kind === 'ok' ? o.left.length : 0), 0));
-
-	let picked = $state<string | null>(null);
-	const selected = $derived(rows.find((r) => r.key === picked) ?? groups[0]?.rows[0] ?? null);
 
 	let dialog = $state<{ title: string; records: UndoRecord[]; keys?: string[] } | null>(null);
 	let dialogOpen = $state(false);
@@ -80,7 +82,7 @@
 <input bind:this={fileInput} type="file" accept="application/json,.json" class="hidden" onchange={upload} data-slot="undo-upload" />
 
 {#snippet fromFile(variant: 'ghost' | 'outline')}
-	<Button {variant} onclick={() => fileInput?.click()} disabled={session.undoing}><Upload data-icon="inline-start" /> Undo from a file…</Button>
+	<Button {variant} onclick={() => fileInput?.click()} disabled={session.undoing}><Upload data-icon="inline-start" /> Undo from file…</Button>
 {/snippet}
 
 {#snippet undoOutcome()}
@@ -126,7 +128,7 @@
 			{#if current}
 				{@render fromFile('ghost')}
 				<Button variant="outline" onclick={() => session.download()} disabled={undoable.length === 0}>
-					<Download data-icon="inline-start" /> Download undo record
+					<Download data-icon="inline-start" /> Download undo file
 				</Button>
 				<Button
 					variant="outline"
@@ -137,22 +139,29 @@
 					<RotateCcw data-icon="inline-start" />
 					{session.undoing ? 'Undoing…' : 'Undo run'}
 				</Button>
-				{#if failedRetry.length}
-					<Button onclick={() => void session.retry(failedRetry)} disabled={session.phase === 'running'}>
-						Retry {failedRetry.length === 1 ? 'the failed entity' : `the ${failedRetry.length} failed`}
-					</Button>
-				{/if}
 			{/if}
 		{/snippet}
 		{#if current}
-			<div class="flex flex-wrap items-center gap-2" data-slot="result-summary">
-				<LineState state="clean" count={tally.clean ?? 0} />
-				<LineState state="differences" count={tally.differences ?? 0} />
-				<LineState state="failed" count={tally.failed ?? 0} />
-				{#if tally.landed}<LineState state="landed" label="Applied earlier" count={tally.landed} />{/if}
-				{#if tally.landing}<LineState state="landing" count={tally.landing} />{/if}
-				{#if tally.undone}<LineState state="undone" count={tally.undone} />{/if}
-				{#if tally.not_applied}<LineState state="not_applied" count={tally.not_applied} />{/if}
+			<div class="flex flex-col gap-2" data-slot="result-summary">
+				<div class="flex flex-wrap items-center gap-2">
+					<LineState state="clean" count={tally.clean ?? 0} />
+					<LineState state="differences" label="Applied with differences" count={tally.differences ?? 0} />
+					<LineState state="failed" count={tally.failed ?? 0} />
+					{#if tally.landed}<LineState state="landed" label="Applied earlier" count={tally.landed} />{/if}
+					{#if tally.landing}<LineState state="landing" count={tally.landing} />{/if}
+					{#if tally.undone}<LineState state="undone" count={tally.undone} />{/if}
+					{#if tally.not_applied}<LineState state="not_applied" count={tally.not_applied} />{/if}
+					{#if failedRetry.length}
+						<Button size="sm" variant="outline" onclick={() => void session.retry(failedRetry)} disabled={session.phase === 'running'}>
+							Retry {failedRetry.length === 1 ? 'the failed one' : `the ${failedRetry.length} failed`}
+						</Button>
+					{/if}
+				</div>
+				{#if totals.length}
+					<p class="text-muted-foreground text-sm" data-slot="result-totals">
+						Tasks: {totals.map((t) => t.text).join(', ')}.
+					</p>
+				{/if}
 			</div>
 		{/if}
 		{#if missing}<Notice tone="destructive">No stored run {runId} in this browser.</Notice>{/if}
@@ -160,7 +169,7 @@
 		{#if session.error}<Notice tone="destructive">{session.error}</Notice>{/if}
 		{#if !session.persistent && current}
 			<Notice tone="warning" title="Undo is download-only in this browser. ">
-				Download the undo record before you close the tab.
+				Download the undo file before you close the tab.
 				{#snippet action()}
 					<Button size="sm" variant="outline" onclick={() => session.download()} disabled={undoable.length === 0}>
 						<Download data-icon="inline-start" /> Download
@@ -170,102 +179,35 @@
 		{/if}
 	</PageHeader>
 
-	{#if !current}
-		<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+	<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+		{#if !current}
 			{#if session.undone.length}
 				<div class="flex w-full max-w-3xl flex-col gap-6 px-6 pt-6">{@render undoOutcome()}</div>
 			{/if}
-			<PageState state="empty" icon={History} title="No run in this tab" line="Apply a plan, or undo a run from its downloaded file.">
+			<PageState state="empty" icon={History} title="No run in this tab" line="Apply a plan, or undo a run from its undo file.">
 				{#snippet action()}
 					{@render fromFile('outline')}
 					<Button href="/plan">Go to the plan</Button>
 				{/snippet}
 			</PageState>
-		</div>
-	{:else}
-		<div class="flex min-h-0 flex-1" data-slot="result">
-			<nav class="border-border flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r px-4 py-4" aria-label="Entities by outcome" data-slot="result-rows">
-				{#each groups as group (group.kind)}
-					<div class="flex flex-col gap-1">
-						<h2 class="text-muted-foreground flex items-center gap-2 px-2 text-xs font-medium">
-							{group.title}<span class="tabular-nums">{group.rows.length}</span>
-						</h2>
-						<ul class="flex flex-col">
-							{#each group.rows as row (row.key)}
-								<li>
-									<button
-										type="button"
-										class={cn(
-											'hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm',
-											selected?.key === row.key && 'bg-accent font-medium'
-										)}
-										aria-current={selected?.key === row.key ? 'true' : undefined}
-										onclick={() => (picked = row.key)}
-										data-kind={row.kind}
-									>
-										<span class="min-w-0 flex-1 truncate" title={row.label}>{row.label}</span>
-										{#if row.differences.length}<span class="text-muted-foreground text-xs tabular-nums">{row.differences.length}</span>{/if}
-									</button>
-								</li>
-							{/each}
-						</ul>
-					</div>
+		{:else}
+			<div class="flex w-full max-w-4xl flex-col gap-4 px-6 py-6" data-slot="result">
+				{#if session.undone.length}{@render undoOutcome()}{/if}
+				{#each blocks as block (block.key)}
+					<EntityBlock
+						{block}
+						entityType={run.entityType}
+						busy={session.undoing || session.phase === 'running'}
+						onretry={() => void session.retry([block.key])}
+						onundo={() => block.record && confirmUndo(`Undo ${block.label}?`, [block.record], [block.key])}
+					/>
 				{/each}
-			</nav>
-			<div class="flex min-w-0 flex-1 flex-col overflow-y-auto">
-				<div class="flex w-full max-w-3xl flex-col gap-6 px-6 py-6">
-					{#if session.undone.length}{@render undoOutcome()}{/if}
-					{#if selected}
-						{@const row = selected}
-						<Section title={row.label} data-slot="result-detail">
-							{#snippet meta()}<LineState state={row.kind} label={row.kind === 'landed' ? 'Applied earlier' : undefined} />{/snippet}
-							{#snippet actions()}
-								{#if row.canRetry}
-									<Button size="sm" variant="outline" onclick={() => void session.retry([row.key])} disabled={session.phase === 'running'}>Retry</Button>
-								{/if}
-								{#if row.canUndo && row.record}
-									{@const record = row.record}
-									<Button
-										size="sm"
-										variant="outline"
-										class={undoTone}
-										disabled={session.undoing}
-										onclick={() => confirmUndo(`Undo ${row.label}?`, [record], [row.key])}
-									>
-										<RotateCcw data-icon="inline-start" /> Undo this entity
-									</Button>
-								{/if}
-							{/snippet}
-							{#if row.error}
-								<Notice tone="destructive" title="Error: ">{row.error}</Notice>
-							{/if}
-							{#if row.differences.length}
-								<div class="bg-card text-card-foreground flex flex-col gap-2 rounded-lg border p-4">
-									<p class="text-sm">
-										Applied. The read-back differs from the plan in {row.differences.length}
-										{row.differences.length === 1 ? 'place' : 'places'}:
-									</p>
-									<ul class="marker:text-muted-foreground flex list-disc flex-col gap-1 pl-5 text-sm">
-										{#each row.differences as text, i (i)}<li>{text}</li>{/each}
-									</ul>
-								</div>
-							{:else if row.kind === 'clean'}
-								<p class="text-muted-foreground text-sm">Matches the plan.</p>
-							{:else if row.kind === 'landed'}
-								<p class="text-muted-foreground text-sm">Applied in an earlier session. No read-back to compare.</p>
-							{:else if row.kind === 'undone'}
-								<p class="text-muted-foreground text-sm">Restored to its state before the apply.</p>
-							{:else if row.kind === 'not_applied'}
-								<p class="text-muted-foreground text-sm">The run stopped before this entity.</p>
-							{:else if row.kind === 'landing'}
-								<p class="text-muted-foreground text-sm">Still applying.</p>
-							{/if}
-						</Section>
-					{/if}
-				</div>
+				{#if unchanged}
+					<p class="text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm" data-slot="result-unchanged">{unchanged}.</p>
+				{/if}
 			</div>
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	{#if dialog}
 		{@const d = dialog}
