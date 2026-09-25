@@ -443,10 +443,17 @@ describe('buildAfterApply', () => {
 	});
 	const withReplaced = (...as: AffectedEdge[]) =>
 		plan({ edges: { ...plan().edges, affected: as, transientAdded: as.map(transient) } });
+	const ENDS = [task(5001, 'paint', 14), task(5002, 'comp', 11), task(5003, 'roto', 13)];
+
+	it('never re-creates a kept edge whose Task is gone from the read-back (113: a retired end is 400 and takes the batch down)', () => {
+		const p = withReplaced(replaced);
+		const after = { tasks: [task(5002, 'comp', 11)], edges: [edge(802, 5002, 5009)] };
+		expect(buildAfterApply(p, OPTS, after)).toEqual([]);
+	});
 
 	it('keeps a replaced edge: deletes the template copy, then re-creates the old one', () => {
 		const p = withReplaced(replaced);
-		const after = { tasks: [], edges: [edge(802, 5002, 5001)] };
+		const after = { tasks: ENDS, edges: [edge(802, 5002, 5001)] };
 		expect(buildAfterApply(p, OPTS, after)).toEqual([
 			{ request_type: 'delete', entity: 'TaskDependency', record_id: 802 },
 			{
@@ -464,13 +471,13 @@ describe('buildAfterApply', () => {
 
 	it('finds the template copy in the reverse direction', () => {
 		const p = withReplaced(replaced);
-		const after = { tasks: [], edges: [edge(803, 5001, 5002)] };
+		const after = { tasks: ENDS, edges: [edge(803, 5001, 5002)] };
 		expect(buildAfterApply(p, OPTS, after)[0]).toEqual({ request_type: 'delete', entity: 'TaskDependency', record_id: 803 });
 	});
 
 	it('leaves a replaced edge the apply did not touch, and a removed one', () => {
 		const p = withReplaced(replaced, { ...replaced, action: 'remove', existing: { ...edge(704, 5003, 5001), id: 704 } });
-		const after = { tasks: [], edges: [edge(702, 5002, 5001, 'start-to-start', 1), edge(804, 5003, 5001)] };
+		const after = { tasks: ENDS, edges: [edge(702, 5002, 5001, 'start-to-start', 1), edge(804, 5003, 5001)] };
 		expect(buildAfterApply(p, OPTS, after)).toEqual([]);
 	});
 });
@@ -483,9 +490,10 @@ describe('buildAfterApply: transient template copies', () => {
 		action: 'keep'
 	};
 	const copy = { templateEdge: edge(900, 3003, 3001), downstream: { existing: 5002 }, upstream: { existing: 5001 }, keptEdge: 702 };
+	const ENDS = [task(5001, 'paint', 14), task(5002, 'comp', 11)];
 
 	it('acts on transientAdded, not on replaced edges without a template copy', () => {
-		const after = { tasks: [], edges: [edge(802, 5002, 5001)] };
+		const after = { tasks: ENDS, edges: [edge(802, 5002, 5001)] };
 		expect(buildAfterApply(plan({ edges: { ...plan().edges, affected: [replaced] } }), OPTS, after)).toEqual([]);
 		const p = plan({ edges: { ...plan().edges, affected: [replaced], transientAdded: [copy] } });
 		expect(buildAfterApply(p, OPTS, after).map((r) => r.request_type)).toEqual(['delete', 'create']);
@@ -494,7 +502,7 @@ describe('buildAfterApply: transient template copies', () => {
 	it('never re-creates an edge marked closesLoop, and leaves the template copy', () => {
 		const loop: AffectedEdge = { ...replaced, closesLoop: true };
 		const p = plan({ edges: { ...plan().edges, affected: [loop], transientAdded: [copy] } });
-		expect(buildAfterApply(p, OPTS, { tasks: [], edges: [edge(802, 5002, 5001)] })).toEqual([]);
+		expect(buildAfterApply(p, OPTS, { tasks: ENDS, edges: [edge(802, 5002, 5001)] })).toEqual([]);
 	});
 });
 

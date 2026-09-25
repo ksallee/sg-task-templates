@@ -4,7 +4,8 @@
  */
 
 import { entityKey } from './run';
-import type { EntityPlan, EntityRef, EntityRunState, Id, Run, RunOptions } from './types';
+import type { EntityPlan, EntityRef, EntityRunState, FailedStage, Id, Run, RunOptions } from './types';
+import type { SnapshotChange } from './drift';
 
 /** An entity's name, else its type and id. */
 export function entityLabel(e: EntityRef): string {
@@ -86,10 +87,46 @@ export function initialLines(plans: EntityPlan[]): EntityLine[] {
 }
 
 /** What the runner reports (apply.ts `ApplyProgress`). */
-export interface RunnerEvent {
+export interface RunnerEvent extends Partial<Failure> {
 	entity: EntityRef;
 	state: EntityRunState['state'];
-	error?: { status: number | null; message: string };
+}
+
+/** A failure as the runner reports it and the store keeps it. */
+export interface Failure {
+	error: { status: number | null; message: string };
+	stage?: FailedStage;
+	written?: SnapshotChange[] | null;
+	drift?: SnapshotChange[];
+}
+
+/**
+ * A failure in plain words, and the server's text as the detail where there is one. `noun`: the
+ * entity type ("Shot"). A run stored before stages were kept shows its message as it is.
+ */
+export function failureText(f: Failure, noun: string): { text: string; detail: string | null } {
+	const raw = f.error.message;
+	const nothing = f.written === undefined || (Array.isArray(f.written) && f.written.length === 0);
+	switch (f.stage) {
+		case undefined:
+		case 'validate':
+			return { text: raw, detail: null };
+		case 'changed':
+			return { text: `The ${noun} changed on Flow PT since the plan. Nothing was written.`, detail: null };
+		case 'read':
+			return { text: `Reading the ${noun} before the write failed. Nothing was written.`, detail: raw };
+		case 'apply':
+			return {
+				text: f.written === null ? `Flow PT refused the write. Reading the ${noun} after it failed.` : `Flow PT refused the write.${nothing ? ' Nothing was written.' : ''}`,
+				detail: raw
+			};
+		case 'read_back':
+			return { text: `Applied, then reading the ${noun} back failed.`, detail: raw };
+		case 'after_apply':
+			return { text: 'Applied, then Flow PT refused the date and dependency fixes.', detail: raw };
+		case 'interrupted':
+			return { text: `The tab closed while this ${noun} was applying.${nothing ? ' Nothing was written.' : ''}`, detail: null };
+	}
 }
 
 const STATE_LINE: Record<EntityRunState['state'], LineState> = {
@@ -102,7 +139,8 @@ const STATE_LINE: Record<EntityRunState['state'], LineState> = {
 
 export function applyEvent(lines: EntityLine[], ev: RunnerEvent): EntityLine[] {
 	const key = entityKey(ev.entity);
-	return lines.map((l) => (l.key === key ? { ...l, state: STATE_LINE[ev.state], error: ev.error?.message ?? null } : l));
+	const error = ev.error ? failureText({ ...ev, error: ev.error }, ev.entity.type).text : null;
+	return lines.map((l) => (l.key === key ? { ...l, state: STATE_LINE[ev.state], error } : l));
 }
 
 /** After a cancel: what never started. */
@@ -118,5 +156,40 @@ export function lineCounts(lines: EntityLine[]): Record<LineState, number> {
 
 /** A stored run's entities as lines. `applying` in the store = landing, maybe landed (resume). */
 export function linesFromRun(run: Run): EntityLine[] {
-	return run.entities.map(({ entity, status }) => line(entity, STATE_LINE[status.state], status.state === 'failed' ? status.error.message : null));
+	return run.entities.map(({ entity, status }) =>
+		line(entity, STATE_LINE[status.state], status.state === 'failed' ? failureText(status, entity.type).text : null)
+	);
+}
+
+// --- the run in words ------------------------------------------------------------------------------
+
+const STATE_WORD: Record<LineState, string> = {
+	landed: 'applied',
+	landing: 'applying',
+	failed: 'failed',
+	undone: 'undone',
+	cancelled: 'cancelled',
+	pending: 'not started'
+};
+
+const WORD_ORDER: LineState[] = ['landed', 'landing', 'failed', 'undone', 'cancelled', 'pending'];
+
+/** "2 applied, 1 failed": the non-zero counts only. `words` renames a state. */
+export function countsLine(counts: Record<LineState, number>, words: Partial<Record<LineState, string>> = {}): string {
+	const parts = WORD_ORDER.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${words[s] ?? STATE_WORD[s]}`);
+	return parts.join(', ') || 'nothing applied';
+}
+
+/** The apply screen's title: a failure or a cancel shows in it. */
+export function applyTitle(phase: 'running' | 'done', counts: Record<LineState, number>): string {
+	if (phase === 'running') return 'Applying';
+	if (counts.failed && !counts.landed) return 'Failed';
+	if (counts.failed) return `Applied, ${counts.failed} failed`;
+	if (counts.cancelled) return `Applied, ${counts.cancelled} cancelled`;
+	return 'Applied';
+}
+
+/** Cancel after current stops the entities not started yet: with none waiting it would do nothing. */
+export function canCancel(counts: Record<LineState, number>): boolean {
+	return counts.pending > 0;
 }

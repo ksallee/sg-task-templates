@@ -129,7 +129,7 @@ describe('apply, result, retry, undo', () => {
 		const outcomes = await applyRun(run, plans, ctx, deps);
 		expect(lines.map((l) => [l.label, l.state, l.error])).toEqual([
 			['sh1', 'landed', null],
-			['sh2', 'failed', 'The field is not editable for this user'],
+			['sh2', 'failed', 'Flow PT refused the write. Nothing was written.'],
 			['sh3', 'landed', null]
 		]);
 
@@ -142,7 +142,7 @@ describe('apply, result, retry, undo', () => {
 		]);
 
 		refuse.clear();
-		const again = await retryFailed(run, [{ plan: plans[1], outcome: outcomes[1] }], ctx, deps);
+		const again = await retryFailed(run, [{ plan: plans[1], stage: outcomes[1].stage }], ctx, deps);
 		expect(again[0].result.kind).toBe('ok');
 		expect(lines[1].state).toBe('landed');
 
