@@ -62,7 +62,7 @@ are this app's. The app reads as sg-notes' sibling.
   (whole page). Errors say what failed and offer the way back. Inside a widget, its own `StateLine`.
 
 Shared pieces: `src/lib/app/` (`app-shell`, `flow-steps`, `page-header`, `section`, `count-chip`,
-`count-chips`, `notice`, `page-state`, `segmented` (a small choice, the pick raised), `wordmark`).
+`notice`, `undo-download-only`, `page-state`, `segmented` (a small choice, the pick raised), `wordmark`).
 
 ## Plan states (2026-09-24, #48)
 
@@ -141,6 +141,13 @@ On /plan the five counts give way to these outcomes: the run summary on top (`pl
 outcome line per entity, Tasks one line each (`plan/outcome-chip`, markers in `plan/tone.ts` tones),
 details folded. Fields show their display names (Task schema with `project_id`), the code name on
 hover and in the CSV beside it.
+
+The plan shows once the reads end; the access check (094) runs on in the background. Meanwhile a
+small line by Apply says "Checking write access" and Apply waits (`applyGate` in `plan-view.ts`).
+Apply opens a confirm dialog (`plan/apply-dialog`, content from `$lib/pure/apply-confirm.ts`): one
+line of totals, then only the risky items (deletes with their publish counts, omits, hand-renamed
+Tasks, fields overwritten from the template), the download-only undo warning when the store is not
+persistent, Confirm and Cancel. Confirm starts the run and opens /apply, which shows the run only.
 
 ## Home and How it works (2026-09-24, #57)
 

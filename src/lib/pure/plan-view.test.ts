@@ -8,6 +8,7 @@ import {
 	acceptPicks,
 	accessWarningText,
 	applyBlockers,
+	applyGate,
 	openConflicts,
 	planningStep,
 	clearableCreates,
@@ -392,13 +393,29 @@ describe('fillLabels', () => {
 });
 
 describe('planningStep', () => {
-	it('says what the plan waits on: the reads with their count, then the access check', () => {
-		expect(planningStep({ state: 'loading', done: 25, total: 52 }, { state: 'idle' }, 'Shot')).toBe('Reading Tasks: 25 of 52 Shots');
-		expect(planningStep({ state: 'loading', done: 0, total: 1 }, { state: 'loading' }, 'Shot')).toBe('Reading Tasks: 0 of 1 Shot');
-		expect(planningStep({ state: 'loading' }, { state: 'idle' }, null)).toBe('Reading Tasks');
-		expect(planningStep({ state: 'ready' }, { state: 'loading' }, 'Shot')).toBe('Checking write access');
-		expect(planningStep({ state: 'ready' }, { state: 'ready' }, 'Shot')).toBeNull();
-		expect(planningStep({ state: 'error' }, { state: 'loading' }, 'Shot')).toBeNull();
-		expect(planningStep({ state: 'idle' }, { state: 'idle' }, 'Shot')).toBeNull();
+	it('shows the reads only: the plan opens without waiting on the access check', () => {
+		expect(planningStep({ state: 'loading', done: 25, total: 52 }, 'Shot')).toBe('Reading Tasks: 25 of 52 Shots');
+		expect(planningStep({ state: 'loading', done: 0, total: 1 }, 'Shot')).toBe('Reading Tasks: 0 of 1 Shot');
+		expect(planningStep({ state: 'loading' }, null)).toBe('Reading Tasks');
+		expect(planningStep({ state: 'ready' }, 'Shot')).toBeNull();
+		expect(planningStep({ state: 'error' }, 'Shot')).toBeNull();
+		expect(planningStep({ state: 'idle' }, 'Shot')).toBeNull();
+	});
+});
+
+describe('applyGate', () => {
+	it('blocks Apply while the access check runs, with that as the reason', () => {
+		expect(applyGate([], { state: 'loading' })).toEqual({ blocked: true, reason: 'Checking write access', checking: true });
+		expect(applyGate(['1 choice to make.'], { state: 'loading' })).toEqual({ blocked: true, reason: 'Checking write access', checking: true });
+	});
+	it('once the check ends, the first blocker is the reason, or nothing blocks', () => {
+		expect(applyGate([], { state: 'ready' })).toEqual({ blocked: false, reason: null, checking: false });
+		expect(applyGate(['Write access looks refused.', 'Nothing to write.'], { state: 'ready' })).toEqual({
+			blocked: true,
+			reason: 'Write access looks refused.',
+			checking: false
+		});
+		expect(applyGate([], { state: 'error' })).toEqual({ blocked: false, reason: null, checking: false });
+		expect(applyGate([], { state: 'idle' })).toEqual({ blocked: false, reason: null, checking: false });
 	});
 });

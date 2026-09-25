@@ -14,11 +14,15 @@
  *   run.ctx, run.snapshots,           after buildPlans(): the project's Task statuses, the frozen reads,
  *   run.plans, run.options,           one EntityPlan per entity (planRun), the options they were built
  *   run.access, run.planning          with, the access summary (094; value null = nothing to check on)
- *   await run.buildPlans()            read snapshots in batches, plan, check access; nothing writes;
- *   run.building                      a second call while one runs gets the same promise; `building` meanwhile
+ *   await run.buildPlans()            read snapshots in batches and plan; the access check runs on in the
+ *   run.building                      background (`access`); nothing writes; a second call while the reads
+ *                                     run gets the same promise; `building` meanwhile
+ *   run.markPlanning()                show the plan as loading before the reads start (resume's recover)
+ *   run.planningFailed(error)         that loading ends in an error; run.clearPlanning() ends it empty
  *   run.setOptions(next)              replan from the held snapshots with new options; no read
  *   run.client()                      the signed-in client, for the apply and the undo
- *   await run.resumeRun(stored, rest) a stored run's picks and options, its remaining entities re-planned
+ *   await run.resumeRun(stored, rest) a stored run's picks and options, its remaining entities re-planned;
+ *                                     the plan shows as loading from the call on
  *
  * Every read here goes through `$lib/io/load.ts` and `$lib/io/access.ts`; the logic is in
  * `$lib/pure/entry.ts` and the planner. Nothing on these screens writes to the site.
@@ -125,6 +129,8 @@ class RunState {
 	});
 
 	#live: LiveState | null = null;
+	/** Bumped by every clear: a build or access check from before it lands nowhere. */
+	#generation = 0;
 	#started: Promise<void> | null = null;
 	#templateCache = new Map<Id, Promise<{ templates: Template[]; labels: Record<string, string> }>>();
 
@@ -236,15 +242,16 @@ class RunState {
 		return typeof count === 'number' ? count : null;
 	}
 
-	/** A plan is being read or its access checked: Plan cannot start another. */
-	building = $derived(this.planning.state === 'loading' || this.access.state === 'loading');
+	/** A plan is being read: Plan cannot start another. */
+	building = $derived(this.planning.state === 'loading');
 
 	/**
 	 * Read the selected entities in batches (`SNAPSHOT_BATCH`, `DEFAULT_CONCURRENCY` in flight) and
 	 * plan them with fresh default options; the access check (094) runs beside the reads
-	 * (io/plan-reads.ts). Resolves true when there are plans to show, once the access check is done
-	 * too; `planning` and `access` hold the progress and any failure. An access check that fails
-	 * leaves the plans standing, with `access` in error. A call while one runs gets that run's promise.
+	 * (io/plan-reads.ts). Resolves true when there are plans to show, without waiting on the access
+	 * check: `access` stays loading until it ends (Apply waits on it, plan-view `applyGate`).
+	 * `planning` and `access` hold the progress and any failure. An access check that fails leaves
+	 * the plans standing, with `access` in error. A call while the reads run gets that run's promise.
 	 */
 	buildPlans = singleFlight(() => this.#buildPlans());
 
@@ -256,6 +263,8 @@ class RunState {
 		const client = this.client();
 		const projectRef: EntityRef = { type: 'Project', id: project.id, name: project.name };
 		this.#clearPlans();
+		const generation = this.#generation;
+		const current = () => generation === this.#generation;
 		this.planning = { state: 'loading', done: 0, total: selected.length };
 		let access: Promise<AccessSummary | null>;
 		try {
@@ -264,7 +273,7 @@ class RunState {
 					context: () => loadProjectContext(client, projectRef),
 					snapshots: (batch) => loadSnapshots(client, batch, template),
 					access: (sample) => {
-						this.access = { state: 'loading' };
+						if (current()) this.access = { state: 'loading' };
 						return checkAccess(client, { ...sample, project: projectRef });
 					}
 				},
@@ -273,9 +282,12 @@ class RunState {
 					selected,
 					batchSize: SNAPSHOT_BATCH,
 					concurrency: DEFAULT_CONCURRENCY,
-					onProgress: (done) => (this.planning = { state: 'loading', done, total: selected.length })
+					onProgress: (done) => {
+						if (current()) this.planning = { state: 'loading', done, total: selected.length };
+					}
 				}
 			);
+			if (!current()) return false;
 			const options = defaultRunOptions(reads.ctx);
 			this.ctx = reads.ctx;
 			this.snapshots = reads.snapshots;
@@ -284,16 +296,36 @@ class RunState {
 			access = reads.access;
 			this.planning = { state: 'ready', value: true };
 		} catch (error) {
+			if (!current()) return false;
 			this.planning = failed(error);
 			this.access = IDLE;
 			return false;
 		}
-		try {
-			this.access = { state: 'ready', value: await access };
-		} catch (error) {
-			this.access = failed(error);
-		}
+		access.then(
+			(value) => {
+				if (current()) this.access = { state: 'ready', value };
+			},
+			(error) => {
+				if (current()) this.access = failed(error);
+			}
+		);
 		return true;
+	}
+
+	/** The plan as loading, reads not started yet: resume recovers what landed first. */
+	markPlanning(): void {
+		this.#clearPlans();
+		this.planning = { state: 'loading' };
+	}
+
+	/** A loading plan that ends before its reads: in an error, or empty (nothing left to plan). */
+	planningFailed(error: unknown): void {
+		this.#clearPlans();
+		this.planning = failed(error);
+	}
+
+	clearPlanning(): void {
+		this.#clearPlans();
 	}
 
 	/**
@@ -308,6 +340,8 @@ class RunState {
 		this.setTemplate(stored.template.id);
 		// A run saved before #59 reopens on the filter its entry point implied; a newer one on the list's own.
 		this.setListFilter(legacyFilter(stored.entryPoint));
+		// The setters cleared the plan: it stays loading while the templates are read.
+		this.planning = { state: 'loading' };
 		await this.#templateCache.get(stored.project.id)?.catch(() => undefined);
 		this.setSelected(remaining);
 		const planned = await this.buildPlans();
@@ -324,6 +358,7 @@ class RunState {
 	}
 
 	#clearPlans(): void {
+		this.#generation++;
 		this.ctx = null;
 		this.snapshots = [];
 		this.plans = [];

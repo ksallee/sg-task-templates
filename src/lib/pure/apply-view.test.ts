@@ -9,11 +9,7 @@ import {
 	linesFromRun,
 	newRun,
 	resumedRun,
-	startBlockers,
-	summaryGroups,
-	undoNote,
-	writablePlans,
-	writeSummary
+	writablePlans
 } from './apply-view';
 import type { EntityPlan, EntityTask, RunOptions, TemplateTask } from './types';
 
@@ -113,114 +109,6 @@ const busy = plan(1, {
 		wouldViolate: [12]
 	},
 	counts: { keep: 0, claim: 1, create: 2, extra: 3, conflict: 0 }
-});
-
-describe('writeSummary', () => {
-	it('counts what the run writes, over the entities that have something to write', () => {
-		const s = writeSummary([busy, plan(2, { noop: true })], options({ clearCreatedDates: true, deleteConfirmed: true }));
-		expect(s).toEqual({
-			entities: 2,
-			toWrite: 1,
-			nothingToWrite: 1,
-			totals: { keep: 0, claim: 1, create: 2, extra: 3, conflict: 0 },
-			templateWrites: 1,
-			claims: 1,
-			creates: 2,
-			overwrites: 1,
-			writeBacks: 1,
-			fillIfEmpty: 0,
-			renames: 1,
-			omits: 1,
-			deletes: 1,
-			deletesWithUsage: 1,
-			leaves: 1,
-			edgesAdded: 1,
-			edgesRecreated: 1,
-			edgesRemoved: 1,
-			datesCleared: 1,
-			mayMove: 2,
-			wouldViolate: 1
-		});
-	});
-
-	it('does not count deletes that are not confirmed, nor clears that are off', () => {
-		const s = writeSummary([busy], options());
-		expect(s.deletes).toBe(0);
-		expect(s.deletesWithUsage).toBe(0);
-		expect(s.datesCleared).toBe(0);
-	});
-});
-
-describe('summaryGroups', () => {
-	it('says what will be written in plain words, grouped, non-zero items only', () => {
-		expect(summaryGroups(writeSummary([busy, plan(2, { noop: true })], options({ deleteConfirmed: true })))).toEqual([
-			{
-				title: 'Entities',
-				lines: ['The template is set on 1 entity.', '1 entity already matches the template: skipped.']
-			},
-			{
-				title: 'Tasks',
-				lines: [
-					'1 existing Task matched by name and Step, linked to the template; its status, assignees and publishes unchanged.',
-					'2 Tasks created from the template.',
-					"1 Task renamed to the template's name.",
-					'1 Task not in the template set to the omit status.',
-					'1 Task not in the template deleted, 1 with Versions or PublishedFiles.',
-					'1 Task not in the template, not changed.'
-				]
-			},
-			{
-				title: 'Fields',
-				lines: ["1 field overwritten with the template's value.", '1 field the template would overwrite, written back unchanged.']
-			},
-			{
-				title: 'Dependencies and dates',
-				lines: [
-					'1 dependency added from the template.',
-					'1 dependency removed by the apply, re-created (new ids).',
-					'1 dependency removed.',
-					'2 unpinned Tasks may be rescheduled by the new dependencies.',
-					'1 pinned Task will be flagged as violating a dependency.'
-				]
-			}
-		]);
-	});
-	it('leaves out a group with nothing in it', () => {
-		const groups = summaryGroups(writeSummary([plan(4, { noop: true })], options()));
-		expect(groups).toEqual([{ title: 'Entities', lines: ['1 entity already matches the template: skipped.'] }]);
-	});
-});
-
-describe('startBlockers', () => {
-	it('is empty for a plan that can run', () => {
-		expect(startBlockers([busy], options({ deleteConfirmed: true }))).toEqual([]);
-	});
-	it('names unresolved conflicts, unconfirmed deletes, a missing omit status, and an empty run', () => {
-		const conflicted = plan(3, { warnings: [{ code: 'unresolved_conflict', templateTaskIds: [500] }] });
-		expect(startBlockers([busy, conflicted], options({ omitStatus: '' }))).toEqual([
-			'1 entity has a Task that needs a choice. Pick it on the plan.',
-			'1 Task is set to delete, not confirmed. Confirm on the plan, or set to leave.',
-			'1 Task is set to omit with no omit status. Pick one on the plan.'
-		]);
-		expect(startBlockers([plan(4, { noop: true })], options())).toEqual(['Nothing to write: every entity already matches the template.']);
-	});
-});
-
-describe('undoNote', () => {
-	it('says where the undo record lives', () => {
-		expect(undoNote(true)).toEqual({
-			persistent: true,
-			lines: [
-				'Each entity is applied whole or not at all.',
-				'The undo record is stored in this browser as each entity is applied. Download it to undo from another browser.'
-			]
-		});
-		const off = undoNote(false);
-		expect(off.persistent).toBe(false);
-		expect(off.lines[1]).toBe(
-			'This browser cannot store the undo record. Download it before you close the tab, or undo is lost.'
-		);
-	});
 });
 
 describe('lines', () => {

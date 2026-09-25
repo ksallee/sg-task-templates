@@ -2,13 +2,19 @@
 	The plan, always shown before a write (brief 9): the header with Apply and what blocks it, the run
 	summary (what Apply does; each line filters the entities), the run options (collapsed to one
 	line), the entity list with one outcome line each on the left, the selected entity's Tasks on the
-	right (plan-summary.ts). While `run.buildPlans` runs, its progress (plan-view `planningStep`). Every choice re-plans
+	right (plan-summary.ts). While `run.buildPlans` reads, their progress (plan-view `planningStep`);
+	the plan shows once they end and Apply waits on the access check (plan-view `applyGate`). Every choice re-plans
 	through `run.setOptions`; the logic is in `$lib/pure/plan-view.ts`. Nothing here writes. Apply
-	opens /apply once nothing blocks it.
+	opens its confirm dialog once nothing blocks it (apply-confirm.ts); Confirm starts the run and
+	opens /apply.
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { run } from '$lib/app/run.svelte';
+	import { session } from '$lib/app/apply.svelte';
+	import ApplyDialog from '$lib/app/plan/apply-dialog.svelte';
+	import { applyConfirm } from '$lib/pure/apply-confirm';
 	import RunOptions from '$lib/app/plan/run-options.svelte';
 	import RunSummary from '$lib/app/plan/run-summary.svelte';
 	import Notice from '$lib/app/notice.svelte';
@@ -16,13 +22,14 @@
 	import PageState from '$lib/app/page-state.svelte';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Download from '@lucide/svelte/icons/download';
+	import LoaderCircle from '@lucide/svelte/icons/loader-circle';
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
 	import EntityDetail from '$lib/app/plan/entity-detail.svelte';
 	import EntityList from '$lib/app/plan/entity-list.svelte';
 	import { planToCsv } from '$lib/pure/csv';
 	import { planTotals } from '$lib/pure/entry';
-	import { acceptPicks, accessWarningText, applyBlockers, openConflicts, planningStep, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
+	import { acceptPicks, accessWarningText, applyBlockers, applyGate, openConflicts, planningStep, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
 	import { matchesKey, planSummary, type SummaryKey } from '$lib/pure/plan-summary';
 	import type { EntityTask, Id, RunOptions as Options } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -34,9 +41,12 @@
 	let selectedId = $state<Id | null>(null);
 	let confirming = $state(false);
 	let optionsOpen = $state(false);
+	let applying = $state(false);
+
+	onMount(() => void session.open());
 
 	const options = $derived(run.options);
-	const step = $derived(planningStep(run.planning, run.access, run.entityType));
+	const step = $derived(planningStep(run.planning, run.entityType));
 	const totals = $derived(planTotals(run.plans));
 	const access = $derived(run.access.state === 'ready' ? run.access.value : null);
 	const accessText = $derived(access ? accessWarningText(access) : null);
@@ -66,10 +76,19 @@
 	const selected = $derived(run.plans.find((p) => p.entity.id === selectedId) ?? visible[0] ?? null);
 	const selectedTasks = $derived(run.snapshots.find((s) => s.entity.id === selected?.entity.id)?.tasks ?? []);
 	const blockers = $derived(options && run.ctx ? applyBlockers(run.plans, options, run.ctx, access) : []);
+	const gate = $derived(applyGate(blockers, run.access));
 	const deletes = $derived(pendingDeletes(run.plans));
 	const conflictsOpen = $derived(options ? openConflicts(run.plans, options) > 0 : false);
 	const entityNoun = $derived(totals.entities === 1 ? (run.entityType ?? 'entity') : run.entityType ? `${run.entityType}s` : 'entities');
 	const filtered = $derived(activeLine !== null || text.trim() !== '');
+
+	const confirmContent = $derived(options ? applyConfirm(run.plans, options, run.entityType, run.fieldLabels) : null);
+
+	function confirmApply(): void {
+		applying = false;
+		void session.start();
+		void goto('/apply');
+	}
 
 	function setOptions(next: Options): void {
 		run.setOptions(next);
@@ -113,11 +132,14 @@
 				{#if totals.noop > 0}<span>· {totals.noop} with nothing to write</span>{/if}
 			{/snippet}
 			{#snippet actions()}
-				{#if blockers.length > 0}
-					<span class="text-muted-foreground max-w-64 truncate text-sm" title={blockers.join(' ')} data-slot="apply-reason">{blockers[0]}</span>
+				{#if gate.reason}
+					<span class="text-muted-foreground flex max-w-64 items-center gap-1.5 text-sm" title={blockers.join(' ') || undefined} data-slot="apply-reason">
+						{#if gate.checking}<LoaderCircle class="size-3.5 shrink-0 animate-spin" aria-hidden="true" />{/if}
+						<span class="truncate">{gate.reason}</span>
+					</span>
 				{/if}
 				<Button variant="outline" onclick={download}><Download data-icon="inline-start" />Download CSV</Button>
-				<Button disabled={blockers.length > 0} onclick={() => void goto('/apply')} title={blockers.join(' ') || undefined}>
+				<Button disabled={gate.blocked} onclick={() => (applying = true)} title={gate.reason ?? undefined}>
 					Apply<ArrowRight data-icon="inline-end" />
 				</Button>
 			{/snippet}
@@ -155,8 +177,7 @@
 		>
 			{#snippet footer()}
 				<p class="text-muted-foreground text-xs" data-slot="plan-warnings">
-					{#if run.access.state === 'loading'}Checking write access…
-					{:else if access && !access.looksShort}<span data-slot="access-ok">Write access: no refusal seen.</span>
+					{#if access && !access.looksShort}<span data-slot="access-ok">Write access: no refusal seen.</span>
 					{/if}
 				</p>
 			{/snippet}
@@ -210,6 +231,10 @@
 			</main>
 		</div>
 	</div>
+
+	{#if confirmContent}
+		<ApplyDialog bind:open={applying} content={confirmContent} persistent={session.persistent} onConfirm={confirmApply} />
+	{/if}
 
 	<Dialog.Root bind:open={confirming}>
 		<Dialog.Content class="sm:max-w-xl">
