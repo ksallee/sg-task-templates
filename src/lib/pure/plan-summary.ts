@@ -341,7 +341,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			if (outcome === 'omitted') details.push({ text: `Status ${row.task.status ?? '(none)'} becomes ${opts.omitStatus || 'the omit status (pick one)'}.` });
 			if (outcome === 'deleted')
 				details.push({
-					text: `Deleted${opts.deleteConfirmed ? '' : ' once you confirm'}. Its ${row.usage.versions} Versions and ${row.usage.publishedFiles} PublishedFiles lose their Task link; undo revives it.`,
+					text: `Deleted${opts.deleteConfirmed ? '' : ' once you confirm'}. Its ${row.usage.versions} Versions and ${row.usage.publishedFiles} PublishedFiles are orphaned; undo revives it.`,
 					...(used ? { tone: 'destructive' as const } : {})
 				});
 			const markers: Marker[] = [];

@@ -1,19 +1,19 @@
 <!--
 	Home's one picture: a Shot's Tasks after two applies of the same template. Left, Flow PT's own
 	apply (forum topic 20654): the old Tasks are flagged; kept, they are duplicated; deleted, their
-	publishes have no Task. Right, this app: matched by name and step,
+	Versions are orphaned. Right, this app: matched by name and step,
 	linked, only the missing Task created. Static, drawn with theme tokens only; the words match the
 	plan's outcome labels (linked, created).
 -->
 <script lang="ts">
-	import Layers from '@lucide/svelte/icons/layers';
+	import Video from '@lucide/svelte/icons/video';
 	import { cn } from '$lib/utils.js';
 
-	type Row = { name: string; tag: string; tone: 'dup' | 'gone' | 'new' | 'linked' | 'created'; publishes?: string };
+	type Row = { name: string; tag: string; tone: 'dup' | 'gone' | 'new' | 'linked' | 'created'; versions?: string };
 
 	/**
 	 * One line per template task, both sides: Flow PT's Tasks for it (an old one kept beside the new
-	 * one, or deleted with its publishes orphaned), and this app's single Task.
+	 * one, or deleted with its Versions orphaned), and this app's single Task.
 	 */
 	const lines: Array<{ theirs: Row[]; ours: Row }> = [
 		{
@@ -32,10 +32,10 @@
 		},
 		{
 			theirs: [
-				{ name: 'Comp', tag: 'deleted', tone: 'gone', publishes: '3 publishes, no Task' },
+				{ name: 'Comp', tag: 'deleted', tone: 'gone', versions: '3 Versions, orphaned' },
 				{ name: 'Comp', tag: 'new', tone: 'new' }
 			],
-			ours: { name: 'Comp', tag: 'linked', tone: 'linked', publishes: '3 publishes' }
+			ours: { name: 'Comp', tag: 'linked', tone: 'linked', versions: '3 Versions' }
 		},
 		{ theirs: [{ name: 'Light', tag: 'new', tone: 'new' }], ours: { name: 'Light', tag: 'created', tone: 'created' } }
 	];
@@ -53,10 +53,10 @@
 	<div class="flex min-h-8 items-center gap-2.5 px-3 py-1.5 text-sm">
 		<span class={cn('size-2 shrink-0 rounded-full', DOT[r.tone])} aria-hidden="true"></span>
 		<span class={cn('font-medium', r.tone === 'gone' && 'text-muted-foreground line-through decoration-destructive/70')}>{r.name}</span>
-		{#if r.publishes}
+		{#if r.versions}
 			<span
 				class={cn('flex items-center gap-1 text-xs', r.tone === 'gone' ? 'text-destructive' : 'text-muted-foreground')}
-				><Layers class="size-3.5" aria-hidden="true" />{r.publishes}</span
+				><Video class="size-3.5" aria-hidden="true" />{r.versions}</span
 			>
 		{/if}
 		<span
@@ -70,7 +70,7 @@
 
 <figure class="flex w-full flex-col gap-4" data-slot="merge-picture">
 	<figcaption class="text-muted-foreground text-center text-sm text-balance">
-		Shot <span class="text-foreground font-medium">sh010</span> has Layout, Anim and Comp. Comp has 3 publishes. The
+		Shot <span class="text-foreground font-medium">sh010</span> has Layout, Anim and Comp. Comp has 3 Versions. The
 		Task Template adds Light.
 	</figcaption>
 

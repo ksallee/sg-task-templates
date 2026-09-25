@@ -7,7 +7,7 @@ run.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/merge-dark.png">
-  <img alt="A Shot with Layout, Anim and Comp gets a template that adds Light. Flow PT's apply duplicates Layout and Anim and deletes Comp with its publishes. This app links the three and creates Light." src="docs/img/merge-light.png">
+  <img alt="A Shot with Layout, Anim and Comp gets a template that adds Light. Flow PT's apply duplicates Layout and Anim and deletes Comp, orphaning its 3 Versions. This app links the three and creates Light." src="docs/img/merge-light.png">
 </picture>
 
 ## The ask
