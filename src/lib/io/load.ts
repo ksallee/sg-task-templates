@@ -19,6 +19,7 @@ import {
 	snapshotsFromRows,
 	taskFieldsFor,
 	taskStatusContext,
+	taskHostTypes,
 	templatableTypes,
 	templateOfFromRows,
 	templatesFromRows
@@ -29,7 +30,7 @@ import { runPool } from './pool';
 /** 082: `page[size]` takes 1 to 5000. */
 export const PAGE_SIZE = 5000;
 
-/** How many schema reads run at once when looking for `task_template` across the site's types. */
+/** How many schema reads run at once when looking for `task_template` on the types a Task links to. */
 const SCHEMA_CONCURRENCY = 8;
 
 const ENTITY_FIELDS = ['code', 'task_template'];
@@ -65,11 +66,12 @@ export async function taskTemplateField(client: SgClient, entityType: string, pr
 }
 
 /**
- * The entity types a template applies to, Task excluded (read.ts). One `GET /schema` for the list, then
- * one field read per type (1.2KB), never the whole `/fields` per type (002).
+ * The entity types a template applies to: the types a Task links to (`Task.entity`, read.ts), each
+ * holding a `task_template` field, Task excluded. One field read for `Task.entity`, then one per host
+ * type (1.2KB each), never `/fields` and never a walk over every site type (002).
  */
 export async function loadTemplatableTypes(client: SgClient, projectId: Id): Promise<string[]> {
-	const names = (await client.entityTypes()).map((t) => t.name);
+	const names = taskHostTypes(await client.fieldWithProject('Task', 'entity', projectId));
 	const found = await runPool(names, SCHEMA_CONCURRENCY, (name) => taskTemplateField(client, name, projectId));
 	const fieldsByType: Record<string, Record<string, FieldSchema>> = {};
 	names.forEach((name, i) => {

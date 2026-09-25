@@ -12,7 +12,7 @@ const COMMON: ColumnSpec[] = [
 	{ path: 'image', width: 100, sortable: false, editable: false },
 	{ path: 'code', width: 220, editable: false },
 	{ path: 'description', width: 280, editable: false },
-	{ path: 'sg_status_list', width: 120, editable: false },
+	{ path: 'sg_status_list', width: 170, editable: false },
 	{ path: 'task_template', width: 200, editable: false }
 ];
 

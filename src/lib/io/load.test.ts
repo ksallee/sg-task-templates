@@ -48,25 +48,27 @@ describe('searchAll', () => {
 });
 
 describe('loadTemplatableTypes', () => {
-	it('keeps the types with a task_template field, Task excluded', async () => {
-		const { client } = fakeClient({
-			entityTypes: async () => ['Shot', 'Task', 'Note', 'CustomEntity07'].map((name) => ({ name, displayName: name })),
-			fieldWithProject: async (type) => {
-				if (type === 'Note') throw new SgApiError(404, null, 'not found');
+	const hosts = (validTypes: string[]): FieldSchema => ({ ...field('entity', 'Task'), validTypes });
+
+	it('reads Task.entity once, then task_template only on the types a Task links to', async () => {
+		const { client, calls } = fakeClient({
+			entityTypes: async () => {
+				throw new Error('no /schema walk');
+			},
+			fieldWithProject: async (type, name) => {
+				if (type === 'Task' && name === 'entity') return hosts(['Shot', 'Task', 'MocapTake', 'CustomEntity07']);
+				if (type === 'MocapTake') throw new SgApiError(404, null, 'not found');
 				return field('task_template', type);
 			}
 		});
 		expect(await loadTemplatableTypes(client, 1180)).toEqual(['Shot', 'CustomEntity07']);
-	});
-
-	it('finds the mock site’s types that carry task_template', async () => {
-		expect((await loadTemplatableTypes(new MockClient(), 1)).sort()).toEqual(['Asset', 'Sequence', 'Shot']);
+		expect(calls.map((c) => `${c.args[0]}.${c.args[1]}`)).toEqual(['Task.entity', 'Shot.task_template', 'MocapTake.task_template', 'CustomEntity07.task_template']);
 	});
 
 	it('rethrows any other failure', async () => {
 		const { client } = fakeClient({
-			entityTypes: async () => [{ name: 'Shot', displayName: 'Shot' }],
-			fieldWithProject: async () => {
+			fieldWithProject: async (type) => {
+				if (type === 'Task') return hosts(['Shot']);
 				throw new SgApiError(500, null, 'boom');
 			}
 		});

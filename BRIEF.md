@@ -89,8 +89,8 @@ From sg-groundtruth `main`, tag `corpus/2026-09-24.1`. Read `corpus/INDEX.md` fi
 
 1. **Scope of a run**
    - One project per run.
-   - Every entity type with a `task_template` field, read from the schema, custom entities included.
-     Task is left out: its `task_template` marks template tasks.
+   - Every entity type a Task links to (`Task.entity`'s valid types) that has a `task_template`
+     field, custom entities included. Task is left out: its `task_template` marks template tasks.
    - One path: pick the template, then the entities. The entities list has one filter: All, Using
      this template, Other template or No template (#59). It opens on Using this template when an
      entity uses it, else All. Nothing is pre-selected.

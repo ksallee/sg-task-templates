@@ -1,5 +1,5 @@
 <!--
-	Template: the project, the entity type (only those with a task_template field), and the template,
+	Template: the project, the entity type (only those a Task links to, with a task_template field), and the template,
 	previewed as its tasks by step with what each waits on. Next leads to Entities. Thin: the reads and the picks live in `$lib/app/run.svelte.ts`, the sorting in
 	`$lib/pure/entry.ts`, the preview in `$lib/pure/outline.ts`.
 -->
@@ -33,7 +33,7 @@
 	const outline = $derived(run.template ? templateOutline(run.template) : null);
 	const context = $derived([run.project?.name ?? null, run.entityType, run.template?.code ?? null].filter(Boolean).join(' · '));
 
-	const GRID = 'grid grid-cols-[7rem_2.5rem_minmax(9rem,1fr)_minmax(12rem,2fr)_4.5rem_4.5rem] gap-x-3';
+	const GRID = 'grid grid-cols-[7rem_2.5rem_minmax(9rem,1fr)_minmax(12rem,2fr)_6rem_4.5rem] gap-x-3';
 </script>
 
 <svelte:head><title>Template · SG Task Templates</title></svelte:head>
@@ -77,7 +77,7 @@
 		<p class="text-muted-foreground text-sm">Pick a project first.</p>
 	{:else if run.types.state === 'ready'}
 		{#if run.types.value.length === 0}
-			<p class="text-muted-foreground text-sm">No entity type in this project has a Task Template field.</p>
+			<p class="text-muted-foreground text-sm">No entity type in this project takes a Task Template.</p>
 		{:else}
 			<EntityTypePicker
 				context={liveContext()}
@@ -92,7 +92,7 @@
 	{:else}
 		<div class="flex flex-col gap-1.5" data-slot="types-loading">
 			<Skeleton class="h-8 w-full" />
-			<span class="text-muted-foreground text-xs">Reading which types have a Task Template field…</span>
+			<span class="text-muted-foreground text-xs">Reading which types take a Task Template…</span>
 		</div>
 	{/if}
 {/snippet}
@@ -113,8 +113,8 @@
 			{/snippet}
 		</PageHeader>
 
-		<div class="flex min-h-0 flex-1">
-			<aside class="border-border flex w-80 shrink-0 flex-col border-r" aria-label="Choose the template" data-slot="template-picks">
+		<div class="flex min-h-0 flex-1 flex-col md:flex-row">
+			<aside class="border-border flex max-h-[50vh] shrink-0 flex-col border-b md:max-h-none md:w-80 md:border-r md:border-b-0" aria-label="Choose the template" data-slot="template-picks">
 				<div class="flex flex-col gap-4 p-4">
 					{@render field('Project', projectBody)}
 					{@render field('Entity type', typeBody)}
@@ -154,7 +154,7 @@
 			<section class="flex min-w-0 flex-1 flex-col overflow-y-auto" aria-label="Template detail">
 				{#if run.template && outline}
 					{@const t = run.template}
-					<div class="flex flex-col gap-6 px-6 py-5">
+					<div class="flex flex-col gap-6 px-4 py-5 md:px-6">
 						<div class="flex flex-col gap-2">
 							<h2 class="text-base font-semibold">{t.code}</h2>
 							<p class="text-muted-foreground text-sm tabular-nums">
@@ -169,13 +169,14 @@
 						</div>
 
 						<Section title="Tasks by Step" meta="Offsets in working days (wd)." data-slot="template-tasks">
-							<div class="bg-card text-card-foreground overflow-hidden rounded-lg border" role="table" aria-label="Template tasks">
+							<div class="bg-card text-card-foreground overflow-x-auto rounded-lg border">
+							<div class="min-w-[44rem]" role="table" aria-label="Template tasks">
 								<div class={`${GRID} text-muted-foreground border-border border-b px-3 py-2 text-xs font-medium`} role="row">
 									<span role="columnheader">Step</span>
 									<span class="text-right" role="columnheader">Order</span>
 									<span role="columnheader">Task</span>
 									<span role="columnheader">Depends on</span>
-									<span class="text-right" role="columnheader">Duration</span>
+									<span class="text-right" role="columnheader">Duration (min)</span>
 									<span class="text-right" role="columnheader">Est. (min)</span>
 								</div>
 								{#each outline.groups as group (group.stepId ?? 'none')}
@@ -208,6 +209,7 @@
 									<p class="text-muted-foreground px-3 py-10 text-center text-sm">This template has no tasks.</p>
 								{/each}
 							</div>
+							</div>
 						</Section>
 					</div>
 				{:else if run.project && run.entityType}
@@ -218,8 +220,6 @@
 							{/if}
 						{/snippet}
 					</PageState>
-				{:else}
-					<PageState state="empty" icon={LayoutTemplate} title="Pick a project and an entity type" line="The templates for that type then show on the left." />
 				{/if}
 			</section>
 		</div>

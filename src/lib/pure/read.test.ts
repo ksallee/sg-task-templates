@@ -14,6 +14,7 @@ import {
 	taskFieldsFor,
 	taskFromRow,
 	taskStatusContext,
+	taskHostTypes,
 	templatableTypes,
 	templateFromRows,
 	templateOfFromRows,
@@ -263,6 +264,20 @@ describe('defaultTemplateFor', () => {
 			id: 202,
 			name: 'tt2'
 		});
+	});
+});
+
+describe('taskHostTypes', () => {
+	const entity = (validTypes?: string[]) => ({ name: 'entity', displayName: 'Link', entityType: 'Task', dataType: 'entity', editable: true, mandatory: false, unique: false, validTypes }) as FieldSchema;
+
+	it('reads the types a Task links to from Task.entity (entity_types/Task)', () => {
+		expect(taskHostTypes(entity(['Asset', 'Level', 'MocapTake', 'Shot', 'Sequence', 'CustomEntity07']))).toEqual(['Asset', 'Level', 'MocapTake', 'Shot', 'Sequence', 'CustomEntity07']);
+	});
+
+	it('leaves out Task, and gives nothing when the field declares no types', () => {
+		expect(taskHostTypes(entity(['Shot', 'Task']))).toEqual(['Shot']);
+		expect(taskHostTypes(entity(undefined))).toEqual([]);
+		expect(taskHostTypes(null)).toEqual([]);
 	});
 });
 
