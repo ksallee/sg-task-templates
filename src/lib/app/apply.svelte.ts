@@ -17,7 +17,12 @@
  *   await session.undoFromFile(recs) undo those records once confirmed; undone ones are refused
  *   session.undoProgress             entities undone so far of the undo in flight
  *   await session.show(runId)        a stored run on the result screen (recovered first)
- *   session.unfinished               stored runs with no finish, for the resume banner
+ *   session.unfinished               stored runs with no finish and no tab applying them, for the resume banner
+ *   session.stored                   every stored run, for /result when this tab has none (refreshStored)
+ *   session.liveElsewhere            the run on screen is being applied in another tab
+ *
+ * IndexedDB is the truth across tabs: a write in another tab (BroadcastChannel) or the tab's focus
+ * reads the run on screen and the lists again. A tab applying a run holds its Web Lock (liveness.ts).
  *   await session.continueRun(id)    recover, re-plan what never landed (the plan loading from the call on)
  *   await session.close(id)          mark a stored run finished: no longer offered
  *
@@ -26,6 +31,7 @@
 
 import { applyRun, plannedMap, retryFailed, type EntityOutcome } from '$lib/io/apply';
 import type { RevertOutcome } from '$lib/io/revert';
+import { holdRun, liveRuns } from '$lib/io/liveness';
 import { openStoredRun, snapshotReader, undoRecords } from '$lib/io/session';
 import { downloadUndoFile, openUndoStore, readUndoFile, type UndoStore } from '$lib/io/undo-store';
 import { whoAmI } from '$lib/live';
@@ -65,6 +71,8 @@ class ApplySession {
 	undoProgress = $state<{ finished: number; total: number } | null>(null);
 
 	unfinished = $state.raw<Run[]>([]);
+	stored = $state.raw<Run[]>([]);
+	liveElsewhere = $state(false);
 
 	/** Between the confirm and the run's first line: the undo store and the user are read. */
 	starting = $state(false);
@@ -84,9 +92,24 @@ class ApplySession {
 	open(): Promise<UndoStore> {
 		this.#store ??= openUndoStore().then((store) => {
 			this.persistent = store.persistent;
+			store.onChange((runId) => void this.#changed(store, runId));
+			if (typeof window !== 'undefined') window.addEventListener('focus', () => void this.#changed(store, null));
 			return store;
 		});
 		return this.#store;
+	}
+
+	/** Another tab wrote `runId` (null: the tab got focus, anything may have changed). */
+	async #changed(store: UndoStore, runId: string | null): Promise<void> {
+		if (this.liveElsewhere && this.current) this.liveElsewhere = await isLive(this.current.id);
+		if (this.phase !== 'running' && !this.undoing && (runId === null || runId === this.current?.id)) await this.#reload(store);
+		await this.refreshUnfinished();
+		if (this.stored.length || runId === null) await this.refreshStored();
+	}
+
+	async refreshStored(): Promise<void> {
+		const store = await this.open();
+		this.stored = await store.allRuns();
 	}
 
 	/** The plans this session can retry, by entity key. */
@@ -137,6 +160,7 @@ class ApplySession {
 					now: new Date().toISOString()
 				});
 		this.resuming = null;
+		this.liveElsewhere = false;
 		this.source = run.plans;
 		this.#plans = plans;
 		this.#snapshots = run.snapshots;
@@ -151,7 +175,7 @@ class ApplySession {
 		this.lines = initialLines(plans);
 		this.phase = 'running';
 		try {
-			this.outcomes = await applyRun(header, plans, ctx, {
+			this.outcomes = await holdRun(header.id, () => applyRun(header, plans, ctx, {
 				client,
 				read: snapshotReader(client, template),
 				store,
@@ -161,7 +185,7 @@ class ApplySession {
 					this.lines = applyEvent(this.lines, p);
 					if (p.state === 'done' || p.state === 'failed') this.finished = p.finished;
 				}
-			});
+			}));
 		} catch (e) {
 			this.error = errorOf(e).message;
 		}
@@ -205,12 +229,14 @@ class ApplySession {
 		this.phase = 'running';
 		this.lines = this.lines.map((l) => (again.has(l.key) ? { ...l, state: 'pending', error: null } : l));
 		try {
-			const outcomes = await retryFailed(current, items, ctx, {
-				client,
-				read: snapshotReader(client, template),
-				store,
-				onProgress: (p) => (this.lines = applyEvent(this.lines, p))
-			});
+			const outcomes = await holdRun(current.id, () =>
+				retryFailed(current, items, ctx, {
+					client,
+					read: snapshotReader(client, template),
+					store,
+					onProgress: (p) => (this.lines = applyEvent(this.lines, p))
+				})
+			);
 			const byKey = new Map(outcomes.map((o) => [entityKey(o.entity), o]));
 			this.outcomes = this.outcomes.map((o) => byKey.get(entityKey(o.entity)) ?? o);
 		} catch (e) {
@@ -293,8 +319,9 @@ class ApplySession {
 		const store = await this.open();
 		await run.start();
 		if (run.problem) return false;
-		const opened = await openStoredRun(store, runId, snapshotReader(run.client(), null));
+		const opened = await openStoredRun(store, runId, snapshotReader(run.client(), null), isLive);
 		if (!opened) return false;
+		this.liveElsewhere = opened.live;
 		this.#plans = [];
 		this.#ctx = null;
 		this.source = null;
@@ -309,8 +336,10 @@ class ApplySession {
 	async refreshUnfinished(): Promise<void> {
 		const store = await this.open();
 		const runs = await store.unfinishedRuns();
-		const live = this.phase === 'running' ? this.current?.id : null;
-		this.unfinished = runs.filter((r) => r.id !== live);
+		const busy = await liveRuns();
+		if (this.phase === 'running' && this.current) busy.add(this.current.id);
+		if (this.resuming) busy.add(this.resuming.id);
+		this.unfinished = runs.filter((r) => !busy.has(r.id));
 	}
 
 	/**
@@ -323,7 +352,8 @@ class ApplySession {
 			const store = await this.open();
 			await run.start();
 			if (run.problem) throw new Error(run.problem);
-			const opened = await openStoredRun(store, runId, snapshotReader(run.client(), null));
+			const opened = await openStoredRun(store, runId, snapshotReader(run.client(), null), isLive);
+			if (opened?.live) throw new Error('Another tab is applying this run.');
 			if (!opened || !opened.remaining.length) {
 				if (opened) {
 					await store.finishRun(runId, new Date().toISOString());
@@ -333,6 +363,7 @@ class ApplySession {
 				return 'closed';
 			}
 			this.resuming = opened.run;
+			await this.refreshUnfinished();
 			return (await run.resumeRun(opened.run, opened.remaining)) ? 'planned' : 'failed';
 		} catch (error) {
 			run.planningFailed(error);
@@ -354,6 +385,8 @@ class ApplySession {
 		this.persistent = store.persistent;
 	}
 }
+
+const isLive = async (runId: string) => (await liveRuns()).has(runId);
 
 /** The tab's one apply session. */
 export const session = new ApplySession();

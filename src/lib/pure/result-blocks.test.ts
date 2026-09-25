@@ -205,7 +205,10 @@ const row = (n: number, kind: ResultRow['kind'], extra: Partial<ResultRow> = {})
 	error: null,
 	record: record(shot(n)),
 	canUndo: kind !== 'failed',
-	canRetry: false,
+	retry: null,
+	detail: null,
+	written: [],
+	drift: [],
 	...extra
 });
 

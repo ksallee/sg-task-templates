@@ -109,6 +109,30 @@ describe('undo store on IndexedDB', () => {
 		expect(await b.prepared('r1', shot(2))).toBeNull();
 	});
 
+	it('lists every run newest first, finished ones included', async () => {
+		const idb = new IDBFactory();
+		const a = await openUndoStore(idb);
+		await a.saveRun(run('old', '2026-09-24T09:00:00Z'));
+		await a.saveRun(run('new', '2026-09-24T11:00:00Z'));
+		await a.finishRun('old', '2026-09-24T09:05:00Z');
+		const b = await openUndoStore(idb);
+		expect((await b.allRuns()).map((r) => r.id)).toEqual(['new', 'old']);
+	});
+
+	it('tells another tab which run changed, and that tab reads it fresh (BroadcastChannel)', async () => {
+		const idb = new IDBFactory();
+		const a = await openUndoStore(idb, 'test-channel-1');
+		const b = await openUndoStore(idb, 'test-channel-1');
+		await a.saveRun(run('r1', '2026-09-24T10:00:00Z'));
+		expect((await b.loadRun('r1'))?.entities[0].status.state).toBe('pending');
+		const heard = new Promise<string>((resolve) => b.onChange(resolve));
+		await a.saveEntity('r1', shot(1), { state: 'undone', undo: record('r1', 1) });
+		expect(await heard).toBe('r1');
+		expect((await b.loadRun('r1'))?.entities[0].status.state).toBe('undone');
+		a.close();
+		b.close();
+	});
+
 	it('deletes a run and its entities', async () => {
 		const idb = new IDBFactory();
 		const a = await openUndoStore(idb);

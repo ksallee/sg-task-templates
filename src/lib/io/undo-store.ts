@@ -45,6 +45,15 @@ export interface UndoStore {
 	unfinishedRuns(): Promise<Run[]>;
 	prepared(runId: string, entity: EntityRef): Promise<Prepared | null>;
 	deleteRun(runId: string): Promise<void>;
+	/** Every stored run, finished or not, newest first: /result lists them. */
+	allRuns(): Promise<Run[]>;
+	/**
+	 * `cb(runId)` when another tab of this browser writes a run (BroadcastChannel). IndexedDB is the
+	 * truth across tabs: the listener reads the run again. Returns the unsubscribe.
+	 */
+	onChange(cb: (runId: string) => void): () => void;
+	/** Stop listening and broadcasting. */
+	close(): void;
 }
 
 // --- memory -------------------------------------------------------------------------------------
@@ -114,9 +123,50 @@ function openDb(idb: IDBFactory): Promise<IDBDatabase> {
 /** Structured clone refuses Svelte proxies and functions: store plain JSON. */
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
+/** The channel runs change on, across the tabs of one browser. */
+export const RUNS_CHANNEL = 'sg-task-templates:runs';
+
 class Store implements UndoStore {
 	private mem = new Memory();
-	constructor(private db: IDBDatabase | null) {}
+	private channel: BroadcastChannel | null = null;
+	private listeners = new Set<(runId: string) => void>();
+
+	constructor(
+		private db: IDBDatabase | null,
+		channelName: string = RUNS_CHANNEL
+	) {
+		// Memory only: another tab could not read the run anyway.
+		if (db && typeof BroadcastChannel !== 'undefined') {
+			try {
+				this.channel = new BroadcastChannel(channelName);
+				this.channel.onmessage = (e: MessageEvent) => {
+					const runId = (e.data as { runId?: unknown } | null)?.runId;
+					if (typeof runId === 'string') for (const cb of this.listeners) cb(runId);
+				};
+			} catch {
+				this.channel = null;
+			}
+		}
+	}
+
+	onChange(cb: (runId: string) => void): () => void {
+		this.listeners.add(cb);
+		return () => this.listeners.delete(cb);
+	}
+
+	close(): void {
+		this.channel?.close();
+		this.channel = null;
+		this.listeners.clear();
+	}
+
+	private told(runId: string) {
+		try {
+			this.channel?.postMessage({ runId });
+		} catch {
+			/* A tab that misses it reads again on focus. */
+		}
+	}
 
 	get persistent() {
 		return this.db !== null;
@@ -149,6 +199,7 @@ class Store implements UndoStore {
 			for (const e of entities)
 				tx.objectStore(ENTITIES).put({ runId: run.id, key: entityKey(e.entity), entity: e.entity, status: e.status });
 		});
+		this.told(run.id);
 	}
 
 	async saveEntity(runId: string, entity: EntityRef, status: EntityRunState, prepared?: Prepared) {
@@ -156,6 +207,7 @@ class Store implements UndoStore {
 		this.mem.putRow({ runId, key, entity, status, prepared });
 		const row = plain(this.mem.rows.get(`${runId}|${key}`)!);
 		await this.write((tx) => tx.objectStore(ENTITIES).put(row));
+		this.told(runId);
 	}
 
 	async finishRun(runId: string, finishedAt: string) {
@@ -164,6 +216,7 @@ class Store implements UndoStore {
 		const next = { ...header, finishedAt };
 		this.mem.runs.set(runId, next);
 		await this.write((tx) => tx.objectStore(RUNS).put(plain(next)));
+		this.told(runId);
 	}
 
 	private async readRun(runId: string): Promise<Omit<Run, 'entities'> | undefined> {
@@ -192,6 +245,10 @@ class Store implements UndoStore {
 	}
 
 	async unfinishedRuns(): Promise<Run[]> {
+		return (await this.allRuns()).filter((r) => r.finishedAt === null);
+	}
+
+	async allRuns(): Promise<Run[]> {
 		const ids = new Set(this.mem.runs.keys());
 		const stored = await this.idb(async (db) => {
 			const tx = db.transaction(RUNS, 'readonly');
@@ -201,7 +258,7 @@ class Store implements UndoStore {
 		const runs: Run[] = [];
 		for (const id of ids) {
 			const run = await this.loadRun(id);
-			if (run && run.finishedAt === null) runs.push(run);
+			if (run) runs.push(run);
 		}
 		return runs.sort(newestFirst);
 	}
@@ -219,6 +276,7 @@ class Store implements UndoStore {
 			tx.objectStore(RUNS).delete(runId);
 			for (const k of keys) tx.objectStore(ENTITIES).delete(k);
 		});
+		this.told(runId);
 	}
 }
 
@@ -226,12 +284,12 @@ class Store implements UndoStore {
  * Open the store. Never throws: no IndexedDB, a refused open (private mode) or a broken database
  * gives a memory store with `persistent` false.
  */
-export async function openUndoStore(idb: IDBFactory | undefined = globalThis.indexedDB): Promise<UndoStore> {
-	if (!idb) return new Store(null);
+export async function openUndoStore(idb: IDBFactory | undefined = globalThis.indexedDB, channel: string = RUNS_CHANNEL): Promise<UndoStore> {
+	if (!idb) return new Store(null, channel);
 	try {
-		return new Store(await openDb(idb));
+		return new Store(await openDb(idb), channel);
 	} catch {
-		return new Store(null);
+		return new Store(null, channel);
 	}
 }
 

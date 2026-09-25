@@ -72,7 +72,7 @@
 			<Wordmark collapse={flow} />
 		</a>
 
-		<div class="flex min-w-0 flex-1 items-center">
+		<div class="flex min-w-0 flex-1 items-center overflow-hidden">
 			{#if flow}<FlowSteps {steps} />{/if}
 		</div>
 
@@ -80,7 +80,7 @@
 			{#if live?.siteUrl}
 				<a
 					href="/connect"
-					class="text-muted-foreground hover:text-foreground focus-visible:ring-ring hidden max-w-64 min-w-0 items-center gap-1.5 truncate rounded-md px-1.5 py-1 outline-none focus-visible:ring-2 lg:flex"
+					class="text-muted-foreground hover:text-foreground focus-visible:ring-ring hidden max-w-64 min-w-0 items-center gap-1.5 truncate rounded-md px-1.5 py-1 outline-none focus-visible:ring-2 xl:flex"
 					title={`${live.siteUrl}${live.session ? ` · ${live.session.login}` : live.devToken ? ' · dev key' : ''}`}
 					data-slot="site-who"
 				>

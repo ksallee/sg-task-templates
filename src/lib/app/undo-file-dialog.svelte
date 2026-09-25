@@ -18,7 +18,7 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-xl" data-slot="undo-file-dialog">
 		<Dialog.Header>
-			<Dialog.Title>{runs.length === 1 ? 'Undo this run?' : `Undo these ${runs.length} runs?`}</Dialog.Title>
+			<Dialog.Title>{records.length === 0 ? 'Undone already' : runs.length === 1 ? 'Undo this run?' : `Undo these ${runs.length} runs?`}</Dialog.Title>
 			<Dialog.Description>
 				{records.length ? `Undoes ${entities(records.length)} from the file.` : 'Every entity in this file is undone already.'}
 			</Dialog.Description>
@@ -27,8 +27,7 @@
 			{#each runs as r (r.runId)}
 				<div class="flex flex-col gap-1.5" data-slot="file-run">
 					<p class="text-sm">
-						<span class="font-medium">{r.title}</span>
-						<span class="text-muted-foreground tabular-nums">, applied {localTime(r.appliedAt)}</span>
+						<span class="font-medium">{r.title}</span><span class="text-muted-foreground tabular-nums">, applied {localTime(r.appliedAt)}</span>
 					</p>
 					<ul class="flex flex-col gap-0.5 text-sm">
 						{#each r.entities as e (e.key)}
@@ -42,17 +41,16 @@
 			{/each}
 		</div>
 		<Dialog.Footer>
-			<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
-			<Button
+			<Button variant="ghost" onclick={() => (open = false)}>{records.length ? 'Cancel' : 'Close'}</Button>
+			{#if records.length}<Button
 				variant="destructive"
-				disabled={records.length === 0}
 				onclick={() => {
 					open = false;
 					onconfirm(records);
 				}}
 			>
 				Undo {entities(records.length)}
-			</Button>
+			</Button>{/if}
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

@@ -139,6 +139,11 @@ From sg-groundtruth `main`, tag `corpus/2026-09-24.1`. Read `corpus/INDEX.md` fi
 6. **Writing**
    - One `_batch` per entity, write-backs included (098). A failure stops that entity only; the run
      continues and the result lists failures with a retry.
+   - The read just before the write is compared with the plan's read: a changed entity is not
+     written, and the result lists what changed. A retry never resends a batch: the entity is read
+     and planned again on the plan screen. A failed batch is atomic (113); the second call (date
+     clears, kept edges) is built from the read-back, and its failure leaves the first standing,
+     with its record to undo.
    - About 4 entities in flight, async in the browser, with progress. Cancel stops after those in
      flight.
    - Apply opens a confirm dialog: one line of totals, the deletes on top with their publish
