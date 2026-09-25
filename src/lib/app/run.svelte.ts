@@ -14,7 +14,8 @@
  *   run.ctx, run.snapshots,           after buildPlans(): the project's Task statuses, the frozen reads,
  *   run.plans, run.options,           one EntityPlan per entity (planRun), the options they were built
  *   run.access, run.planning          with, the access summary (094; value null = nothing to check on)
- *   await run.buildPlans()            read snapshots in batches, plan, check access; nothing writes
+ *   await run.buildPlans()            read snapshots in batches, plan, check access; nothing writes;
+ *   run.building                      a second call while one runs gets the same promise; `building` meanwhile
  *   run.setOptions(next)              replan from the held snapshots with new options; no read
  *   run.client()                      the signed-in client, for the apply and the undo
  *   await run.resumeRun(stored, rest) a stored run's picks and options, its remaining entities re-planned
@@ -25,6 +26,7 @@
 
 import type { EntityRef, SgClient } from 'sg-widgets-core';
 import { checkAccess } from '$lib/io/access';
+import { readForPlan } from '$lib/io/plan-reads';
 import {
 	loadTaskFields,
 	loadDefaultTemplate,
@@ -34,12 +36,10 @@ import {
 	loadTemplates,
 	searchAll
 } from '$lib/io/load';
-import { DEFAULT_CONCURRENCY, runPool } from '$lib/io/pool';
+import { DEFAULT_CONCURRENCY } from '$lib/io/pool';
 import { liveWriter, prepareLive, project as storedProject, setProject as storeProject, type LiveState, type ProjectPick } from '$lib/live';
 import {
-	accessSample,
 	addToSelection,
-	chunk,
 	defaultRunOptions,
 	entityListFilters,
 	legacyFilter,
@@ -48,7 +48,7 @@ import {
 	type ListFilter
 } from '$lib/pure/entry';
 import { planRun } from '$lib/pure/planner';
-import { errorOf } from '$lib/pure/run';
+import { errorOf, singleFlight } from '$lib/pure/run';
 import type { AccessSummary, EntityPlan, EntitySnapshot, Id, ProjectContext, Run, RunOptions, Template } from '$lib/pure/types';
 
 export type { ListFilter };
@@ -236,43 +236,63 @@ class RunState {
 		return typeof count === 'number' ? count : null;
 	}
 
+	/** A plan is being read or its access checked: Plan cannot start another. */
+	building = $derived(this.planning.state === 'loading' || this.access.state === 'loading');
+
 	/**
-	 * Read the selected entities in batches (`SNAPSHOT_BATCH`, about four in flight), plan them with
-	 * fresh default options, then run the access check on one sample (094). Resolves true when there
-	 * are plans to show; `planning` holds the progress and any failure. An access check that fails
-	 * leaves the plans standing, with `access` in error.
+	 * Read the selected entities in batches (`SNAPSHOT_BATCH`, `DEFAULT_CONCURRENCY` in flight) and
+	 * plan them with fresh default options; the access check (094) runs beside the reads
+	 * (io/plan-reads.ts). Resolves true when there are plans to show, once the access check is done
+	 * too; `planning` and `access` hold the progress and any failure. An access check that fails
+	 * leaves the plans standing, with `access` in error. A call while one runs gets that run's promise.
 	 */
-	async buildPlans(): Promise<boolean> {
+	buildPlans = singleFlight(() => this.#buildPlans());
+
+	async #buildPlans(): Promise<boolean> {
 		const project = this.project;
 		const template = this.template;
 		const selected = this.selected;
 		if (!project || !template || selected.length === 0) return false;
 		const client = this.client();
 		const projectRef: EntityRef = { type: 'Project', id: project.id, name: project.name };
-		const batches = chunk(selected, SNAPSHOT_BATCH);
-		let done = 0;
 		this.#clearPlans();
-		this.planning = { state: 'loading', done, total: selected.length };
+		this.planning = { state: 'loading', done: 0, total: selected.length };
+		let access: Promise<AccessSummary | null>;
 		try {
-			const ctx = await loadProjectContext(client, projectRef);
-			const read = await runPool(batches, DEFAULT_CONCURRENCY, async (batch) => {
-				const snaps = await loadSnapshots(client, batch, template);
-				done += batch.length;
-				this.planning = { state: 'loading', done, total: selected.length };
-				return snaps;
-			});
-			const snapshots = read.flat();
-			const options = defaultRunOptions(ctx);
-			this.ctx = ctx;
-			this.snapshots = snapshots;
+			const reads = await readForPlan(
+				{
+					context: () => loadProjectContext(client, projectRef),
+					snapshots: (batch) => loadSnapshots(client, batch, template),
+					access: (sample) => {
+						this.access = { state: 'loading' };
+						return checkAccess(client, { ...sample, project: projectRef });
+					}
+				},
+				{
+					template,
+					selected,
+					batchSize: SNAPSHOT_BATCH,
+					concurrency: DEFAULT_CONCURRENCY,
+					onProgress: (done) => (this.planning = { state: 'loading', done, total: selected.length })
+				}
+			);
+			const options = defaultRunOptions(reads.ctx);
+			this.ctx = reads.ctx;
+			this.snapshots = reads.snapshots;
 			this.options = options;
-			this.plans = planRun(template, snapshots, ctx, options);
+			this.plans = planRun(template, reads.snapshots, reads.ctx, options);
+			access = reads.access;
 			this.planning = { state: 'ready', value: true };
 		} catch (error) {
 			this.planning = failed(error);
+			this.access = IDLE;
 			return false;
 		}
-		await this.#checkAccess(projectRef, template);
+		try {
+			this.access = { state: 'ready', value: await access };
+		} catch (error) {
+			this.access = failed(error);
+		}
 		return true;
 	}
 
@@ -301,21 +321,6 @@ class RunState {
 		if (!template || !this.ctx) return;
 		this.options = next;
 		this.plans = planRun(template, this.snapshots, this.ctx, next);
-	}
-
-	async #checkAccess(project: EntityRef, template: Template): Promise<void> {
-		const sample = accessSample(this.plans, this.snapshots, template);
-		if (!sample) {
-			this.access = { state: 'ready', value: null };
-			return;
-		}
-		this.access = { state: 'loading' };
-		try {
-			const summary = await checkAccess(this.client(), { ...sample, project });
-			this.access = { state: 'ready', value: summary };
-		} catch (error) {
-			this.access = failed(error);
-		}
 	}
 
 	#clearPlans(): void {

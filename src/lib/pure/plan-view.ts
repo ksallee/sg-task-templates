@@ -494,3 +494,20 @@ export function planCsvName(templateCode: string, now: Date): string {
 }
 
 export const EXTRA_ACTIONS: readonly ExtraAction[] = ['leave', 'omit', 'delete'];
+
+// ---------------------------------------------------------------------------------------------
+// Building
+// ---------------------------------------------------------------------------------------------
+
+type Stage = { state: 'idle' | 'ready' | 'error' } | { state: 'loading'; done?: number; total?: number };
+
+/** What the plan waits on while it builds, for its loading state; null once nothing is pending. */
+export function planningStep(planning: Stage, access: Stage, entityType: string | null): string | null {
+	if (planning.state === 'loading') {
+		if (planning.total === undefined) return 'Reading Tasks';
+		const noun = entityType ? `${entityType}${planning.total === 1 ? '' : 's'}` : planning.total === 1 ? 'entity' : 'entities';
+		return `Reading Tasks: ${planning.done ?? 0} of ${planning.total} ${noun}`;
+	}
+	if (planning.state === 'ready' && access.state === 'loading') return 'Checking write access';
+	return null;
+}
