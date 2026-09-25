@@ -168,6 +168,12 @@ export function diffEntity(
 		}
 	}
 
+	// An edge on a Task the batch deleted goes with it (103).
+	for (const { edge } of plan.edges.withDeleted ?? []) {
+		const stillThere = after.edges.find((e) => sameEdgeSpec(e, edge));
+		if (stillThere) differences.push({ code: 'edge_still_present', edgeId: stillThere.id ?? edge.id });
+	}
+
 	const createdFor = [...createdByTemplateTaskId].map(([templateTaskId, taskId]) => ({ templateTaskId, taskId }));
 	return { created, createdFor, addedEdges, differences };
 }

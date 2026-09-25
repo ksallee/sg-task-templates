@@ -196,7 +196,6 @@ describe('defaultRunOptions', () => {
 			conflictPicks: {},
 			edgeActions: {},
 			clearCreatedDates: false,
-			deleteConfirmed: false
 		});
 	});
 

@@ -37,9 +37,16 @@ manifest's `project` is the id to pick (1180 today); its `templates` are the `TT
 
     uv run --no-project --python 3.11 --with requests python tools/seed.py
 
-A dry run: it reports each scenario as missing, pristine, drifted or orphan, and writes nothing.
-`--write` creates what is missing. `--reset S04` (or `S04,S13,BULK`, or `all`) deletes a scenario
-and recreates it, after an apply. The docstring at the top of `tools/seed.py` lists the rest.
+A dry run: it reports each scenario as missing, pristine, drifted or orphan, and writes nothing. A
+drifted scenario lists every drifted entity, one line each, with a count per kind.
+
+    uv run --no-project --python 3.11 --with requests python tools/seed.py --write
+    uv run --no-project --python 3.11 --with requests python tools/seed.py --reset S04,S13,BULK
+
+`--write` creates what is missing. `--reset` takes scenario ids, comma-separated, or `all`: it
+deletes those scenarios and recreates them, after an apply. It writes on its own, no `--write`
+needed. It rewrites `fixtures/seed-manifest.json`: commit it. The docstring at the top of
+`tools/seed.py` lists the rest.
 
 1. Point the dev token route at the same site. `.env.local` at the repo root (gitignored) takes the
    three `FPT_API_*` lines from `../sg-groundtruth/.env.local`:
@@ -49,8 +56,8 @@ and recreates it, after an apply. The docstring at the top of `tools/seed.py` li
    `POST /live/dev-token` then mints a 600 s bearer from that script key under `vite dev` only, and
    the page reads without a sign-in. Signing in through the launcher over it writes as yourself.
 2. `pnpm dev`, open the URL, go to Template. Pick the project (search its name), the entity
-   type (only types with a `task_template` field are offered: Shot, Asset, Sequence, custom
-   entities), then a template: its tasks and dependencies show on the right. The project's default
+   type (only types a Task links to and with a `task_template` field are offered, as the
+   site's `Task.entity` lists them), then a template: its tasks and dependencies show on the right. The project's default
    for the type (088; Kevin sets Shot = T2 and Asset = T4 in the project's Tracking Settings) is
    tagged Project default and pre-selected.
 3. Next: entities. One list, filtered by template: All, Using this template, Other template or No
@@ -60,7 +67,7 @@ and recreates it, after an apply. The docstring at the top of `tools/seed.py` li
 4. The plan shows at once. The access check (probe 094: refused or rolled-back calls only, nothing
    lands) runs beside it, and Apply waits on it.
 
-Nothing up to the plan writes. Apply opens a confirm dialog; Confirm is the first write.
+Nothing up to the plan writes. Apply opens a confirm dialog; its button is the first write.
 
 ## Deploy
 

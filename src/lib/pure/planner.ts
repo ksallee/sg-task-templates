@@ -465,6 +465,7 @@ export function planEntity(
       edges: snap.edges,
       mapping: mapTasks(rows),
       edgeActions: opts.edgeActions,
+      deleted: extras.filter((r) => r.action === "delete").map((r) => r.task.id),
     }),
     counts,
     warnings,
@@ -484,12 +485,12 @@ const changes = (fc: FieldChange[] | undefined) =>
 
 /**
  * Nothing to write: the entity already has the template, and there is no claim, create, field
- * value to change, omit, confirmed delete, edge to add or edge to remove. Kept hand edits and
+ * value to change, omit, delete, edge to add or edge to remove. Kept hand edits and
  * kept edges do not count: without a template write they stay as they are.
  */
 export function isNoop(
   plan: EntityPlan,
-  opts?: Pick<RunOptions, "omitStatus" | "deleteConfirmed">,
+  opts?: Pick<RunOptions, "omitStatus">,
 ): boolean {
   if (!plan.needsClearFirst) return false;
   for (const r of plan.rows) {
@@ -498,8 +499,7 @@ export function isNoop(
     if (r.kind === "extra") {
       if (r.action === "omit" && r.task.status !== opts?.omitStatus)
         return false;
-      if (r.action === "delete" && (!opts || opts.deleteConfirmed))
-        return false; // unknown = a write
+      if (r.action === "delete") return false;
       if (changes(r.fieldChanges)) return false;
     }
   }
@@ -584,21 +584,26 @@ export function withEntityConflictPick(
   };
 }
 
-/** Extra names across plans (normalized content) with counts, most frequent first, for the bulk setter. */
+/**
+ * Extra names across plans with counts, most frequent first, for the bulk setter. `name` is the
+ * normalized content (the bulk key); `label` the first Task's name as written, trimmed.
+ */
 export function extraNames(
   plans: EntityPlan[],
-): Array<{ name: string; count: number }> {
+): Array<{ name: string; label: string; count: number }> {
   const counts = new Map<string, number>();
+  const labels = new Map<string, string>();
   for (const p of plans) {
     for (const r of p.rows) {
       if (r.kind === "extra") {
         const n = normalizeContent(r.task.content);
         counts.set(n, (counts.get(n) ?? 0) + 1);
+        if (!labels.has(n)) labels.set(n, (r.task.content ?? "").trim());
       }
     }
   }
   return [...counts]
-    .map(([name, count]) => ({ name, count }))
+    .map(([name, count]) => ({ name, label: labels.get(name) ?? name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 

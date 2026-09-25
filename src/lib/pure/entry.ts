@@ -117,7 +117,7 @@ const STOCK_OMIT = 'omt';
 
 /**
  * A fresh run's options: every policy at its default (`policyFor`: keep, the name overwrite), every
- * extra left, pre-picks for conflicts, every affected edge kept, dates copied, no delete confirmed.
+ * extra left, pre-picks for conflicts, every affected edge kept, dates copied.
  * `omitStatus` is `omt` only when the project's Task statuses include it, else empty: never guessed.
  */
 export function defaultRunOptions(ctx: ProjectContext): RunOptions {
@@ -129,7 +129,6 @@ export function defaultRunOptions(ctx: ProjectContext): RunOptions {
 		conflictPicks: {},
 		edgeActions: {},
 		clearCreatedDates: false,
-		deleteConfirmed: false
 	};
 }
 

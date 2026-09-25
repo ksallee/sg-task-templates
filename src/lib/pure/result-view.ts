@@ -206,3 +206,38 @@ export function undoFileName(run: Pick<Run, 'template' | 'startedAt'>): string {
 	const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]+/g, '-');
 	return `undo-${safe(run.template.code)}-${safe(run.startedAt)}.json`;
 }
+
+// --- undo from a file -----------------------------------------------------------------------------
+
+export interface FileRun {
+	runId: string;
+	/** The template's code when this browser stored the run, else its id. */
+	title: string;
+	/** The earliest apply time among its records (ISO). */
+	appliedAt: string;
+	entities: Array<{ key: string; label: string; undone: boolean }>;
+	/** What an undo of this run sends: its records the store does not mark undone. */
+	records: UndoRecord[];
+}
+
+/**
+ * An uploaded undo file, run by run, before anything is undone: each run's entities, when it was
+ * applied, and which ones the store already marks undone (refused: their Tasks are gone or back).
+ * `stored`: the store's run by id, null when this browser never saw it.
+ */
+export function fileRuns(records: UndoRecord[], stored: Record<string, Run | null>): FileRun[] {
+	const byRun = new Map<string, UndoRecord[]>();
+	for (const r of records) byRun.set(r.runId, [...(byRun.get(r.runId) ?? []), r]);
+	return [...byRun].map(([runId, recs]) => {
+		const run = stored[runId] ?? null;
+		const undone = new Set(run?.entities.filter((e) => e.status.state === 'undone').map((e) => entityKey(e.entity)) ?? []);
+		const entities = recs.map((r) => ({ key: entityKey(r.entity), label: entityLabel(r.entity), undone: undone.has(entityKey(r.entity)) }));
+		return {
+			runId,
+			title: run?.template.code ?? `Template #${recs[0].templateId}`,
+			appliedAt: recs.map((r) => r.appliedAt).sort()[0],
+			entities,
+			records: recs.filter((r) => !undone.has(entityKey(r.entity)))
+		};
+	});
+}

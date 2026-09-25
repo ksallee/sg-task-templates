@@ -89,8 +89,8 @@ From sg-groundtruth `main`, tag `corpus/2026-09-24.1`. Read `corpus/INDEX.md` fi
 
 1. **Scope of a run**
    - One project per run.
-   - Every entity type with a `task_template` field, read from the schema, custom entities included.
-     Task is left out: its `task_template` marks template tasks.
+   - Every entity type a Task links to (`Task.entity`'s valid types) that has a `task_template`
+     field, custom entities included. Task is left out: its `task_template` marks template tasks.
    - One path: pick the template, then the entities. The entities list has one filter: All, Using
      this template, Other template or No template (#59). It opens on Using this template when an
      entity uses it, else All. Nothing is pre-selected.
@@ -109,8 +109,9 @@ From sg-groundtruth `main`, tag `corpus/2026-09-24.1`. Read `corpus/INDEX.md` fi
 3. **Tasks not in the template**
    - Listed under each entity. One action each: **leave** (default), **omit** (a status) or
      **delete**. Bulk-set by name.
-   - Delete asks for a second confirmation. A Task with Versions or PublishedFiles linked can be
-     deleted, with a loud warning that shows the counts (089). Undo revives it.
+   - Delete asks for a second confirmation, in the Apply dialog. A Task with Versions or
+     PublishedFiles linked can be deleted, with a loud warning that shows the counts (089). Undo
+     revives it.
 4. **Linked Tasks**
    - What the apply does to linked Tasks (102, 108). Overwritten when the template's value is
      non-empty: `content`, `step`, `est_in_mins`, `sg_description`, `sg_sort_order`,
@@ -140,8 +141,9 @@ From sg-groundtruth `main`, tag `corpus/2026-09-24.1`. Read `corpus/INDEX.md` fi
      continues and the result lists failures with a retry.
    - About 4 entities in flight, async in the browser, with progress. Cancel stops after those in
      flight.
-   - Apply opens a confirm dialog: one line of totals, then only what is risky (deletes with their
-     publish counts, omits, hand-renamed Tasks, fields overwritten). Confirm starts the run.
+   - Apply opens a confirm dialog: one line of totals, the deletes on top with their publish
+     counts, then only what is risky (omits, hand-renamed Tasks, fields overwritten). Its button
+     starts the run: "Apply and delete N Tasks" when Tasks are deleted.
    - Undo per run and per entity, after a confirmation that lists what undo cannot put back. The
      record per entity: previous `template_task`, previous values of every field under policy,
      `content` included, removed or replaced edges, previous status of omitted Tasks, deleted Task

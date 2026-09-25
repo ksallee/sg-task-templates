@@ -183,18 +183,24 @@
 		</PageHeader>
 
 		<div class="border-border flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b px-6 py-3" data-slot="entity-picks">
-			<div class="flex items-center gap-2">
+			<div class="flex max-w-full min-w-0 items-center gap-2">
 				<span class="text-muted-foreground text-xs font-medium" aria-hidden="true">Show</span>
-				<Segmented
-					label="Show"
-					value={run.listFilter ?? ''}
-					options={FILTERS}
-					onChange={(value) => run.setListFilter(value as ListFilter)}
-				/>
+				<div class="min-w-0" data-slot="list-filter">
+					<Segmented
+						label="Show"
+						class="h-auto shrink flex-wrap"
+						value={showSelected ? '' : (run.listFilter ?? '')}
+						options={FILTERS}
+						onChange={(value) => {
+							showSelected = false;
+							run.setListFilter(value as ListFilter);
+						}}
+					/>
+				</div>
 			</div>
-			<div class="relative w-64">
+			<div class="relative w-full sm:w-64">
 				<Search class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" aria-hidden="true" />
-				<Input class="h-8 pl-8" type="search" placeholder="Filter by code" bind:value={search} aria-label="Filter by code" />
+				<Input class="h-8 pl-8" type="search" placeholder="Filter by code" bind:value={search} aria-label="Filter by code" disabled={showSelected} />
 			</div>
 		</div>
 
@@ -217,9 +223,11 @@
 			>
 				Show selected
 			</Button>
-			<Button size="sm" variant="outline" onclick={() => void selectAll()} disabled={selectingAll}>
-				{selectingAll ? 'Selecting…' : matching === null ? 'Select all' : `Select all ${matching}`}
-			</Button>
+			{#if !showSelected}
+				<Button size="sm" variant="outline" onclick={() => void selectAll()} disabled={selectingAll}>
+					{selectingAll ? 'Selecting…' : matching === null ? 'Select all' : `Select all ${matching}`}
+				</Button>
+			{/if}
 			<Button size="sm" variant="ghost" onclick={() => run.setSelected([])} disabled={count === 0}>Clear</Button>
 			{#if selectError}<span class="text-destructive text-sm">{selectError}</span>{/if}
 		</div>
@@ -247,7 +255,7 @@
 						{#if column.path === 'tasks'}
 							<span class="font-mono text-xs tabular-nums">{taskCount(value) ?? ''}</span>
 						{:else}
-							<FieldValue {value} dataType={column.dataType} field={column.field} context={liveContext()} density="compact" />
+							<FieldValue {value} dataType={column.dataType} field={column.field} context={liveContext()} density="compact" emptyLabel="" />
 						{/if}
 					{/snippet}
 				</EntityTable>

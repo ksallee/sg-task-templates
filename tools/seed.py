@@ -372,23 +372,12 @@ class Seed:
         return ("pristine" if snap == mine["snapshot"] else "drifted"), rows
 
     def drift_detail(self, sc):
+        """The drift lines for a scenario: every drifted entity, from _plan.drift_report."""
         mine = self.m["scenarios"][sc["id"]]
         refs = [{"type": sc["entity_type"], "id": e["id"]} for e in mine["entities"].values()]
         now = self.snapshot(sc["entity_type"], refs)
-        out = []
-        for eid, s in mine["snapshot"].items():
-            n = now.get(eid, {})
-            for k in ("task_template", "edges", "versions", "pfs"):
-                if s.get(k) != n.get(k):
-                    out.append(f"{eid}.{k}")
-            for tid in sorted(set(s["tasks"]) | set(n.get("tasks", {}))):
-                a, b = s["tasks"].get(tid), n.get("tasks", {}).get(tid)
-                if a != b:
-                    if a is None or b is None:
-                        out.append(f"task {tid} {'added' if a is None else 'gone'}")
-                    else:
-                        out += [f"task {tid}.{k} {a[k]!r} -> {b[k]!r}" for k in a if a[k] != b.get(k)]
-        return out
+        codes = {str(e["id"]): e["code"] for e in mine["entities"].values()}
+        return _plan.drift_report(mine["snapshot"], now, codes)
 
     # -- scenarios: writing -----------------------------------------------------------------------------
 
@@ -624,10 +613,9 @@ def main():
     for sc in s.plan["scenarios"]:
         st, rows = s.state(sc)
         states[sc["id"]] = (st, rows)
-        extra = ""
+        print(f"  {sc['id']:<5} {st}")
         if st == "drifted":
-            extra = "  " + "; ".join(s.drift_detail(sc)[:4])
-        print(f"  {sc['id']:<5} {st}{extra}")
+            print("\n".join("        " + x for x in s.drift_detail(sc)))
 
     if not write:
         print(f"\ndry run in {time.time() - t0:.0f}s. Pass --write to create what is missing.")

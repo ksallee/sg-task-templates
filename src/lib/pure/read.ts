@@ -279,6 +279,17 @@ export function defaultTemplateFor(trackingSettings: unknown, entityType: string
 }
 
 /**
+ * The types a Task hangs off: `Task.entity`'s declared `valid_types` (entity_types/Task: Asset, Level,
+ * the Mocap types, ShootDay, Shot, Sequence on the probed site, plus whatever the site enables). The
+ * link is advisory to the API (field_types/entity), but the declared set is the site's own list of
+ * types that take Tasks, so a type outside it (Attachment, Version, a connection) is never offered.
+ * Task itself is left out. Empty when the field names no types.
+ */
+export function taskHostTypes(entityField: FieldSchema | null): string[] {
+	return (entityField?.validTypes ?? []).filter((type) => type !== 'Task');
+}
+
+/**
  * Entity types whose schema declares a `task_template` field, custom entities included (brief 1),
  * Task excepted: on a Task, `task_template` marks a template task (entity_types/TaskTemplate).
  */
@@ -288,11 +299,17 @@ export function templatableTypes(fieldsByType: Record<string, Record<string, Fie
 		.map(([type]) => type);
 }
 
-/** `defaultTaskStatus` and `validTaskStatuses` (valid minus hidden) off a normalized status field. */
-export function taskStatusContext(field: FieldSchema): Pick<ProjectContext, 'defaultTaskStatus' | 'validTaskStatuses'> {
+/**
+ * `defaultTaskStatus`, `validTaskStatuses` (valid minus hidden) and the display names
+ * (`display_values`, the only source of a label, 009) off a normalized status field.
+ */
+export function taskStatusContext(
+	field: FieldSchema
+): Pick<ProjectContext, 'defaultTaskStatus' | 'validTaskStatuses' | 'taskStatusNames'> {
 	return {
 		defaultTaskStatus: typeof field.defaultValue === 'string' ? field.defaultValue : '',
-		validTaskStatuses: usableStatuses(field).map((s) => s.code)
+		validTaskStatuses: usableStatuses(field).map((s) => s.code),
+		taskStatusNames: { ...(field.displayValues ?? {}) }
 	};
 }
 

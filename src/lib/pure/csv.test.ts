@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLAN_CSV_COLUMNS, PLAN_CSV_HEADERS, planToCsv } from './csv';
 import { matchKey } from './matching';
-import { planEntity, withConflictPick, withExtraOverride } from './planner';
+import { planEntity, withConflictPick, withEntityConflictPick, withExtraOverride } from './planner';
 import type {
 	Edge,
 	EdgeAction,
@@ -118,7 +118,6 @@ const opts: RunOptions = {
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false
 };
 
 function snap(
@@ -195,8 +194,8 @@ function parse(csv: string): string[][] {
 type Col = (typeof PLAN_CSV_COLUMNS)[number];
 type Line = Record<Col, string>;
 
-function lines(plans: EntityPlan[], template: Template = tt2, labels?: Record<string, string>): Line[] {
-	const csv = planToCsv(plans, template, labels);
+function lines(plans: EntityPlan[], template: Template = tt2, labels?: Record<string, string>, o?: RunOptions): Line[] {
+	const csv = planToCsv(plans, template, labels, o);
 	const [header, ...body] = parse(csv.slice(1));
 	expect(header).toEqual(PLAN_CSV_COLUMNS.map((c) => PLAN_CSV_HEADERS[c]));
 	return body.map((cells) => {
@@ -305,6 +304,12 @@ describe('planToCsv: task rows (recipe 015)', () => {
 		expect(create.dates).toBe('template dates 2026-03-02 to 2026-03-04; can be cleared');
 	});
 
+	it('a created Task with no template dates says only that', () => {
+		const t: Template = { ...tt2, tasks: tt2.tasks.map((x) => ({ ...x, startDate: null, dueDate: null })) };
+		const ls = lines([plan(snap([task(1, 'comp', 11)]), opts, t)], t);
+		expect(byAction(ls, 'create').map((l) => l.dates)).toEqual(['no template dates', 'no template dates']);
+	});
+
 	it('says when a created Task cannot have its dates cleared (upstream edge, 097)', () => {
 		const t: Template = { ...tt2, edges: [edge(900, 47202, 47201)] };
 		const ls = lines([plan(snap([task(1, 'comp', 11)]), opts, t)], t);
@@ -403,6 +408,16 @@ describe('planToCsv: conflicts', () => {
 		expect(c.usage).toBe('#47299: 1 version; #47297: none');
 		expect(c.reason).toBe('pre-pick: it has Versions or Published Files');
 		expect(c.decision).toBe('pick (the pre-pick): Paint  #47299');
+	});
+
+	it('a choice made by hand reads as picked, on its row and in the counts', () => {
+		const o = withEntityConflictPick(opts, 7557, 47203, 47297);
+		const p = plan(snap(tasks(), { usage }), o);
+		const ls = lines([p], tt2, undefined, o);
+		expect(byAction(ls, 'conflict')).toEqual([]);
+		expect(ls.filter((l) => l.action === 'Picked')).toHaveLength(1);
+		expect(ls[0].reason).not.toContain('Needs a choice');
+		expect(ls[0].reason).toContain('Picked 1');
 	});
 
 	it('labels a pick that differs from the pre-pick', () => {
@@ -551,10 +566,19 @@ describe('planToCsv: edges', () => {
 			expect(one(lines([plan(s)]), 'edge-outside').reason).toBe('downstream Task outside the template: kept');
 		});
 
-		it('an extra that is deleted takes its edges (103)', () => {
-			const s = snap(tasks(), { edges: [edge(77, 1, 3), edge(504, 9, 1)] });
-			const e = one(lines([plan(s, withExtraOverride(opts, 9, 'delete'))]), 'edge-outside');
-			expect(e.reason).toBe('deleted with the Task not in the template cleanup #9');
+		it('an extra that is deleted takes its edges, either direction, never re-created (103)', () => {
+			const s = snap(tasks(), { edges: [edge(77, 1, 3), edge(504, 9, 1), edge(503, 1, 9)] });
+			const ls = lines([plan(s, withEdge(withExtraOverride(opts, 9, 'delete'), 503, 'keep'))]);
+			expect(byAction(ls, 'edge-outside')).toEqual([]);
+			const gone = byAction(ls, 'edge-delete');
+			expect(gone.map((l) => [l.edge_downstream, l.edge_upstream])).toEqual([
+				['cleanup #9', 'comp #1'],
+				['comp #1', 'cleanup #9']
+			]);
+			for (const e of gone) {
+				expect(e.reason).toBe('removed with cleanup #9, which is deleted');
+				expect(e.decision).toBe('');
+			}
 		});
 
 		it('names a Task of another entity by id', () => {

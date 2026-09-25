@@ -3,6 +3,7 @@ import { matchKey } from './matching';
 import {
 	describeDifference,
 	describeNote,
+	fileRuns,
 	mergeNotes,
 	nameBook,
 	resultRows,
@@ -98,7 +99,6 @@ const run = (entities: Run['entities']): Run => ({
 		conflictPicks: {},
 		edgeActions: {},
 		clearCreatedDates: false,
-		deleteConfirmed: false
 	},
 	startedAt: '2026-09-24T10:00:00Z',
 	finishedAt: null,
@@ -251,5 +251,30 @@ describe('resultRows', () => {
 describe('undoFileName', () => {
 	it('names the file by template and time', () => {
 		expect(undoFileName(run([]))).toBe('undo-T-2026-09-24T10-00-00Z.json');
+	});
+});
+
+describe('fileRuns', () => {
+	const rec = (runId: string, id: number, appliedAt: string) =>
+		({ runId, entity: { type: 'Shot', id, name: `sh${id}` }, templateId: 5, appliedAt }) as unknown as UndoRecord;
+	const stored = (states: Array<'done' | 'undone'>): Run =>
+		({
+			id: 'r1',
+			template: { id: 5, code: 'TT Seed · Shot v2' },
+			entities: states.map((state, i) => ({ entity: { type: 'Shot', id: i + 1 }, status: { state, undo: rec('r1', i + 1, 'x') } }))
+		}) as unknown as Run;
+
+	it('lists each run in the file with its entities and first apply time; what the store marks undone is refused', () => {
+		const records = [rec('r1', 1, '2026-09-25T14:48:22Z'), rec('r1', 2, '2026-09-25T14:48:21Z'), rec('r2', 7, '2026-09-24T10:00:00Z')];
+		const runs = fileRuns(records, { r1: stored(['undone', 'done']), r2: null });
+		expect(runs.map((r) => [r.runId, r.title, r.appliedAt, r.entities.map((e) => [e.label, e.undone]), r.records.length])).toEqual([
+			['r1', 'TT Seed · Shot v2', '2026-09-25T14:48:21Z', [['sh1', true], ['sh2', false]], 1],
+			['r2', 'Template #5', '2026-09-24T10:00:00Z', [['sh7', false]], 1]
+		]);
+	});
+
+	it('a run the store marks all undone has nothing to undo', () => {
+		const [run] = fileRuns([rec('r1', 1, 'a'), rec('r1', 2, 'b')], { r1: stored(['undone', 'undone']) });
+		expect(run.records).toEqual([]);
 	});
 });

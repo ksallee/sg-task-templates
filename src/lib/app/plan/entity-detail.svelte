@@ -37,21 +37,28 @@
 		tasks: EntityTask[];
 		options: RunOptions;
 		onOptions: (next: RunOptions) => void;
+		/** Task status display names by code. */
+		statusNames?: Record<string, string>;
 	};
-	let { plan, summary, template, tasks, options, onOptions }: Props = $props();
+	let { plan, summary, template, tasks, options, onOptions, statusNames = {} }: Props = $props();
+	const statusField = $derived({ displayValues: statusNames });
+	const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 	const edges = $derived(edgeView(plan, template, tasks));
 	const warnings = $derived(entityWarnings(plan, options).filter((w) => w.code !== 'unresolved_conflict_row'));
 	const picks = $derived(picksFor(options, plan.entity.id));
 	const EXTRA_OPTIONS = EXTRA_ACTIONS.map((a) => ({ value: a, label: a, tone: a === 'delete' ? ('destructive' as const) : undefined }));
 	const TONE = { block: 'destructive', warn: 'warning', info: 'info' } as const;
-	const noEdges = $derived(edges.added.length === 0 && edges.affected.length === 0 && edges.outsideDownstream.length === 0);
+	const noEdges = $derived(
+		edges.added.length === 0 && edges.affected.length === 0 && edges.outsideDownstream.length === 0 && edges.withDeleted.length === 0
+	);
 	const edgeLine = $derived(
 		[
 			edges.added.length ? `${edges.added.length} added` : null,
 			edges.affected.length
 				? `${edges.affected.length} removed by the apply (${edges.affected.filter((e) => e.action === 'keep').length} re-created)`
 				: null,
+			edges.withDeleted.length ? `${edges.withDeleted.length} removed with a deleted Task` : null,
 			edges.outsideDownstream.length ? `${edges.outsideDownstream.length} to Tasks outside the template, kept` : null,
 			edges.mayMove.length ? `dates may move on ${edges.mayMove.length}` : null,
 			edges.wouldViolate.length ? `${edges.wouldViolate.length} would flag a dependency violation` : null
@@ -133,14 +140,14 @@
 								<span class="flex flex-wrap items-center gap-2">
 									<span class="font-medium">{c.task.content ?? '(no name)'}</span>
 									<span class="text-muted-foreground text-xs tabular-nums">#{c.task.id}</span>
-									{#if c.task.status}<StatusBadge code={c.task.status} variant="text" size="xs" label="code" />{/if}
+									{#if c.task.status}<StatusBadge code={c.task.status} field={statusField} variant="text" size="xs" />{/if}
 									{#if pre}
 										<span class="border-info/60 text-info inline-flex h-5 items-center rounded-md border px-1.5 text-xs font-medium">pre-pick</span>
 										<span class="text-muted-foreground text-xs">{PICK_REASON[row.reason]}</span>
 									{/if}
 								</span>
 								<span class="text-muted-foreground text-xs tabular-nums">
-									{c.usage.versions} Versions · {c.usage.publishedFiles} Published Files · created {c.task.createdAt.slice(0, 10)}
+									{plural(c.usage.versions, 'Version')} · {plural(c.usage.publishedFiles, 'Published File')} · created {c.task.createdAt.slice(0, 10)}
 								</span>
 							</span>
 						</button>
@@ -203,7 +210,7 @@
 							<ChevronRight class={cn('text-muted-foreground size-4 shrink-0 transition-transform', on && 'rotate-90')} aria-hidden="true" />
 							<span class="truncate font-medium">{l.name}</span>
 							{#if l.taskId !== null}<span class="text-muted-foreground text-xs tabular-nums">#{l.taskId}</span>{/if}
-							{#if l.status && l.taskId !== null}<StatusBadge code={l.status} variant="text" size="xs" label="code" />{/if}
+							{#if l.status && l.taskId !== null}<StatusBadge code={l.status} field={statusField} variant="text" size="xs" />{/if}
 							<span class="mr-auto"></span>
 							{#each l.markers as m (m.key)}
 								<span class={cn('inline-flex h-5 shrink-0 items-center rounded-md border px-1.5 text-xs whitespace-nowrap', TONE_TEXT[m.tone])} data-slot="task-marker"
@@ -305,6 +312,16 @@
 					</ul>
 				</div>
 			{/if}
+			{#if edges.withDeleted.length > 0}
+				<div class="flex flex-col gap-1.5" data-slot="edges-with-deleted">
+					<p class="text-muted-foreground text-xs font-medium">Removed with a deleted Task · {edges.withDeleted.length}</p>
+					<ul class="divide-border text-muted-foreground flex flex-col divide-y rounded-lg border text-sm">
+						{#each edges.withDeleted as e (e.id)}
+							<li class="px-3 py-1.5">{@render waits(e)}</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
 			{#if edges.outsideDownstream.length > 0}
 				<div class="flex flex-col gap-1.5">
 					<p class="text-muted-foreground text-xs font-medium">To Tasks outside the template, kept by the apply · {edges.outsideDownstream.length}</p>
@@ -322,7 +339,7 @@
 			{/if}
 			{#if edges.wouldViolate.length > 0}
 				<Notice tone="warning" title="Would flag a dependency violation: " data-slot="date-violation">
-					{edges.wouldViolate.join(', ')}. Pinned: they keep their dates.
+					{edges.wouldViolate.join(', ')}. Pinned: {edges.wouldViolate.length === 1 ? 'it keeps its dates' : 'they keep their dates'}.
 				</Notice>
 			{/if}
 		{/if}

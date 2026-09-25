@@ -20,6 +20,9 @@
  * A kept edge whose re-creation would close a loop of any length is refused by the server (085,
  * 107) and rolls the whole batch back: it is marked `closesLoop` and defaults to remove.
  *
+ * An edge with an end on a Task the batch deletes goes with that Task (089, 103), whatever the
+ * apply would do to it: listed in `withDeleted`, never kept, and out of the after-apply graph.
+ *
  * Date impact is graph level. An edge that comes to exist reschedules its unpinned downstream Task
  * at once and the move cascades (092, 087, 100); a pinned Task holds and flags
  * `dependency_violation` (092). Deleting an edge moves nothing (095). Whether a given Task really
@@ -52,6 +55,8 @@ export interface EdgeInput {
 	mapping: TaskMap;
 	/** By TaskDependency id. Absent = 'keep'. */
 	edgeActions?: Record<Id, EdgeAction>;
+	/** Tasks the batch deletes (extras set to delete): their edges go with them. */
+	deleted?: Id[];
 }
 
 /** Keep, claim and create rows, and conflicts by their pick (null = the server creates it). */
@@ -92,6 +97,7 @@ function sameSpec(a: Edge, b: Edge): boolean {
 export function planEdges(input: EdgeInput): EdgePlan {
 	const { template, tasks, edges, mapping } = input;
 	const actions = input.edgeActions ?? {};
+	const deleted = new Set(input.deleted ?? []);
 
 	const mappedExisting = new Set<Id>();
 	for (const m of mapping.values()) if ('existing' in m) mappedExisting.add(m.existing);
@@ -112,7 +118,8 @@ export function planEdges(input: EdgeInput): EdgePlan {
 		toExtras: [],
 		mayMove: [],
 		wouldViolate: [],
-		untouched: []
+		untouched: [],
+		withDeleted: []
 	};
 	const standing: GraphEdge[] = []; // existing edges the apply keeps
 	const satisfied = new Set<string>(); // pairs already holding the template's edge
@@ -121,6 +128,11 @@ export function planEdges(input: EdgeInput): EdgePlan {
 	const pending: Array<{ a: AffectedEdge; g: GraphEdge; pair: string | null; explicit: boolean }> = [];
 
 	for (const edge of edges) {
+		const gone = deleted.has(edge.upstream) ? edge.upstream : deleted.has(edge.downstream) ? edge.downstream : null;
+		if (gone !== null && edge.id !== null) {
+			plan.withDeleted!.push({ edge: edge as Edge & { id: Id }, task: gone });
+			continue;
+		}
 		const down = mappedExisting.has(edge.downstream);
 		const up = mappedExisting.has(edge.upstream);
 		const g = { down: taskNode(edge.downstream), up: taskNode(edge.upstream) };

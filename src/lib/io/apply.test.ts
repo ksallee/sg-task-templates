@@ -13,7 +13,9 @@ import type {
 	TemplateTask
 } from '$lib/pure/types';
 import { applyRun, INTERRUPTED, recoverInterrupted, retryFailed, type ApplyProgress } from './apply';
+import { fakeClient } from './fake-client';
 import { openUndoStore } from './undo-store';
+import { plannedMap } from './apply';
 
 // Template 5 has one task, comp (template task 500). Shot n has one hand-made comp, Task n*10,
 // which the plan claims.
@@ -29,7 +31,6 @@ const options = (o: Partial<RunOptions> = {}): RunOptions => ({
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false,
 	...o
 });
 
@@ -199,7 +200,16 @@ describe('applyRun', () => {
 		const store = await openUndoStore(undefined);
 		const seen: ApplyProgress[] = [];
 		await applyRun(newRun(1), [claimPlan(1)], ctx, { client: site.client, read: site.read, store, onProgress: (p) => seen.push(p) });
-		expect(seen.at(-1)).toEqual({ entity: shot(1), state: 'failed', finished: 1, total: 1, error: { status: 400, message: 'The field is not editable for this user' } });
+		// 113: the refused batch landed nothing; the read-back says so.
+		expect(seen.at(-1)).toEqual({
+			entity: shot(1),
+			state: 'failed',
+			finished: 1,
+			total: 1,
+			error: { status: 400, message: 'The field is not editable for this user' },
+			stage: 'apply',
+			written: []
+		});
 	});
 
 	it('sends the one batch per entity, claim then template (recipe 020)', async () => {
@@ -254,7 +264,7 @@ describe('applyRun', () => {
 		const deps = { client: site.client, read: site.read, store };
 		const first = await applyRun(run, plans, ctx, deps);
 		fail.clear();
-		const again = await retryFailed(run, [{ plan: plans[1], outcome: first[1] }], ctx, deps);
+		const again = await retryFailed(run, [{ plan: plans[1], stage: first[1].stage }], ctx, deps);
 		expect(again[0].result.kind).toBe('ok');
 		expect((await store.loadRun('run-1'))!.entities[1].status.state).toBe('done');
 	});
@@ -308,7 +318,7 @@ describe('applyRun', () => {
 		expect((await store.loadRun('run-1'))!.entities[0].status).toMatchObject({ state: 'failed', undo: { created: [11] } });
 
 		failPhase2 = false;
-		const [again] = await retryFailed(run, [{ plan: createPlan(1), outcome: first }], ctx, deps);
+		const [again] = await retryFailed(run, [{ plan: createPlan(1), stage: first.stage, prepared: first.prepared }], ctx, deps);
 		expect(again.result.kind).toBe('ok');
 		expect(site.log.filter((l) => l.requests[0].entity === 'Shot')).toHaveLength(1); // phase 1 not resent
 	});
@@ -332,5 +342,56 @@ describe('recoverInterrupted', () => {
 		const s1 = recovered.entities[0].status;
 		expect(s1).toMatchObject({ state: 'failed', error: { message: INTERRUPTED }, undo: { claimed: [{ taskId: 10, previousTemplateTask: null }] } });
 		expect(remainingEntities(recovered)).toEqual([shot(2)]);
+	});
+});
+
+describe('QA item 1: a Task retired out of band between the plan and the apply', () => {
+	// tts_bulk_012, 2026-09-25: Roto #47844 retired at 14:48:09, after the plan's read. Phase 1
+	// landed at 14:48:21; phase 2 re-created the kept edge on #47844 and was refused (113: 400 "Value
+	// is not legal"). The app said Failed while phase 1 stood; the retry re-sent phase 2.
+	const ROTO = 47844;
+	const planned = snap(1, [task(1, 10, 'comp', null), task(1, ROTO, 'roto', null)]);
+	planned.edges = [{ id: 700, downstream: 10, upstream: ROTO, type: 'start-to-start', offsetDays: 1 }];
+
+	it('sends nothing: the read before the write differs from the plan, and the result says what changed', async () => {
+		const now = snap(1, [task(1, 10, 'comp', null)]);
+		const { client, calls } = fakeClient({ batch: async () => [] });
+		const store = await openUndoStore(undefined);
+		const [out] = await applyRun(newRun(1), [claimPlan(1)], ctx, { client, read: async () => now, store, planned: plannedMap([planned]) });
+
+		expect(calls.filter((c) => c.method === 'batch')).toEqual([]);
+		expect(out.stage).toBe('changed');
+		expect(out.drift).toEqual([
+			{ code: 'task_removed', task: { id: ROTO, name: 'roto' } },
+			{ code: 'edge_removed', downstream: { id: 10, name: 'comp' }, upstream: { id: ROTO, name: 'roto' } }
+		]);
+		const stored = (await store.loadRun('run-1'))!.entities[0].status;
+		expect(stored).toMatchObject({ state: 'failed', stage: 'changed', undo: null });
+		expect(remainingEntities((await store.loadRun('run-1'))!)).toEqual([shot(1)]);
+	});
+
+	it('an unchanged entity is applied as planned', async () => {
+		const site = claimedSite();
+		const store = await openUndoStore(undefined);
+		const [out] = await applyRun(newRun(1), [claimPlan(1)], ctx, { client: site.client, read: site.read, store, planned: plannedMap([snap(1, [task(1, 10, 'comp', null)])]) });
+		expect(out.result.kind).toBe('ok');
+	});
+
+	it('phase 2 refused: the entity failed with what phase 1 wrote, and its record to undo it', async () => {
+		const site = fakeSite({
+			before: (n) => snap(n, []),
+			after: (n) => snap(n, [task(n, n * 10 + 1, 'layout', 501, '2026-10-01')], TEMPLATE)
+		});
+		const client = {
+			async batch(reqs: BatchRequest[]) {
+				if (reqs[0].entity === 'Task') throw new SgApiError(400, null, 'Invalid field value, update failed [5 - Update failed for [TaskDependency.dependent_task]: Value is not legal.]');
+				return site.client.batch(reqs);
+			}
+		};
+		const store = await openUndoStore(undefined);
+		const [out] = await applyRun(newRun(1, { clearCreatedDates: true }), [createPlan(1)], ctx, { client, read: site.read, store });
+		expect(out.stage).toBe('after_apply');
+		expect(out.written?.map((c) => c.code)).toEqual(['template', 'task_added']);
+		expect((await store.loadRun('run-1'))!.entities[0].status).toMatchObject({ state: 'failed', stage: 'after_apply', undo: { created: [11] } });
 	});
 });

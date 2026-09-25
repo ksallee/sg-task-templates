@@ -7,8 +7,8 @@
  * - The bulk options on top: the fields under policy with their choices (no fill-if-empty on
  *   booleans, Q-F), the omit status when the project has no `omt`, the clear-dates opt-in only where
  *   a created Task has no upstream edge (093, 097).
- * - What blocks Apply: an unresolved conflict, refused access (094), an omit with no status, deletes
- *   awaiting their second confirmation (089), a kept edge that closes a loop.
+ * - What blocks Apply: an unresolved conflict, refused access (094), an omit with no status, a kept
+ *   edge that closes a loop. Deletes block nothing: the Apply dialog confirms them (apply-confirm.ts).
  *
  * Option setters return new `RunOptions`; `run.setOptions` re-plans from them.
  */
@@ -90,9 +90,8 @@ export function acceptPicks(opts: RunOptions, plans: EntityPlan[]): RunOptions {
 // Option setters
 // ---------------------------------------------------------------------------------------------
 
-/** Any change to an extra's action withdraws the delete confirmation: the list it confirmed changed. */
 export function withExtraAction(opts: RunOptions, taskId: Id, action: ExtraAction): RunOptions {
-	return { ...opts, extraOverrides: { ...opts.extraOverrides, [taskId]: action }, deleteConfirmed: false };
+	return { ...opts, extraOverrides: { ...opts.extraOverrides, [taskId]: action } };
 }
 
 /** Bulk by normalized name; per-Task overrides of that name are dropped so the bulk choice shows. */
@@ -101,7 +100,7 @@ export function withExtraNameAction(opts: RunOptions, name: string, action: Extr
 	for (const p of plans) {
 		for (const r of p.rows) if (r.kind === 'extra' && normalized(r.task.content) === name) delete overrides[r.task.id];
 	}
-	return { ...opts, extraByName: { ...opts.extraByName, [name]: action }, extraOverrides: overrides, deleteConfirmed: false };
+	return { ...opts, extraByName: { ...opts.extraByName, [name]: action }, extraOverrides: overrides };
 }
 
 export function withEdgeAction(opts: RunOptions, edgeId: Id, action: EdgeAction): RunOptions {
@@ -114,10 +113,6 @@ export function withOmitStatus(opts: RunOptions, status: string): RunOptions {
 
 export function withClearCreatedDates(opts: RunOptions, on: boolean): RunOptions {
 	return { ...opts, clearCreatedDates: on };
-}
-
-export function withDeleteConfirmed(opts: RunOptions, on: boolean): RunOptions {
-	return { ...opts, deleteConfirmed: on };
 }
 
 const normalized = normalizeContent;
@@ -167,11 +162,23 @@ export function policySummary(views: Array<Pick<PolicyFieldView, 'field' | 'poli
 	return [`${head}: ${policyLabel('', common)}`, ...odd].join(' · ');
 }
 
-/** The bulk extra actions in one line: how many names, leave by default, then each name set otherwise. */
-export function extrasSummary(names: Array<{ name: string; count: number }>, opts: RunOptions): string {
+/**
+ * The bulk extra actions in one line: each name set otherwise, as written, then how many are left.
+ * "Not in template: Lighting omit, Paint delete, 2 other names leave".
+ */
+export function extrasSummary(names: Array<{ name: string; label?: string; count: number }>, opts: RunOptions): string {
 	if (names.length === 0) return 'No Tasks outside the template';
-	const odd = names.filter((n) => (opts.extraByName[n.name] ?? 'leave') !== 'leave').map((n) => `${n.name || '(no name)'}: ${opts.extraByName[n.name]}`);
-	return [`${names.length} name${names.length === 1 ? '' : 's'} not in the template: leave`, ...odd].join(' · ');
+	const shown = (n: { name: string; label?: string }) => (n.label ?? n.name) || '(no name)';
+	const action = (n: { name: string }) => opts.extraByName[n.name] ?? 'leave';
+	const odd = names.filter((n) => action(n) !== 'leave').map((n) => `${shown(n)} ${action(n)}`);
+	const left = names.filter((n) => action(n) === 'leave');
+	const rest =
+		left.length === 0
+			? []
+			: odd.length > 0
+				? [`${left.length} other ${left.length === 1 ? 'name leaves' : 'names leave'}`]
+				: [left.length === 1 ? `${shown(left[0])} leave` : `${left.length} names leave`];
+	return `Not in template: ${[...odd, ...rest].join(', ')}`;
 }
 
 /** Why the pre-pick chose its Task (matching.ts `prePick`), in words. */
@@ -215,21 +222,6 @@ export function clearableCreates(plans: EntityPlan[]): number {
 	return n;
 }
 
-export interface PendingDelete {
-	entity: EntityPlan['entity'];
-	task: EntityTask;
-	usage: TaskUsage;
-}
-
-/** Every extra set to delete, for the second confirmation (brief 3); those with usage first (089). */
-export function pendingDeletes(plans: EntityPlan[]): PendingDelete[] {
-	const out: PendingDelete[] = [];
-	for (const p of plans) {
-		for (const r of p.rows) if (r.kind === 'extra' && r.action === 'delete') out.push({ entity: p.entity, task: r.task, usage: r.usage });
-	}
-	const used = (d: PendingDelete) => (d.usage.versions + d.usage.publishedFiles > 0 ? 0 : 1);
-	return out.sort((a, b) => used(a) - used(b));
-}
 
 // ---------------------------------------------------------------------------------------------
 // Warnings and blockers
@@ -317,8 +309,6 @@ export function applyBlockers(
 	if (access?.looksShort) out.push('Write access looks refused.');
 	const omits = plans.some((p) => p.rows.some((r) => r.kind === 'extra' && r.action === 'omit'));
 	if (omits && !ctx.validTaskStatuses.includes(opts.omitStatus)) out.push('Pick the status omitted Tasks take.');
-	const deletes = pendingDeletes(plans).length;
-	if (deletes > 0 && !opts.deleteConfirmed) out.push(`Confirm ${deletes} delete${deletes === 1 ? '' : 's'}.`);
 	const loops = plans.reduce((n, p) => n + p.edges.affected.filter((a) => a.closesLoop && a.action === 'keep').length, 0);
 	if (loops > 0) out.push(`${loops} kept ${loops === 1 ? 'dependency' : 'dependencies'} would close a loop: remove ${loops === 1 ? 'it' : 'them'}.`);
 	if (plans.length > 0 && plans.every((p) => p.noop)) out.push('Nothing to write.');
@@ -427,6 +417,8 @@ export interface EdgeView {
 	affected: AffectedEdgeView[];
 	/** Linked Task upstream of a Task outside the template: kept by the apply, shown for information (101, 109). */
 	outsideDownstream: AddedEdgeView[];
+	/** Edges on a Task the batch deletes: removed with it, no choice (103). `deleted` names that Task. */
+	withDeleted: Array<AddedEdgeView & { id: Id; deleted: string }>;
 	mayMove: string[];
 	wouldViolate: string[];
 }
@@ -475,6 +467,15 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 			type: e.type,
 			offsetDays: e.offsetDays,
 			...words(e.type, e.offsetDays)
+		})),
+		withDeleted: (plan.edges.withDeleted ?? []).map(({ edge: e, task }) => ({
+			id: e.id,
+			upstream: existing(e.upstream),
+			downstream: existing(e.downstream),
+			type: e.type,
+			offsetDays: e.offsetDays,
+			...words(e.type, e.offsetDays),
+			deleted: existing(task).label
 		})),
 		mayMove: plan.edges.mayMove.map((id) => existing(id).label),
 		wouldViolate: plan.edges.wouldViolate.map((id) => existing(id).label)

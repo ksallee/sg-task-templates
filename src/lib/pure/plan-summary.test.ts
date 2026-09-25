@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultRunOptions } from './entry';
 import { matchKey } from './matching';
 import { planEntity, withFieldPolicy } from './planner';
-import { acceptPicks, withDeleteConfirmed, withExtraAction } from './plan-view';
+import { acceptPicks, withExtraAction } from './plan-view';
 import {
 	OUTCOME_MEANING,
 	OUTCOME_ORDER,
@@ -135,7 +135,7 @@ describe('taskLines: one outcome per Task', () => {
 		const p = plan(extraSnap);
 		const anim = byTask(taskLines(p, input([p])), 10);
 		expect(anim.details.map((d) => d.text)).toContain('Linked before: Anim in TT Seed · Shot v1.');
-		expect(anim.details[0].text).toBe('Same name and Step (anim @ Anim): linked to Anim in TT Seed · Shot v2.');
+		expect(anim.details[0].text).toBe('Same name and Step: linked to Anim in TT Seed · Shot v2.');
 	});
 
 	it('marks filled dates, and a Task downstream of a new dependency whose dates may move (092)', () => {
@@ -172,10 +172,37 @@ describe('taskLines: one outcome per Task', () => {
 		expect(paint.outcome).toBe('deleted');
 		expect(paint.markers).toContainEqual({ key: 'usage', label: '2 Versions, 3 Published Files', tone: 'destructive' });
 		expect(paint.details.map((d) => d.text)).toContain(
-			'Deleted once you confirm. Its 2 Versions and 3 Published Files are orphaned; undo revives it.'
+			'Deleted. Its 2 Versions and 3 Published Files are orphaned; undo revives it.'
 		);
+		const one = { ...extraSnap, usage: { 11: { versions: 1, publishedFiles: 1 } } };
+		const single = byTask(taskLines(plan(one, o), input([plan(one, o)], o)), 11);
+		expect(single.markers).toContainEqual({ key: 'usage', label: '1 Version, 1 Published File', tone: 'destructive' });
+		expect(single.details.map((d) => d.text)).toContain('Deleted. Its 1 Version and 1 Published File are orphaned; undo revives it.');
 		expect(byTask(lines, 13).outcome).toBe('omitted');
-		expect(byTask(lines, 13).details.map((d) => d.text)).toContain('Status wtg becomes omt.');
+		expect(byTask(lines, 13).details.map((d) => d.text)).toEqual(['Not in the template.', 'Status wtg becomes omt.']);
+		const names = { wtg: 'Waiting to Start', omt: 'Omitted' };
+		const named = byTask(taskLines(p, input([p], o, { statusNames: names })), 13);
+		expect(named.details.map((d) => d.text)).toContain('Status Waiting to Start becomes Omitted.');
+	});
+
+	it('a Task not in the template reads as sentences: why, then what happens', () => {
+		const p = plan(extraSnap);
+		expect(byTask(taskLines(p, input([p])), 13).details.map((d) => d.text)).toEqual(['Not in the template.', 'Left as it is.']);
+		const o = withExtraAction(opts0(), 13, 'delete');
+		const q = plan(extraSnap, o);
+		expect(byTask(taskLines(q, input([q], o)), 13).details.map((d) => d.text)).toEqual(['Not in the template.', 'Deleted; undo revives it.']);
+	});
+
+	it('an edge on a Task set to delete is removed with it, on both ends, never offered keep (103)', () => {
+		const o = withExtraAction(opts0(), 11, 'delete');
+		const p = plan(extraSnap, o);
+		expect(p.edges.affected).toEqual([]);
+		const lines = taskLines(p, input([p], o));
+		expect(byTask(lines, 10).details.map((d) => d.text)).toContain('Anim #10 after Paint #11: removed with Paint #11, which is deleted.');
+		expect(byTask(lines, 11).details.map((d) => d.text)).toContain('Anim #10 after Paint #11: removed with this Task.');
+		const s = planSummary(input([p], o));
+		expect(s.lines.find((l) => l.key === 'deps_removed')!.text).toBe('1 dependency removed');
+		expect(s.lines.find((l) => l.key === 'deps_recreated')).toBeUndefined();
 	});
 
 	it('a linked Task with nothing to change is unchanged; renamed back by hand is updated, loudly', () => {
@@ -221,10 +248,7 @@ describe('taskLines: conflicts', () => {
 		expect(choice).toHaveLength(1);
 		expect(choice[0].conflict?.candidates.map((c) => c.task.id)).toEqual([2, 1]);
 		expect(choice[0].name).toBe('Comp');
-		expect(choice[0].details.map((d) => d.text)).toEqual([
-			'2 Tasks match comp @ Anim: pick the Task to link, or create a new one.',
-			'Pre-pick: comp #2, it has Versions or Published Files.'
-		]);
+		expect(choice[0].details.map((d) => d.text)).toEqual(['2 Tasks are named Comp on Step Anim: pick the one to link, or create a new one.']);
 		expect(lines.some((l) => l.taskId === 1 || l.taskId === 2)).toBe(false);
 	});
 
@@ -237,7 +261,8 @@ describe('taskLines: conflicts', () => {
 		expect(byTask(lines, 2).conflict).not.toBeNull();
 		expect(byTask(lines, 1).outcome).toBe('left');
 		expect(byTask(lines, 1).conflict).not.toBeNull();
-		expect(byTask(lines, 1).details.map((d) => d.text)).toContain('Not picked.');
+		expect(byTask(lines, 1).details.map((d) => d.text)).toEqual(['Another Task was picked for Comp.', 'Left as it is.']);
+		expect(byTask(lines, 2).details.map((d) => d.text)).toContain('Picked from 2 Tasks with this name and Step.');
 	});
 });
 
@@ -256,6 +281,8 @@ describe('entitySummary', () => {
 		expect(created('Shot')).toBe('missing on the Shot, created from the template');
 		expect(created(null)).toBe('missing on the entity, created from the template');
 		expect(outcomeMeaning('linked', 'Shot')).toBe(OUTCOME_MEANING.linked);
+		expect(outcomeMeaning('deleted', 'Shot', 1)).toBe('not in the template, deleted; undo revives it');
+		expect(outcomeMeaning('deleted', 'Shot', 2)).toBe('not in the template, deleted; undo revives them');
 	});
 
 	it('says so when there is nothing to write', () => {
@@ -281,13 +308,12 @@ describe('planSummary: the run summary', () => {
 		const b = plan(conflictSnap);
 		const s = planSummary(input([a, b]));
 		const text = Object.fromEntries(s.lines.map((l) => [l.key, `${l.text}${l.where ? `, ${l.where}` : ''}`]));
-		expect(text.needs_choice).toBe('1 needs a choice: several Tasks match one template task, on 1 of 2 Shots');
+		expect(text.needs_choice).toBeUndefined(); // said once, in the Before Apply notice
 		expect(text.created).toBe('5 new Tasks created from the template, on both Shots');
 		expect(text.linked).toBe('2 existing Tasks matched by name and Step, linked to the template, on 1 of 2 Shots');
 		expect(text.left).toBe('2 Tasks not in the template, not changed, on 1 of 2 Shots');
 		expect(text.deps_added).toBe('4 dependencies added, on both Shots');
 		expect(text.deps_recreated).toBe('1 dependency removed by the apply, re-created after it, on 1 of 2 Shots');
-		expect(s.lines[0].key).toBe('needs_choice');
 		expect(s.lines.every((l) => l.count > 0)).toBe(true);
 	});
 
@@ -295,20 +321,16 @@ describe('planSummary: the run summary', () => {
 		const a = plan(extraSnap);
 		const s = planSummary(input([a], opts0(), { labels: { content: 'Task Name', sg_description: 'Description' } }));
 		const line = s.lines.find((l) => l.key === 'policy')!;
-		expect(line.text).toBe("3 template fields on 2 existing Tasks: your values kept, except Task Name: the template's");
+		expect(line.text).toBe("3 template fields on 2 existing Tasks: your values kept, except Task Name (the template's)");
 		const o = withFieldPolicy(opts0(), 'content', 'keep');
 		const t = planSummary(input([plan(extraSnap, o)], o, { labels: { content: 'Task Name' } }));
 		expect(t.lines.find((l) => l.key === 'policy')!.text).toBe('3 template fields on 2 existing Tasks: your values kept');
 	});
 
-	it('names deletes with publishes and the pending confirmation', () => {
+	it('names deletes with publishes', () => {
 		const o = withExtraAction(opts0(), 11, 'delete');
 		const s = planSummary(input([plan(extraSnap, o)], o));
-		expect(s.lines.find((l) => l.key === 'deleted')!.text).toBe('1 Task deleted, 1 with Versions or Published Files (to confirm)');
-		const c = withDeleteConfirmed(o, true);
-		expect(planSummary(input([plan(extraSnap, c)], c)).lines.find((l) => l.key === 'deleted')!.text).toBe(
-			'1 Task deleted, 1 with Versions or Published Files'
-		);
+		expect(s.lines.find((l) => l.key === 'deleted')!.text).toBe('1 Task deleted, 1 with Versions or Published Files');
 	});
 
 	it('each line filters the entities it counts', () => {

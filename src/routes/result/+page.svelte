@@ -1,11 +1,13 @@
 <!--
-	Result: the run's summary, then one block per entity with its Tasks by Pipeline Step, failures
-	and differences inline; entities with nothing to write in one line. Undo per run (top right) and
+	Result: the run's summary, then a grid of entity cards (3 across from xl, 2 from md, 1 on a
+	phone) with their Tasks by Pipeline Step, failures and differences inline, failed and with
+	differences first; entities with nothing to write in one line. Undo per run (top right) and
 	per entity (its block's menu) after a confirmation that lists what undo cannot put back; the
 	undo file down and up. `?run=<id>` shows a stored run (the resume banner's "Review and undo").
 	Logic in `$lib/pure/result-view.ts` and `$lib/pure/result-blocks.ts`.
 -->
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import Download from '@lucide/svelte/icons/download';
 	import History from '@lucide/svelte/icons/history';
@@ -19,10 +21,11 @@
 	import PageState from '$lib/app/page-state.svelte';
 	import Section from '$lib/app/section.svelte';
 	import UndoDialog from '$lib/app/undo-dialog.svelte';
+	import UndoFileDialog from '$lib/app/undo-file-dialog.svelte';
 	import { entityLabel } from '$lib/pure/apply-view';
 	import EntityBlock from '$lib/app/result/entity-block.svelte';
 	import { resultBlocks, runTotals, unchangedLine } from '$lib/pure/result-blocks';
-	import { UNDO_STAGE_LABEL, describeNote, mergeNotes, nameBook, resultRows, type ResultKind } from '$lib/pure/result-view';
+	import { UNDO_STAGE_LABEL, describeNote, mergeNotes, nameBook, resultRows, type FileRun, type ResultKind } from '$lib/pure/result-view';
 	import type { UndoRecord } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
 
@@ -51,6 +54,13 @@
 	let dialog = $state<{ title: string; records: UndoRecord[]; keys?: string[] } | null>(null);
 	let dialogOpen = $state(false);
 	let fileError = $state<string | null>(null);
+	let fileRuns = $state.raw<FileRun[]>([]);
+	let fileOpen = $state(false);
+
+	/** Retry: phase 1 landed, it goes on here; else the entities are planned again on /plan. */
+	async function retry(keys: string[]): Promise<void> {
+		if ((await session.retry(keys)) === 'plan') void goto('/plan');
+	}
 	let fileInput = $state<HTMLInputElement | null>(null);
 
 	const entities = (n: number) => `${n} ${n === 1 ? 'entity' : 'entities'}`;
@@ -70,7 +80,8 @@
 		if (!file) return;
 		fileError = null;
 		try {
-			await session.undoFile(file);
+			fileRuns = await session.readFile(file);
+			fileOpen = true;
 		} catch (error) {
 			fileError = error instanceof Error ? error.message : String(error);
 		}
@@ -137,7 +148,7 @@
 					onclick={() => confirmUndo(`Undo the run on ${entities(undoable.length)}?`, session.records())}
 				>
 					<RotateCcw data-icon="inline-start" />
-					{session.undoing ? 'Undoing…' : 'Undo run'}
+					{session.undoing ? (session.undoProgress ? `Undoing ${session.undoProgress.finished} of ${session.undoProgress.total}…` : 'Undoing…') : 'Undo run'}
 				</Button>
 			{/if}
 		{/snippet}
@@ -152,7 +163,7 @@
 					{#if tally.undone}<LineState state="undone" count={tally.undone} />{/if}
 					{#if tally.not_applied}<LineState state="not_applied" count={tally.not_applied} />{/if}
 					{#if failedRetry.length}
-						<Button size="sm" variant="outline" onclick={() => void session.retry(failedRetry)} disabled={session.phase === 'running'}>
+						<Button size="sm" variant="outline" onclick={() => void retry(failedRetry)} disabled={session.phase === 'running'}>
 							Retry {failedRetry.length === 1 ? 'the failed one' : `the ${failedRetry.length} failed`}
 						</Button>
 					{/if}
@@ -163,6 +174,11 @@
 					</p>
 				{/if}
 			</div>
+		{/if}
+		{#if session.undoing && session.undoProgress}
+			<p class="text-muted-foreground text-sm tabular-nums" data-slot="undo-progress">
+				Undoing: {session.undoProgress.finished} of {entities(session.undoProgress.total)} done.
+			</p>
 		{/if}
 		{#if missing}<Notice tone="destructive">No stored run {runId} in this browser.</Notice>{/if}
 		{#if fileError}<Notice tone="destructive" data-slot="upload-error">{fileError}</Notice>{/if}
@@ -191,23 +207,25 @@
 				{/snippet}
 			</PageState>
 		{:else}
-			<div class="flex w-full max-w-4xl flex-col gap-4 px-6 py-6" data-slot="result">
-				{#if session.undone.length}{@render undoOutcome()}{/if}
+			<div class="grid w-full grid-cols-1 items-start gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-3" data-slot="result">
+				{#if session.undone.length}<div class="col-span-full">{@render undoOutcome()}</div>{/if}
 				{#each blocks as block (block.key)}
 					<EntityBlock
 						{block}
 						entityType={run.entityType}
 						busy={session.undoing || session.phase === 'running'}
-						onretry={() => void session.retry([block.key])}
+						onretry={() => void retry([block.key])}
 						onundo={() => block.record && confirmUndo(`Undo ${block.label}?`, [block.record], [block.key])}
 					/>
 				{/each}
 				{#if unchanged}
-					<p class="text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm" data-slot="result-unchanged">{unchanged}.</p>
+					<p class="text-muted-foreground col-span-full rounded-lg border border-dashed px-4 py-3 text-sm" data-slot="result-unchanged">{unchanged}.</p>
 				{/if}
 			</div>
 		{/if}
 	</div>
+
+	<UndoFileDialog bind:open={fileOpen} runs={fileRuns} onconfirm={(records) => void session.undoFromFile(records)} />
 
 	{#if dialog}
 		{@const d = dialog}

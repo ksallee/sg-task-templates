@@ -229,14 +229,40 @@ describe('resultBlocks', () => {
 		expect(blocks.map((b) => [b.label, b.steps.length, b.tally])).toEqual([
 			['sh2', 0, null],
 			['sh1', 3, null],
-			['sh3', 0, null],
-			['sh4', 0, 'Nothing written']
+			['sh4', 0, 'Nothing written'],
+			['sh3', 0, null]
 		]);
 	});
 
 	it('shows what needs a look first: failed, then with differences, then the rest in run order', () => {
 		const rows = [row(1, 'clean'), row(2, 'differences'), row(3, 'failed'), row(4, 'clean')];
 		expect(resultBlocks(rows, [], [], 'omt').map((b) => b.label)).toEqual(['sh3', 'sh2', 'sh1', 'sh4']);
+	});
+
+	it('puts the applied entities before the undone and the never applied ones; a retry in flight stays up', () => {
+		const rows = [row(1, 'not_applied'), row(2, 'undone'), row(3, 'landed'), row(4, 'clean'), row(5, 'landing'), row(6, 'failed')];
+		expect(resultBlocks(rows, [], [], 'omt').map((b) => b.label)).toEqual(['sh6', 'sh5', 'sh3', 'sh4', 'sh2', 'sh1']);
+	});
+
+	it('counts each block’s Tasks by outcome for its one line; none without Tasks', () => {
+		const outcomes = [
+			{
+				entity: shot(1),
+				result: {
+					kind: 'ok' as const,
+					entity: shot(1),
+					created: [900],
+					createdFor: [{ templateTaskId: 502, taskId: 900 }],
+					addedEdges: [],
+					differences: []
+				}
+			}
+		];
+		const blocks = resultBlocks([row(1, 'clean'), row(2, 'failed')], [shot1, plan(2, shot1.rows)], outcomes, 'omt');
+		expect(blocks.map((b) => [b.label, b.counts.map((c) => c.text)])).toEqual([
+			['sh2', []],
+			['sh1', ['1 created', '1 linked', '1 already linked', '3 not in template']]
+		]);
 	});
 });
 

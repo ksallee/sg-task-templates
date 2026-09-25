@@ -12,6 +12,7 @@
  */
 
 import type { EntityRef, EntityRow, FieldSchema } from 'sg-widgets-core';
+import type { SnapshotChange } from './drift';
 
 // ---------------------------------------------------------------------------------------------
 // 1. Wire
@@ -242,6 +243,8 @@ export interface ProjectContext {
 	project: EntityRef;
 	defaultTaskStatus: string; // Task.sg_status_list default_value for the project
 	validTaskStatuses: string[]; // valid_values minus hidden_values (field_types/status_list)
+	/** Display names by code (`display_values`, 009). Absent or missing a code: show the code. */
+	taskStatusNames?: Record<string, string>;
 }
 
 // --- matching -----------------------------------------------------------------------------------
@@ -311,7 +314,6 @@ export interface RunOptions {
 	edgeActions: Record<Id, EdgeAction>;
 	/** Offered only for created Tasks with no upstream edge (decisions, 097: they stay unpinned). */
 	clearCreatedDates: boolean;
-	deleteConfirmed: boolean; // the second confirmation (brief 3)
 }
 
 // --- plan -----------------------------------------------------------------------------------------
@@ -462,6 +464,11 @@ export interface EdgePlan {
 	wouldViolate: Id[];
 	/** Edges with no end linked to the template after apply: the apply leaves them alone (102). */
 	untouched?: Edge[];
+	/**
+	 * Edges with an end on a Task the batch deletes: they go with it (089, 103), never kept, never
+	 * re-created. `task` is the deleted end. Absent = none.
+	 */
+	withDeleted?: Array<{ edge: Edge & { id: Id }; task: Id }>;
 }
 
 export type PlanWarning =
@@ -661,11 +668,29 @@ export interface UndoFile {
 
 // --- run -------------------------------------------------------------------------------------------
 
+/**
+ * Where a failed entity stopped. `validate`, `read`, `changed`: nothing sent. `apply`: the batch was
+ * refused (113: atomic, nothing in it lands). `read_back`: it landed, the read after failed.
+ * `after_apply`: it landed, the second batch (date clears, kept edges) was refused. `interrupted`:
+ * the tab closed while it was applying, found on reopen.
+ */
+export type FailedStage = 'validate' | 'read' | 'changed' | 'apply' | 'read_back' | 'after_apply' | 'interrupted';
+
 export type EntityRunState =
 	| { state: 'pending' }
 	| { state: 'applying' }
 	| { state: 'done'; undo: UndoRecord }
-	| { state: 'failed'; error: { status: number | null; message: string }; undo: UndoRecord | null }
+	| {
+			state: 'failed';
+			error: { status: number | null; message: string };
+			undo: UndoRecord | null;
+			/** Where it stopped. Absent on runs stored before it was kept. */
+			stage?: FailedStage;
+			/** What the read-back found written: [] nothing, null unread. Absent when nothing was sent. */
+			written?: SnapshotChange[] | null;
+			/** Stage `changed`: what changed on Flow PT between the plan's read and the one before the write. */
+			drift?: SnapshotChange[];
+	  }
 	| { state: 'undone'; undo: UndoRecord };
 
 export interface Run {
