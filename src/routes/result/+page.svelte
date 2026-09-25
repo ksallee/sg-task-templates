@@ -1,6 +1,7 @@
 <!--
-	Result: the run's summary, then one block per entity with its Tasks by Pipeline Step, failures
-	and differences inline; entities with nothing to write in one line. Undo per run (top right) and
+	Result: the run's summary, then a grid of entity cards (3 across from xl, 2 from md, 1 on a
+	phone) with their Tasks by Pipeline Step, failures and differences inline, failed and with
+	differences first; entities with nothing to write in one line. Undo per run (top right) and
 	per entity (its block's menu) after a confirmation that lists what undo cannot put back; the
 	undo file down and up. `?run=<id>` shows a stored run (the resume banner's "Review and undo").
 	Logic in `$lib/pure/result-view.ts` and `$lib/pure/result-blocks.ts`.
@@ -191,8 +192,8 @@
 				{/snippet}
 			</PageState>
 		{:else}
-			<div class="flex w-full max-w-4xl flex-col gap-4 px-6 py-6" data-slot="result">
-				{#if session.undone.length}{@render undoOutcome()}{/if}
+			<div class="grid w-full grid-cols-1 items-start gap-4 px-6 py-6 md:grid-cols-2 xl:grid-cols-3" data-slot="result">
+				{#if session.undone.length}<div class="col-span-full">{@render undoOutcome()}</div>{/if}
 				{#each blocks as block (block.key)}
 					<EntityBlock
 						{block}
@@ -203,7 +204,7 @@
 					/>
 				{/each}
 				{#if unchanged}
-					<p class="text-muted-foreground rounded-lg border border-dashed px-4 py-3 text-sm" data-slot="result-unchanged">{unchanged}.</p>
+					<p class="text-muted-foreground col-span-full rounded-lg border border-dashed px-4 py-3 text-sm" data-slot="result-unchanged">{unchanged}.</p>
 				{/if}
 			</div>
 		{/if}

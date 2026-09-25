@@ -1,28 +1,20 @@
 <!--
-	One entity on the result screen (result-blocks.ts): its name and outcome, Retry on a failure,
-	undo in its menu; the error or the differences inline; its Tasks by Pipeline Step, one line each
-	with the outcome label (kinds.ts). Bordered card, no fill of its own.
+	One entity's card on the result grid (result-blocks.ts): its name, state and menu (Undo); its
+	Task counts in one line; the error with Retry or the differences inline; its Tasks by Pipeline
+	Step (the Step on the left of its lines), one dense line each (outcome dot, name, note, label; kinds.ts). Failed and with differences
+	outline the card in their tone.
 -->
-<script lang="ts" module>
-	import type { LineKind } from '$lib/pure/result-blocks';
-
-	const KIND_DOT: Record<LineKind, string> = {
-		create: 'bg-success',
-		claim: 'bg-info',
-		keep: 'bg-muted-foreground',
-		extra: 'bg-muted-foreground/50'
-	};
-</script>
-
 <script lang="ts">
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+	import { KIND_DOT } from '$lib/app/count-chip.svelte';
 	import LineState from '$lib/app/line-state.svelte';
 	import Notice from '$lib/app/notice.svelte';
 	import { kindMeaning } from '$lib/pure/kinds';
 	import type { ResultBlock } from '$lib/pure/result-blocks';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import { cn } from '$lib/utils.js';
 
 	let {
 		block,
@@ -41,72 +33,98 @@
 
 	const STATE_WORD: Partial<Record<ResultBlock['kind'], string>> = {
 		clean: 'Applied',
-		differences: 'Applied with differences',
+		differences: 'With differences',
 		landed: 'Applied earlier'
 	};
+	const TONE: Partial<Record<ResultBlock['kind'], string>> = {
+		failed: 'border-destructive/50',
+		differences: 'border-warning/70'
+	};
+	const entity = $derived(entityType ?? 'entity');
 </script>
 
-<section class="bg-card text-card-foreground flex min-w-0 flex-col gap-3 rounded-lg border p-4" data-slot="result-block" data-kind={block.kind}>
-	<header class="flex min-h-7 flex-wrap items-center gap-2">
-		<h2 class="min-w-0 truncate text-sm font-semibold" title={block.label}>{block.label}</h2>
-		<LineState state={block.kind} label={STATE_WORD[block.kind]} />
-		<div class="ml-auto flex items-center gap-1">
-			{#if block.canRetry}
-				<Button size="sm" variant="outline" onclick={onretry} disabled={busy}>Retry</Button>
-			{/if}
+{#snippet retry()}
+	<Button size="sm" variant="outline" onclick={onretry} disabled={busy}>Retry</Button>
+{/snippet}
+
+<section
+	class={cn('bg-card text-card-foreground flex min-w-0 flex-col gap-3 rounded-lg border p-4', TONE[block.kind])}
+	data-slot="result-block"
+	data-kind={block.kind}
+>
+	<header class="flex min-w-0 flex-col gap-1">
+		<div class="flex min-h-7 min-w-0 items-center gap-2">
+			<h2 class="min-w-0 truncate text-sm font-semibold" title={block.label}>{block.label}</h2>
+			<LineState state={block.kind} label={STATE_WORD[block.kind]} class="h-5 px-1.5" />
 			{#if block.canUndo}
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
-							<Button {...props} size="icon-sm" variant="ghost" aria-label={`Actions for ${block.label}`}><Ellipsis /></Button>
+							<Button {...props} size="icon-sm" variant="ghost" class="-mr-1.5 ml-auto" aria-label={`Actions for ${block.label}`}>
+								<Ellipsis />
+							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end" class="min-w-44">
 						<DropdownMenu.Item variant="destructive" disabled={busy} onSelect={onundo}>
-							<RotateCcw /> Undo this {entityType ?? 'entity'}
+							<RotateCcw /> Undo this {entity}
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 			{/if}
 		</div>
+		{#if block.counts.length}
+			<p class="text-muted-foreground flex flex-wrap gap-x-3 text-xs tabular-nums" data-slot="block-counts">
+				{#each block.counts as c (c.kind)}
+					<span class="inline-flex items-center gap-1.5 whitespace-nowrap" title={kindMeaning(c.kind, entityType)}>
+						<span class="size-1.5 shrink-0 rounded-full {KIND_DOT[c.kind]}" aria-hidden="true"></span>{c.text}
+					</span>
+				{/each}
+			</p>
+		{:else if block.tally}
+			<p class="text-muted-foreground text-xs">{block.tally}. Applied in an earlier session.</p>
+		{:else if block.kind === 'undone'}
+			<p class="text-muted-foreground text-xs">Back to its state before the apply.</p>
+		{:else if block.kind === 'not_applied'}
+			<p class="text-muted-foreground text-xs">The run stopped before this {entity}.</p>
+		{:else if block.kind === 'landing'}
+			<p class="text-muted-foreground text-xs">Applying.</p>
+		{/if}
 	</header>
 
 	{#if block.error}
-		<Notice tone="destructive" title="Error: " data-slot="block-error">{block.error}</Notice>
+		<Notice tone="destructive" class="px-2.5 py-1.5 text-xs" data-slot="block-error" action={block.canRetry ? retry : undefined}>
+			{block.error}
+		</Notice>
+	{:else if block.canRetry}
+		<div>{@render retry()}</div>
 	{/if}
 	{#if block.differences.length}
-		<div class="border-warning/60 bg-warning/10 flex flex-col gap-1 rounded-lg border px-3 py-2 text-sm" data-slot="block-differences">
-			<p class="font-medium">Differs from the plan:</p>
-			<ul class="marker:text-muted-foreground flex list-disc flex-col gap-0.5 pl-5">
+		<div class="border-warning/60 bg-warning/10 flex flex-col gap-1 rounded-md border px-2.5 py-1.5 text-xs" data-slot="block-differences">
+			<p class="font-medium">Differs from the plan</p>
+			<ul class="marker:text-muted-foreground flex list-disc flex-col gap-0.5 pl-4">
 				{#each block.differences as text, i (i)}<li>{text}</li>{/each}
 			</ul>
 		</div>
 	{/if}
-	{#if block.tally}
-		<p class="text-muted-foreground text-sm">{block.tally}. Applied in an earlier session.</p>
-	{:else if block.kind === 'undone'}
-		<p class="text-muted-foreground text-sm">Restored to its state before the apply.</p>
-	{:else if block.kind === 'not_applied'}
-		<p class="text-muted-foreground text-sm">The run stopped before this {entityType ?? 'entity'}.</p>
-	{:else if block.kind === 'landing'}
-		<p class="text-muted-foreground text-sm">Applying.</p>
-	{/if}
 
 	{#if block.steps.length}
-		<div class="flex flex-col gap-3" data-slot="block-steps">
+		<div class="divide-border/60 flex flex-col divide-y" data-slot="block-steps">
 			{#each block.steps as group (group.step)}
-				<div class="flex flex-col gap-1">
-					<h3 class="text-muted-foreground text-xs font-medium">{group.step}</h3>
-					<ul class="flex flex-col">
+				<div class="flex min-w-0 gap-3 py-0.5">
+					<h3 class="text-muted-foreground w-20 shrink-0 truncate text-xs leading-6 font-medium" title={group.step}>{group.step}</h3>
+					<ul class="flex min-w-0 flex-1 flex-col">
 						{#each group.lines as line (line.id)}
-							<li class="flex min-h-7 items-center gap-3 text-sm" data-slot="task-line" data-kind={line.kind} data-task-id={line.taskId ?? undefined}>
-								<span class="min-w-0 flex-1 truncate" title={line.name}>{line.name}</span>
-								{#if line.note}<span class="text-muted-foreground truncate text-xs">{line.note}</span>{/if}
-								<span
-									class="border-border inline-flex h-5 w-32 shrink-0 items-center gap-1 rounded-md border px-1.5 text-xs font-medium whitespace-nowrap"
-									title={kindMeaning(line.kind, entityType)}
-								>
-									<span class="size-2 shrink-0 rounded-full {KIND_DOT[line.kind]}" aria-hidden="true"></span>
+							<li
+								class="flex h-6 min-w-0 items-center gap-2 text-sm"
+								data-slot="task-line"
+								data-kind={line.kind}
+								data-task-id={line.taskId ?? undefined}
+							>
+								<span class="size-1.5 shrink-0 rounded-full {KIND_DOT[line.kind]}" aria-hidden="true"></span>
+								<span class="min-w-0 truncate" title={line.name}>{line.name}</span>
+								{#if line.note}<span class="text-muted-foreground min-w-0 truncate text-xs" title={line.note}>{line.note}</span>{/if}
+								<span class="text-muted-foreground ml-auto shrink-0 pl-2 text-xs whitespace-nowrap" title={kindMeaning(line.kind, entityType)}>
 									{line.label}
 								</span>
 							</li>

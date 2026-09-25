@@ -35,6 +35,8 @@ export interface ResultBlock extends ResultRow {
 	steps: StepGroup[];
 	/** A stored run's landed entity: its undo record's counts ("2 created, 1 linked"). Else null. */
 	tally: string | null;
+	/** Its Tasks by outcome, for the card's one line (`runTotals` of this block alone). */
+	counts: RunTotal[];
 }
 
 const NO_STEP = 'No Step';
@@ -97,16 +99,17 @@ export function recordTally(rec: UndoRecord): string {
 	);
 }
 
-const FIRST: ResultRow['kind'][] = ['failed', 'differences'];
+/** Block order: what needs a look, a retry in flight, the applied, then what did not change. */
+const ORDER: ResultRow['kind'][][] = [['failed'], ['differences'], ['landing'], ['clean', 'landed'], ['undone'], ['not_applied']];
 
-/** The rows as blocks: failed first, then with differences, then the rest in run order. */
+/**
+ * The rows as blocks: failed first, then with differences, a retry in flight, the applied, the
+ * undone, the never applied; run order within each.
+ */
 export function resultBlocks(rows: ResultRow[], plans: EntityPlan[], outcomes: OutcomeLike[], omitStatus: string): ResultBlock[] {
 	const planOf = new Map(plans.map((p) => [entityKey(p.entity), p]));
 	const outcomeOf = new Map(outcomes.map((o) => [entityKey(o.entity), o]));
-	const rank = (r: ResultRow) => {
-		const i = FIRST.indexOf(r.kind);
-		return i === -1 ? FIRST.length : i;
-	};
+	const rank = (r: ResultRow) => ORDER.findIndex((kinds) => kinds.includes(r.kind));
 	return [...rows]
 		.map((r, i) => ({ r, i }))
 		.sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i)
@@ -114,10 +117,12 @@ export function resultBlocks(rows: ResultRow[], plans: EntityPlan[], outcomes: O
 			const plan = planOf.get(r.key);
 			const result = outcomeOf.get(r.key)?.result;
 			const applied = (r.kind === 'clean' || r.kind === 'differences') && plan && result?.kind === 'ok';
+			const steps = applied ? entityTasks(plan, result.createdFor ?? [], omitStatus) : [];
 			return {
 				...r,
-				steps: applied ? entityTasks(plan, result.createdFor ?? [], omitStatus) : [],
-				tally: r.kind === 'landed' && r.record ? recordTally(r.record) : null
+				steps,
+				tally: r.kind === 'landed' && r.record ? recordTally(r.record) : null,
+				counts: totalsOf(steps.flatMap((s) => s.lines))
 			};
 		});
 }
@@ -133,7 +138,10 @@ const TOTAL_ORDER: LineKind[] = ['create', 'claim', 'keep', 'extra'];
 
 /** The applied entities' Tasks by outcome, created counted only where the read-back found it. */
 export function runTotals(blocks: ResultBlock[]): RunTotal[] {
-	const lines = blocks.flatMap((b) => b.steps.flatMap((s) => s.lines));
+	return totalsOf(blocks.flatMap((b) => b.steps.flatMap((s) => s.lines)));
+}
+
+function totalsOf(lines: ResultTaskLine[]): RunTotal[] {
 	return TOTAL_ORDER.map((kind) => {
 		const count = lines.filter((l) => l.kind === kind && (kind !== 'create' || l.taskId !== null)).length;
 		return { kind, count, text: `${count} ${KIND_LABEL[kind].toLowerCase()}` };

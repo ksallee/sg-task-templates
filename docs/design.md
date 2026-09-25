@@ -34,7 +34,11 @@ are this app's. The app reads as sg-notes' sibling.
   where the choice is made. `border-b`, `px-6 py-4`.
 - **Grid.** Workbench screens (template, entities, plan) are full width: a left rail `w-80`
   and a detail pane, both scrolling on their own. Forms and summaries (connect, apply) sit in one
-  column `max-w-3xl`, `px-6`; the result, one block per entity, in one column `max-w-4xl`.
+  column `max-w-3xl`, `px-6`. The result is a grid of entity cards, full width: 3 across from
+  `xl` (1280), 2 from `md`, 1 on a phone; equal widths, heights as content. Failed and with
+  differences first, outlined in their tone, then applied, undone, not applied. A card: name, state,
+  menu; its counts in one line; the error with Retry or the differences; its Tasks one `h-6` line
+  each, the Pipeline Step in a `w-20` column on the left. Unchanged entities fold into one line.
 - **Type.** Page title `text-lg font-semibold`. Section title `text-sm font-semibold`, its count or
   note beside it `text-xs text-muted-foreground`. Group heading in a list `text-xs font-medium
   text-muted-foreground`. Body `text-sm`. Meta `text-xs text-muted-foreground`. Codes and keys
