@@ -68,6 +68,11 @@ export function unresolvedConflicts(plan: EntityPlan, opts: RunOptions): number 
 	return rows + plan.warnings.filter((w) => w.code === 'unresolved_conflict').length;
 }
 
+/** Unresolved conflicts over the run: drives Accept all pre-picks and the choices blocker. */
+export function openConflicts(plans: EntityPlan[], opts: RunOptions): number {
+	return plans.reduce((n, p) => n + unresolvedConflicts(p, opts), 0);
+}
+
 /** Take the pick each unresolved conflict shows (the pre-pick, 2 Matching) as the user's, per entity. */
 export function acceptPicks(opts: RunOptions, plans: EntityPlan[]): RunOptions {
 	let next = opts;
@@ -248,7 +253,7 @@ export function entityWarnings(plan: EntityPlan, opts: RunOptions): ViewWarning[
 		if (w.code === 'template_entity_type_mismatch') {
 			out.push({ code: w.code, level: 'warn', text: `The template is for ${w.templateType ?? 'no type'}; this is a ${w.entityType}. Allowed.` });
 		} else if (w.code === 'edge_closes_loop') {
-			out.push({ code: w.code, level: 'warn', text: `Keeping dependency #${w.edgeId} would close a loop, which the site refuses. Removed.` });
+			out.push({ code: w.code, level: 'warn', text: `Keeping dependency #${w.edgeId} would close a loop, which Flow PT refuses. Removed.` });
 		} else if (w.code === 'unresolved_conflict') {
 			out.push({ code: w.code, level: 'block', text: `A pick is no longer valid for template tasks ${w.templateTaskIds.map((id) => `#${id}`).join(', ')}. Pick again.` });
 		} else if (w.code === 'template_duplicate_key') {
@@ -307,7 +312,7 @@ export function applyBlockers(
 	access: AccessSummary | null
 ): string[] {
 	const out: string[] = [];
-	const conflicts = plans.reduce((n, p) => n + unresolvedConflicts(p, opts), 0);
+	const conflicts = openConflicts(plans, opts);
 	if (conflicts > 0) out.push(`${conflicts} choice${conflicts === 1 ? '' : 's'} to make.`);
 	if (access?.looksShort) out.push('Write access looks refused.');
 	const omits = plans.some((p) => p.rows.some((r) => r.kind === 'extra' && r.action === 'omit'));
@@ -462,7 +467,7 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 					}
 				: null,
 			action: a.action,
-			keepDisabled: a.closesLoop ? 'Keeping it would close a dependency loop, which the site refuses.' : null
+			keepDisabled: a.closesLoop ? 'Keeping it would close a dependency loop, which Flow PT refuses.' : null
 		})),
 		outsideDownstream: plan.edges.toExtras.map((e) => ({
 			upstream: existing(e.upstream),
@@ -489,3 +494,20 @@ export function planCsvName(templateCode: string, now: Date): string {
 }
 
 export const EXTRA_ACTIONS: readonly ExtraAction[] = ['leave', 'omit', 'delete'];
+
+// ---------------------------------------------------------------------------------------------
+// Building
+// ---------------------------------------------------------------------------------------------
+
+type Stage = { state: 'idle' | 'ready' | 'error' } | { state: 'loading'; done?: number; total?: number };
+
+/** What the plan waits on while it builds, for its loading state; null once nothing is pending. */
+export function planningStep(planning: Stage, access: Stage, entityType: string | null): string | null {
+	if (planning.state === 'loading') {
+		if (planning.total === undefined) return 'Reading Tasks';
+		const noun = entityType ? `${entityType}${planning.total === 1 ? '' : 's'}` : planning.total === 1 ? 'entity' : 'entities';
+		return `Reading Tasks: ${planning.done ?? 0} of ${planning.total} ${noun}`;
+	}
+	if (planning.state === 'ready' && access.state === 'loading') return 'Checking write access';
+	return null;
+}

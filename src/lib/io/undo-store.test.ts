@@ -153,6 +153,6 @@ describe('undo file', () => {
 	});
 
 	it('refuses a file that is not an undo file', async () => {
-		await expect(readUndoFile(new Blob(['{"version":2}']))).rejects.toThrow('Unknown undo file version: 2');
+		await expect(readUndoFile(new Blob(['{"version":2}']))).rejects.toThrow('This undo file is from another version (2).');
 	});
 });

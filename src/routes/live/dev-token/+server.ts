@@ -34,7 +34,7 @@ export const POST: RequestHandler = async () => {
 	});
 	const body = (await res.json().catch(() => null)) as { access_token?: string; expires_in?: number } | null;
 	if (!res.ok || !body?.access_token) {
-		return json({ message: 'The site refused the script key.' }, { status: res.status === 200 ? 502 : res.status });
+		return json({ message: 'Flow PT refused the script key.' }, { status: res.status === 200 ? 502 : res.status });
 	}
 	return json({ accessToken: body.access_token, expiresIn: body.expires_in ?? 600, siteUrl });
 };

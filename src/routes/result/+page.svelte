@@ -32,7 +32,7 @@
 		if (runId) missing = !(await session.show(runId));
 	})();
 
-	const names = $derived(nameBook(session.plans));
+	const names = $derived(nameBook(session.plans, run.fieldLabels));
 	const rows = $derived(session.current ? resultRows(session.current, session.outcomes, names, session.retryable) : []);
 	const groups = $derived(groupRows(rows));
 	const undoable = $derived(rows.filter((r) => r.canUndo));

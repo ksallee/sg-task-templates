@@ -250,10 +250,8 @@ export function tasksToRevive(rec: UndoRecord): Id[] {
 export function buildRevert(rec: UndoRecord, live: Edge[], revived: Id[]): RevertPlan {
 	const done = new Set(revived);
 	const pending = rec.deletedTasks.filter((id) => !done.has(id));
-	if (pending.length > 0)
-		throw new Error(
-			`Revive Tasks ${pending.join(', ')} before the revert batch: the old template's write would re-create them (110)`
-		);
+	// Revive first: the old template's write would re-create a retired Task (110).
+	if (pending.length > 0) throw new Error(`Tasks ${pending.join(', ')} must be restored before the undo writes the old template.`);
 
 	const batch: BatchRequest[] = [];
 	const update = (entity: string, record_id: Id, data: Record<string, unknown>) =>
@@ -451,12 +449,17 @@ const RECORD_ARRAYS = [
 
 /** Parse an undo file. Throws on anything that is not a version-1 file of version-1 records. */
 export function parseUndoJson(text: string): UndoRecord[] {
-	const file: unknown = JSON.parse(text);
+	let file: unknown;
+	try {
+		file = JSON.parse(text);
+	} catch {
+		throw new Error('This file is not an undo file.');
+	}
 	if (!isObject(file) || file.version !== UNDO_FILE_VERSION)
-		throw new Error(`Unknown undo file version: ${isObject(file) ? String(file.version) : 'none'}`);
-	if (!Array.isArray(file.records)) throw new Error('Not an undo file: no records');
+		throw new Error(`This undo file is from another version (${isObject(file) ? String(file.version) : 'none'}).`);
+	if (!Array.isArray(file.records)) throw new Error('This file is not an undo file.');
 	return file.records.map((r, i) => {
-		if (!isObject(r) || r.version !== 1) throw new Error(`Unknown undo record version at ${i}`);
+		if (!isObject(r) || r.version !== 1) throw new Error(`Entity ${i + 1} in this undo file is from another version.`);
 		const ok =
 			typeof r.runId === 'string' &&
 			typeof r.templateId === 'number' &&
@@ -466,7 +469,7 @@ export function parseUndoJson(text: string): UndoRecord[] {
 			typeof r.entity.id === 'number' &&
 			(r.previousTaskTemplate === null || isObject(r.previousTaskTemplate)) &&
 			RECORD_ARRAYS.every((k) => Array.isArray(r[k]));
-		if (!ok) throw new Error(`Not an undo record at ${i}`);
+		if (!ok) throw new Error(`Entity ${i + 1} in this undo file cannot be read.`);
 		return r as unknown as UndoRecord;
 	});
 }

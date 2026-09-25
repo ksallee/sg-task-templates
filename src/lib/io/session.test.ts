@@ -183,7 +183,7 @@ describe('apply, result, retry, undo', () => {
 	});
 
 	it('refuses a file that is not an undo file, with undo.ts\'s message', async () => {
-		await expect(readUndoFile(new Blob([serializeUndo([]).replace('"version": 1', '"version": 2')]))).rejects.toThrow('Unknown undo file version: 2');
+		await expect(readUndoFile(new Blob([serializeUndo([]).replace('"version": 1', '"version": 2')]))).rejects.toThrow('This undo file is from another version (2).');
 	});
 
 	it('closes a stored run once everything that landed is undone and nothing is left to apply', async () => {

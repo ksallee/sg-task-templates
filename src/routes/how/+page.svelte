@@ -325,7 +325,7 @@
 
 			<footer class="text-muted-foreground flex flex-col gap-4 border-t pt-8 text-sm sm:flex-row sm:items-center sm:justify-between">
 				<p>
-					What Flow PT does here is measured on a live site. The record: <a
+					What Flow PT does here is measured live. The record: <a
 						class={link}
 						href="https://github.com/ksallee/sg-groundtruth"
 						target="_blank"

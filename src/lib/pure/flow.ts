@@ -45,7 +45,7 @@ interface StepRule {
 
 const RULES: readonly StepRule[] = [
 	{ id: 'connect', label: 'Connect', open: () => true, done: (f) => f.connected, hint: '' },
-	{ id: 'template', label: 'Template', open: (f) => f.connected, done: (f) => f.connected && f.templatePicked, hint: 'Connect to a site first.' },
+	{ id: 'template', label: 'Template', open: (f) => f.connected, done: (f) => f.connected && f.templatePicked, hint: 'Connect to Flow PT first.' },
 	{
 		id: 'entities',
 		label: 'Entities',
@@ -68,7 +68,7 @@ const RULES: readonly StepRule[] = [
 		hint: 'Review the plan first.'
 	},
 	// Undo from a file needs only a site, so Result opens with the connection.
-	{ id: 'result', label: 'Result', open: (f) => f.connected, done: () => false, hint: 'Connect to a site first.' }
+	{ id: 'result', label: 'Result', open: (f) => f.connected, done: () => false, hint: 'Connect to Flow PT first.' }
 ];
 
 export function flowSteps(pathname: string, facts: FlowFacts): FlowStep[] {

@@ -8,6 +8,8 @@ import {
 	acceptPicks,
 	accessWarningText,
 	applyBlockers,
+	openConflicts,
+	planningStep,
 	clearableCreates,
 	conflictResolved,
 	edgeView,
@@ -231,6 +233,15 @@ describe('clearableCreates', () => {
 	});
 });
 
+describe('openConflicts', () => {
+	it('counts unresolved conflicts over every entity, zero once the pre-picks are accepted', () => {
+		expect(openConflicts([plan(conflictSnap), plan(conflictSnap)], opts0())).toBe(2);
+		const o = acceptPicks(opts0(), [plan(conflictSnap)]);
+		expect(openConflicts([plan(conflictSnap, o)], o)).toBe(0);
+		expect(openConflicts([plan(extraSnap)], opts0())).toBe(0);
+	});
+});
+
 describe('applyBlockers', () => {
 	it('names unresolved conflicts, refused access, a missing omit status, unconfirmed deletes', () => {
 		const c = ctx(['wtg', 'ip']);
@@ -377,5 +388,17 @@ describe('fillLabels', () => {
 		expect(fillLabels([{ field: 'due_date', value: '2026-03-04' }])).toEqual([
 			'Dates will be filled from the template: (empty) to 2026-03-04; a dependency may move them.'
 		]);
+	});
+});
+
+describe('planningStep', () => {
+	it('says what the plan waits on: the reads with their count, then the access check', () => {
+		expect(planningStep({ state: 'loading', done: 25, total: 52 }, { state: 'idle' }, 'Shot')).toBe('Reading Tasks: 25 of 52 Shots');
+		expect(planningStep({ state: 'loading', done: 0, total: 1 }, { state: 'loading' }, 'Shot')).toBe('Reading Tasks: 0 of 1 Shot');
+		expect(planningStep({ state: 'loading' }, { state: 'idle' }, null)).toBe('Reading Tasks');
+		expect(planningStep({ state: 'ready' }, { state: 'loading' }, 'Shot')).toBe('Checking write access');
+		expect(planningStep({ state: 'ready' }, { state: 'ready' }, 'Shot')).toBeNull();
+		expect(planningStep({ state: 'error' }, { state: 'loading' }, 'Shot')).toBeNull();
+		expect(planningStep({ state: 'idle' }, { state: 'idle' }, 'Shot')).toBeNull();
 	});
 });

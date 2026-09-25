@@ -5,6 +5,7 @@
  */
 
 import { entityLabel } from './apply-view';
+import { valueLabel } from './plan-view';
 import { entityKey } from './run';
 import { buildRevert, tasksToRevive } from './undo';
 import type { EntityPlan, EntityRef, EntityResult, Id, ResultDifference, Run, TaskDates, UndoNote, UndoRecord } from './types';
@@ -14,10 +15,15 @@ import type { EntityPlan, EntityRef, EntityResult, Id, ResultDifference, Run, Ta
 export interface NameBook {
 	task(id: Id): string;
 	templateTask(id: Id): string;
+	/** A field by its display name, the code name when the schema gave none. */
+	field(name: string): string;
 }
 
-/** Task and template task names from the plans of this session; `Task <id>` for anything else. */
-export function nameBook(plans: EntityPlan[]): NameBook {
+/**
+ * Task and template task names from the plans of this session, `Task <id>` for anything else;
+ * field display names from `labels` (the schema's, `run.fieldLabels`).
+ */
+export function nameBook(plans: EntityPlan[], labels: Record<string, string> = {}): NameBook {
 	const tasks = new Map<Id, string>();
 	const templateTasks = new Map<Id, string>();
 	const add = (m: Map<Id, string>, id: Id, content: string | null) => {
@@ -35,11 +41,10 @@ export function nameBook(plans: EntityPlan[]): NameBook {
 		}
 	return {
 		task: (id) => tasks.get(id) ?? `Task ${id}`,
-		templateTask: (id) => templateTasks.get(id) ?? `template task ${id}`
+		templateTask: (id) => templateTasks.get(id) ?? `template task ${id}`,
+		field: (name) => labels[name]?.trim() || name
 	};
 }
-
-const show = (v: unknown) => (v === undefined || v === null ? 'null' : JSON.stringify(v));
 
 export function describeDifference(d: ResultDifference, n: NameBook): string {
 	switch (d.code) {
@@ -50,7 +55,7 @@ export function describeDifference(d: ResultDifference, n: NameBook): string {
 		case 'claim_missing':
 			return `${n.task(d.taskId)} is not linked to ${n.templateTask(d.templateTaskId)}.`;
 		case 'writeback_missing':
-			return `${n.task(d.taskId)}: ${d.field} is ${show(d.actual)}, expected ${show(d.expected)}.`;
+			return `${n.task(d.taskId)}: ${n.field(d.field)} is ${valueLabel(d.actual)}. The plan wrote ${valueLabel(d.expected)}.`;
 		case 'delete_missing':
 			return `${n.task(d.taskId)} was not deleted.`;
 		case 'unlink_missing':

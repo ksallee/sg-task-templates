@@ -266,7 +266,7 @@ describe('applyRun', () => {
 		plan.rows.push({ kind: 'extra', task: task(1, 11, 'paint', null), action: 'omit', usage: { versions: 0, publishedFiles: 0 }, reason: 'not_in_template' });
 		const outcomes = await applyRun(newRun(1, { omitStatus: 'gone' }), [plan], ctx, { client: site.client, read: site.read, store });
 		expect(outcomes[0].stage).toBe('validate');
-		expect(outcomes[0].result).toMatchObject({ kind: 'failed', error: { message: 'omit status "gone" is not a valid Task status in this project' } });
+		expect(outcomes[0].result).toMatchObject({ kind: 'failed', error: { message: '"gone" is not a Task status in this project. Pick the status omitted Tasks take.' } });
 		expect(site.log).toEqual([]);
 	});
 

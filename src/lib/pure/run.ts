@@ -54,3 +54,19 @@ export function clearedDatesFrom(reqs: BatchRequest[], tasks: EntityTask[]): Und
 		return t ? [{ taskId: t.id, start: t.startDate, due: t.dueDate }] : [];
 	});
 }
+
+/**
+ * `fn` guarded against a second start: a call while one runs gets the running call's promise; the
+ * next call after it settles, resolved or rejected, runs `fn` again.
+ */
+export function singleFlight<T>(fn: () => Promise<T>): () => Promise<T> {
+	let running: Promise<T> | null = null;
+	return () => {
+		if (running) return running;
+		const p = fn().finally(() => {
+			if (running === p) running = null;
+		});
+		running = p;
+		return p;
+	};
+}

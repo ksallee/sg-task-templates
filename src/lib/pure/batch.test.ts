@@ -344,7 +344,7 @@ describe('extraRequests', () => {
 
 	it('rejects an omit status outside the project valid set', () => {
 		const p = plan({ rows: [extra(task(5009, 'roto', 12), 'omit')] });
-		expect(() => extraRequests(p, { ...OPTS, omitStatus: 'nope' }, CTX)).toThrow(/nope/);
+		expect(() => extraRequests(p, { ...OPTS, omitStatus: 'nope' }, CTX)).toThrow('"nope" is not a Task status in this project. Pick the status omitted Tasks take.');
 	});
 
 	it('delete is absent without confirmation', () => {

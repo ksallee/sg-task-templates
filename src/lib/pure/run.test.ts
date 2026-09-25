@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SgApiError } from 'sg-widgets-core';
 import type { BatchRequest, EntityRef, EntityTask, Run, UndoRecord } from './types';
-import { clearedDatesFrom, entityKey, errorOf, remainingEntities, undoRecordsOf, withEntityState } from './run';
+import { clearedDatesFrom, entityKey, errorOf, remainingEntities, singleFlight, undoRecordsOf, withEntityState } from './run';
 
 const shot = (id: number): EntityRef => ({ type: 'Shot', id });
 
@@ -114,5 +114,38 @@ describe('clearedDatesFrom', () => {
 		expect(clearedDatesFrom(reqs, [t(11, '2026-10-01', '2026-10-03'), t(12, '2026-10-01', null)])).toEqual([
 			{ taskId: 11, start: '2026-10-01', due: '2026-10-03' }
 		]);
+	});
+});
+
+describe('singleFlight', () => {
+	it('answers a second call while the first runs with the first call\'s promise, and runs again once it settles', async () => {
+		let runs = 0;
+		let release!: () => void;
+		const once = singleFlight(async () => {
+			runs++;
+			await new Promise<void>((r) => (release = r));
+			return runs;
+		});
+		const a = once();
+		const b = once();
+		expect(b).toBe(a);
+		release();
+		expect(await a).toBe(1);
+		const c = once();
+		expect(c).not.toBe(a);
+		release();
+		expect(await c).toBe(2);
+		expect(runs).toBe(2);
+	});
+
+	it('runs again after a failure', async () => {
+		let runs = 0;
+		const once = singleFlight(async () => {
+			runs++;
+			if (runs === 1) throw new Error('boom');
+			return runs;
+		});
+		await expect(once()).rejects.toThrow('boom');
+		expect(await once()).toBe(2);
 	});
 });

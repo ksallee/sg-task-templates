@@ -170,8 +170,8 @@ async function resolve(): Promise<LiveState> {
 
 	// Never silently answer with nothing: with no site or no login every read fails,
 	// and the widgets show the error state they show for any refusal.
-	const problem = !site ? 'Name the site to read.' : token ? null : 'Sign in to read the site.';
-	const refuse = (): Promise<string> => Promise.reject(new Error(problem ?? 'The site is not ready.'));
+	const problem = !site ? 'Name the site to read.' : token ? null : 'Sign in to read Flow PT.';
+	const refuse = (): Promise<string> => Promise.reject(new Error(problem ?? 'Not connected to Flow PT.'));
 	writer = new RestClient({ siteUrl: site, token: token ?? refuse });
 	context = createSgContext({ client: writer, siteUrl: site });
 	return { siteUrl: site, session: stored, devToken: devToken !== null, project: picked, problem };
@@ -192,13 +192,13 @@ export function liveState(): LiveState {
 
 /** The one context every widget on the page shares, so two widgets cost one read. */
 export function liveContext(): SgContext {
-	if (!context) throw new Error('The site is not ready. Await prepareLive() first.');
+	if (!context) throw new Error('Not connected to Flow PT. Await prepareLive() first.');
 	return context;
 }
 
 /** The bare client, for writes: the batches the planner sends go through this. */
 export function liveWriter(): RestClient {
-	if (!writer) throw new Error('The site is not ready. Await prepareLive() first.');
+	if (!writer) throw new Error('Not connected to Flow PT. Await prepareLive() first.');
 	return writer;
 }
 
@@ -239,7 +239,7 @@ export async function signIn(site: string, open: (url: string) => void): Promise
 		machineId: 'sg-task-templates'
 	});
 	if (created.status !== 200 || !created.body?.id || !created.body.url) {
-		throw new Error(created.body?.message ?? 'The site did not offer an approval page.');
+		throw new Error(created.body?.message ?? 'Flow PT did not offer an approval page.');
 	}
 	open(created.body.url);
 
@@ -252,7 +252,7 @@ export async function signIn(site: string, open: (url: string) => void): Promise
 			id: created.body.id
 		});
 		if (polled.status === 404) throw new Error('The approval page expired or was refused. Sign in again.');
-		if (polled.status !== 200) throw new Error('The site stopped answering the approval poll.');
+		if (polled.status !== 200) throw new Error('Flow PT stopped answering during sign-in.');
 		if (polled.body?.approved && polled.body.sessionToken && polled.body.userLogin) {
 			const approved: Session = { siteUrl: origin, token: polled.body.sessionToken, login: polled.body.userLogin };
 			setSession(approved);

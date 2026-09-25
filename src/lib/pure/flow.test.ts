@@ -19,7 +19,7 @@ describe('flowSteps', () => {
 	it('before a site: connect is current, everything after is blocked with the reason', () => {
 		const steps = flowSteps('/connect', NONE);
 		expect(steps.map((s) => s.state)).toEqual(['current', 'blocked', 'blocked', 'blocked', 'blocked', 'blocked']);
-		expect(steps[1].hint).toBe('Connect to a site first.');
+		expect(steps[1].hint).toBe('Connect to Flow PT first.');
 	});
 
 	it('connected on template: connect done, template current, entities waits on a template', () => {

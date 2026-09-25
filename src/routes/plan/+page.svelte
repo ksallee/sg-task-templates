@@ -2,7 +2,7 @@
 	The plan, always shown before a write (brief 9): the header with Apply and what blocks it, the run
 	summary (what Apply does; each line filters the entities), the run options (collapsed to one
 	line), the entity list with one outcome line each on the left, the selected entity's Tasks on the
-	right (plan-summary.ts). Every choice re-plans
+	right (plan-summary.ts). While `run.buildPlans` runs, its progress (plan-view `planningStep`). Every choice re-plans
 	through `run.setOptions`; the logic is in `$lib/pure/plan-view.ts`. Nothing here writes. Apply
 	opens /apply once nothing blocks it.
 -->
@@ -22,7 +22,7 @@
 	import EntityList from '$lib/app/plan/entity-list.svelte';
 	import { planToCsv } from '$lib/pure/csv';
 	import { planTotals } from '$lib/pure/entry';
-	import { acceptPicks, accessWarningText, applyBlockers, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
+	import { acceptPicks, accessWarningText, applyBlockers, openConflicts, planningStep, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
 	import { matchesKey, planSummary, type SummaryKey } from '$lib/pure/plan-summary';
 	import type { EntityTask, Id, RunOptions as Options } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -36,6 +36,7 @@
 	let optionsOpen = $state(false);
 
 	const options = $derived(run.options);
+	const step = $derived(planningStep(run.planning, run.access, run.entityType));
 	const totals = $derived(planTotals(run.plans));
 	const access = $derived(run.access.state === 'ready' ? run.access.value : null);
 	const accessText = $derived(access ? accessWarningText(access) : null);
@@ -66,7 +67,7 @@
 	const selectedTasks = $derived(run.snapshots.find((s) => s.entity.id === selected?.entity.id)?.tasks ?? []);
 	const blockers = $derived(options && run.ctx ? applyBlockers(run.plans, options, run.ctx, access) : []);
 	const deletes = $derived(pendingDeletes(run.plans));
-	const conflictsOpen = $derived(blockers.some((b) => b.includes('conflict')));
+	const conflictsOpen = $derived(options ? openConflicts(run.plans, options) > 0 : false);
 	const entityNoun = $derived(totals.entities === 1 ? (run.entityType ?? 'entity') : run.entityType ? `${run.entityType}s` : 'entities');
 	const filtered = $derived(activeLine !== null || text.trim() !== '');
 
@@ -88,7 +89,13 @@
 
 <svelte:head><title>Plan · SG Task Templates</title></svelte:head>
 
-{#if run.plans.length === 0 || !options || !run.template || !run.ctx}
+{#if step}
+	<PageState state="loading" title="Building the plan" line={step} />
+{:else if run.planning.state === 'error'}
+	<PageState state="error" title="Could not build the plan" line={run.planning.message}>
+		{#snippet action()}<Button href="/entities">Entities</Button>{/snippet}
+	</PageState>
+{:else if run.plans.length === 0 || !options || !run.template || !run.ctx}
 	<PageState state="empty" title="No plan yet" line="Choose the entities, then Next.">
 		{#snippet action()}<Button href="/entities">Entities</Button>{/snippet}
 	</PageState>

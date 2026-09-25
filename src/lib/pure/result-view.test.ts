@@ -116,6 +116,18 @@ describe('nameBook', () => {
 		expect(names.templateTask(500)).toBe('Comp');
 		expect(names.templateTask(8)).toBe('template task 8');
 	});
+
+	it('names a field by its display name, the code name without one', () => {
+		const names = nameBook([plan], { sg_description: 'Description' });
+		expect(names.field('sg_description')).toBe('Description');
+		expect(names.field('est_in_mins')).toBe('est_in_mins');
+		expect(
+			describeDifference({ code: 'writeback_missing', taskId: 10, field: 'sg_description', expected: 'a', actual: null }, names)
+		).toBe('comp: Description is (empty). The plan wrote a.');
+		expect(
+			describeDifference({ code: 'writeback_missing', taskId: 10, field: 'task_assignees', expected: [{ type: 'HumanUser', id: 3, name: 'Ann' }], actual: [] }, names)
+		).toBe('comp: task_assignees is (none). The plan wrote Ann.');
+	});
 });
 
 describe('describeDifference', () => {
@@ -128,7 +140,7 @@ describe('describeDifference', () => {
 		expect(describeDifference({ code: 'claim_missing', taskId: 10, templateTaskId: 500 }, names)).toBe('comp is not linked to Comp.');
 		expect(
 			describeDifference({ code: 'writeback_missing', taskId: 10, field: 'sg_description', expected: 'a', actual: null }, names)
-		).toBe('comp: sg_description is null, expected "a".');
+		).toBe('comp: sg_description is (empty). The plan wrote a.');
 		expect(describeDifference({ code: 'delete_missing', taskId: 10 }, names)).toBe('comp was not deleted.');
 		expect(describeDifference({ code: 'unlink_missing', taskId: 10, templateTaskId: 500 }, names)).toBe('comp is still linked to Comp.');
 		expect(describeDifference({ code: 'edge_expected_missing', downstream: 10, upstream: 99 }, names)).toBe(

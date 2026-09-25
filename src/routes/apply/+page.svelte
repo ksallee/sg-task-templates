@@ -55,10 +55,10 @@
 {/snippet}
 
 {#await started}
-	<PageState state="loading" title="Connecting to the site…" />
+	<PageState state="loading" title="Connecting to Flow PT…" />
 {:then}
 	{#if run.problem}
-		<PageState state="error" title="Cannot connect to the site" line={run.problem}>
+		<PageState state="error" title="Cannot connect to Flow PT" line={run.problem}>
 			{#snippet action()}<Button size="sm" href="/connect">Connect</Button>{/snippet}
 		</PageState>
 	{:else if showRun && session.current}
@@ -140,7 +140,7 @@
 				{#if !blockers.length}
 					<label class="flex items-center gap-2 text-sm" data-slot="apply-confirm">
 						<Checkbox bind:checked={confirmed} aria-label="Confirm the write" />
-						Write to {entities(summary.toWrite)} on the site
+						Write to {entities(summary.toWrite)} in Flow PT
 					</label>
 				{/if}
 				<Button onclick={() => void session.start()} disabled={!confirmed || blockers.length > 0}>

@@ -100,7 +100,7 @@
 
 	const blocker = $derived(planBlocker({ project: run.project, entityType: run.entityType, template: run.template, selected: run.selected.length }));
 	const isDefault = $derived(run.defaultTemplate.state === 'ready' && run.defaultTemplate.value?.id === run.templateId);
-	const planning = $derived(run.planning.state === 'loading');
+	const planning = $derived(run.building);
 	const count = $derived(run.selected.length);
 
 	onMount(() => {
@@ -138,15 +138,17 @@
 		}
 	}
 
-	async function next(): Promise<void> {
-		if (await run.buildPlans()) void goto('/plan');
+	/** Straight to the plan: it shows the reads' progress while `buildPlans` runs. */
+	function next(): void {
+		void run.buildPlans();
+		void goto('/plan');
 	}
 </script>
 
 <svelte:head><title>Entities · SG Task Templates</title></svelte:head>
 
 {#await started}
-	<PageState state="loading" title="Connecting to the site…" />
+	<PageState state="loading" title="Connecting to Flow PT…" />
 {:then}
 	{#if run.problem}
 		<PageState state="error" title="Not connected" line={run.problem}>
@@ -167,14 +169,10 @@
 				{#if isDefault}<span>(project default)</span>{/if}
 			{/snippet}
 			{#snippet actions()}
-				{#if planning}
-					<span class="text-muted-foreground text-sm tabular-nums" data-slot="planning-progress">
-						Reading {run.planning.state === 'loading' ? (run.planning.done ?? 0) : 0} of {run.planning.state === 'loading' ? (run.planning.total ?? count) : count}…
-					</span>
-				{:else if blocker}
+				{#if blocker}
 					<span class="text-muted-foreground text-sm">{blocker}</span>
 				{/if}
-				<Button onclick={() => void next()} disabled={blocker !== null || planning}>
+				<Button onclick={next} disabled={blocker !== null || planning}>
 					{planning ? 'Planning…' : count > 0 ? `Plan ${count} ${count === 1 ? 'entity' : 'entities'}` : 'Plan'}
 					<ArrowRight data-icon="inline-end" />
 				</Button>

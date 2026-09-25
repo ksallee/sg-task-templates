@@ -189,7 +189,7 @@ function core(row: EntityRow): Omit<TaskCore, 'assignees' | 'reviewers' | 'field
  */
 export function templateTaskFromRow(row: EntityRow): TemplateTask {
 	const templateRef = singleRef(row, 'task_template');
-	if (!templateRef) throw new Error(`templateTaskFromRow: Task ${row.id} has no task_template`);
+	if (!templateRef) throw new Error(`Template task ${row.id} has no template.`);
 	return { ...core(row), templateId: templateRef.id };
 }
 
@@ -200,7 +200,7 @@ export function templateTaskFromRow(row: EntityRow): TemplateTask {
 export function taskFromRow(row: EntityRow, templateOf: (templateTaskId: Id) => Id | null): EntityTask {
 	const a = row.attributes ?? {};
 	const entity = singleRef(row, 'entity');
-	if (!entity) throw new Error(`taskFromRow: Task ${row.id} has no entity`);
+	if (!entity) throw new Error(`Task ${row.id} has no entity.`);
 	const templateTaskRef = singleRef(row, 'template_task');
 	return {
 		...core(row),

@@ -31,7 +31,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	try {
 		answer = text ? JSON.parse(text) : null;
 	} catch {
-		answer = { message: 'The site answered a body that is not JSON.' };
+		answer = { message: 'Flow PT answered with a body that is not JSON.' };
 	}
 	return json(answer, { status: res.status });
 };

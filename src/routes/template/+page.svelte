@@ -53,7 +53,6 @@
 		{#if t.id === defaultId}
 			<span class="text-muted-foreground border-border inline-flex h-5 shrink-0 items-center rounded-md border px-1.5 text-xs font-medium" data-slot="project-default">Project default</span>
 		{/if}
-		<span class="text-muted-foreground w-6 shrink-0 text-right text-xs tabular-nums" aria-label={`${t.tasks.length} tasks`}>{t.tasks.length}</span>
 	</button>
 {/snippet}
 
@@ -99,7 +98,7 @@
 {/snippet}
 
 {#await started}
-	<PageState state="loading" title="Connecting to the site…" />
+	<PageState state="loading" title="Connecting to Flow PT…" />
 {:then}
 	{#if run.problem}
 		<PageState state="error" title="Not connected" line={run.problem}>
@@ -198,8 +197,6 @@
 															{edge.upstream}
 															{#if edge.offset}<span class="text-muted-foreground font-mono text-xs tabular-nums">{edge.offset}</span>{/if}
 														</span>
-													{:else}
-														<span class="text-muted-foreground">{task.feeds > 0 ? 'Starts the chain' : '—'}</span>
 													{/each}
 												</span>
 												<span class="text-right tabular-nums" role="cell">{task.duration ?? ''}</span>
