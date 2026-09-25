@@ -27,7 +27,6 @@ const options: RunOptions = {
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false
 };
 
 function task(entity: number, link: number | null): EntityTask {

@@ -118,7 +118,6 @@ const opts: RunOptions = {
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false
 };
 
 function snap(

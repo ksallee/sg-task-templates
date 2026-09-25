@@ -1,8 +1,9 @@
 /**
- * The confirm dialog Apply opens on the plan: one line of totals, then only what is risky (Tasks
- * deleted with their publish counts, omits, hand-renamed Tasks that get the template's name, fields
- * overwritten from the template). Over the entities the run writes (apply-view `writablePlans`).
- * Pure, no I/O.
+ * The confirm dialog Apply opens on the plan: one line of totals; when Tasks are deleted, a notice
+ * on top with what is deleted and orphaned (089) and each Task, and a destructive button naming the
+ * deletes (the second confirmation, brief 3); then only what is risky (omits, hand-renamed Tasks
+ * that get the template's name, fields overwritten from the template). Over the entities the run
+ * writes (apply-view `writablePlans`). Pure, no I/O.
  */
 
 import { writablePlans } from './apply-view';
@@ -22,7 +23,10 @@ export interface ConfirmSection {
 
 export interface ApplyConfirm {
 	headline: string;
+	/** Tasks the run deletes, shown first; null when none. */
+	deletes: ConfirmSection | null;
 	sections: ConfirmSection[];
+	action: { label: string; destructive: boolean };
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -38,6 +42,8 @@ export function applyConfirm(
 	let linked = 0;
 	let omits = 0;
 	const deletes: ConfirmLine[] = [];
+	let orphanedVersions = 0;
+	let orphanedFiles = 0;
 	const renames: ConfirmLine[] = [];
 	const overwrites = new Map<FieldName, number>();
 	// The name is under renames: only a hand rename is risky.
@@ -59,6 +65,8 @@ export function applyConfirm(
 				if (r.action === 'omit') omits++;
 				if (r.action === 'delete') {
 					const { versions, publishedFiles } = r.usage;
+					orphanedVersions += versions;
+					orphanedFiles += publishedFiles;
 					deletes.push({
 						text: `${name} · ${r.task.content} #${r.task.id}: ${plural(versions, 'Version', 'Versions')}, ${plural(publishedFiles, 'Published File', 'Published Files')}`,
 						loud: versions + publishedFiles > 0
@@ -74,7 +82,6 @@ export function applyConfirm(
 	const headline = `Apply to ${noun}${totals.length ? `: ${totals.join(', ')}` : ''}.`;
 
 	const sections: ConfirmSection[] = [];
-	if (deletes.length) sections.push({ title: 'Deleted', lines: deletes });
 	if (omits) sections.push({ title: 'Omitted', lines: [{ text: `${plural(omits, 'Task', 'Tasks')} not in the template ${omits === 1 ? 'gets' : 'get'} status ${opts.omitStatus}.`, loud: false }] });
 	if (renames.length) sections.push({ title: "Renamed by hand, gets the template's name", lines: renames });
 	if (overwrites.size)
@@ -82,5 +89,15 @@ export function applyConfirm(
 			title: 'Overwritten from the template',
 			lines: [...overwrites].map(([field, count]) => ({ text: `${fieldLabel(labels, field)} on ${plural(count, 'Task', 'Tasks')}`, loud: false }))
 		});
-	return { headline, sections };
+	const deleted = plural(deletes.length, 'Task', 'Tasks');
+	const orphaned =
+		orphanedVersions + orphanedFiles > 0
+			? ` ${plural(orphanedVersions, 'Version', 'Versions')} and ${plural(orphanedFiles, 'Published File', 'Published Files')} will be orphaned.`
+			: '';
+	return {
+		headline,
+		deletes: deletes.length ? { title: `${deleted} will be deleted.${orphaned}`, lines: [...deletes.filter((l) => l.loud), ...deletes.filter((l) => !l.loud)] } : null,
+		sections,
+		action: deletes.length ? { label: `Apply and delete ${deleted}`, destructive: true } : { label: 'Apply', destructive: false }
+	};
 }

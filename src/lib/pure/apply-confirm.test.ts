@@ -11,7 +11,6 @@ const options = (o: Partial<RunOptions> = {}): RunOptions => ({
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false,
 	...o
 });
 
@@ -105,7 +104,7 @@ const labels = { sg_description: 'Description' };
 
 describe('applyConfirm', () => {
 	it('one line of totals over the entities it writes', () => {
-		const c = applyConfirm([busy, plan(2, { noop: true })], options({ deleteConfirmed: true }), 'Shot', labels);
+		const c = applyConfirm([busy, plan(2, { noop: true })], options(), 'Shot', labels);
 		expect(c.headline).toBe('Apply to 1 Shot: 2 Tasks created, 1 linked.');
 		const many = applyConfirm([busy, plan(3, { rows: busy.rows })], options(), 'Shot', labels);
 		expect(many.headline).toBe('Apply to 2 Shots: 4 Tasks created, 2 linked.');
@@ -130,9 +129,8 @@ describe('applyConfirm', () => {
 				}
 			]
 		});
-		const c = applyConfirm([busy, handRenamed], options({ deleteConfirmed: true }), 'Shot', labels);
+		const c = applyConfirm([busy, handRenamed], options(), 'Shot', labels);
 		expect(c.sections).toEqual([
-			{ title: 'Deleted', lines: [{ text: 'sh1 · old #12: 1 Version, 0 Published Files', loud: true }] },
 			{ title: 'Omitted', lines: [{ text: '1 Task not in the template gets status omt.', loud: false }] },
 			{ title: "Renamed by hand, gets the template's name", lines: [{ text: 'sh7 · comp v2 to Comp', loud: false }] },
 			{ title: 'Overwritten from the template', lines: [{ text: 'Description on 2 Tasks', loud: false }] }
@@ -160,11 +158,31 @@ describe('applyConfirm', () => {
 		expect(applyConfirm([safe], options(), 'Shot', labels).sections).toEqual([]);
 	});
 
-	it('a delete with no publishes is listed, not loud', () => {
-		const p = plan(9, { rows: [{ kind: 'extra', task: task(30, 'tmp'), action: 'delete', usage: { versions: 0, publishedFiles: 2 }, reason: 'not_in_template' }, { kind: 'extra', task: task(31, 'tmp2'), action: 'delete', usage: { versions: 0, publishedFiles: 0 }, reason: 'not_in_template' }] });
-		expect(applyConfirm([p], options({ deleteConfirmed: true }), 'Shot', {}).sections[0].lines).toEqual([
-			{ text: 'sh9 · tmp #30: 0 Versions, 2 Published Files', loud: true },
-			{ text: 'sh9 · tmp2 #31: 0 Versions, 0 Published Files', loud: false }
-		]);
+	it('deletes lead: what is deleted and orphaned, each Task (used ones first, 089), and a destructive button naming them', () => {
+		const p = plan(9, { rows: [{ kind: 'extra', task: task(30, 'tmp'), action: 'delete', usage: { versions: 3, publishedFiles: 2 }, reason: 'not_in_template' }, { kind: 'extra', task: task(31, 'tmp2'), action: 'delete', usage: { versions: 0, publishedFiles: 0 }, reason: 'not_in_template' }] });
+		const c = applyConfirm([p, busy], options(), 'Shot', {});
+		expect(c.deletes).toEqual({
+			title: '3 Tasks will be deleted. 4 Versions and 2 Published Files will be orphaned.',
+			lines: [
+				{ text: 'sh9 · tmp #30: 3 Versions, 2 Published Files', loud: true },
+				{ text: 'sh1 · old #12: 1 Version, 0 Published Files', loud: true },
+				{ text: 'sh9 · tmp2 #31: 0 Versions, 0 Published Files', loud: false }
+			]
+		});
+		expect(c.action).toEqual({ label: 'Apply and delete 3 Tasks', destructive: true });
+	});
+
+	it('one delete with nothing to orphan says only the delete', () => {
+		const p = plan(9, { rows: [{ kind: 'extra', task: task(31, 'tmp2'), action: 'delete', usage: { versions: 0, publishedFiles: 0 }, reason: 'not_in_template' }] });
+		const c = applyConfirm([p], options(), 'Shot', {});
+		expect(c.deletes?.title).toBe('1 Task will be deleted.');
+		expect(c.action).toEqual({ label: 'Apply and delete 1 Task', destructive: true });
+	});
+
+	it('without deletes: no notice, the button reads Apply', () => {
+		const safe = plan(8, { rows: [busy.rows[1]] });
+		const c = applyConfirm([safe], options(), 'Shot', {});
+		expect(c.deletes).toBeNull();
+		expect(c.action).toEqual({ label: 'Apply', destructive: false });
 	});
 });

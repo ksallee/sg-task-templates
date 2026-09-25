@@ -42,7 +42,6 @@ function run(id: string, startedAt: string, n = 2): Run {
 			conflictPicks: {},
 			edgeActions: {},
 			clearCreatedDates: false,
-			deleteConfirmed: false
 		},
 		startedAt,
 		finishedAt: null,
@@ -72,6 +71,16 @@ describe('undo store on IndexedDB', () => {
 			{ entity: shot(1), status: { state: 'done', undo: record('r1', 1) } },
 			{ entity: shot(2), status: { state: 'pending' } }
 		]);
+	});
+
+	it('reads a run saved with the old deleteConfirmed option', async () => {
+		const idb = new IDBFactory();
+		const a = await openUndoStore(idb);
+		const old = run('r0', '2026-09-24T10:00:00Z');
+		await a.saveRun({ ...old, options: { ...old.options, deleteConfirmed: true } as Run['options'] });
+		const loaded = await (await openUndoStore(idb)).loadRun('r0');
+		expect(loaded?.options.omitStatus).toBe('omt');
+		expect(loaded?.entities).toHaveLength(2);
 	});
 
 	it('lists unfinished runs newest first, not finished ones', async () => {

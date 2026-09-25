@@ -91,7 +91,7 @@ label; *marker* a small tag beside it; *detail* only in the Task's fold or the D
 | create, has upstream | Its dates follow the upstream Task; not clearable. | no | detail |
 | extra, leave | On the Shot, not in the template: stays as it is. | no, default | label **not in template**; headline |
 | extra, omit | Stays, its status becomes the omit status. | yes (choice) | label **omitted**; headline |
-| extra, delete | Removed; Versions and Published Files are orphaned (089). Undo revives it. | yes, confirm | label **deleted**, marker *has publishes* (loud); headline, with the count that has publishes |
+| extra, delete | Removed; Versions and Published Files are orphaned (089). Undo revives it. | yes, in the Apply dialog | label **deleted**, marker *has publishes* (loud); headline, with the count that has publishes |
 | extra, reason not in template | Why it is extra. | no | detail |
 | extra, reason link wins | Same name as a template task another Task is already linked to. | no | detail |
 | extra, reason conflict loser | Lost a conflict; unlinked when it was linked there (106). | no | detail |
@@ -123,7 +123,6 @@ label; *marker* a small tag beside it; *detail* only in the Task's fold or the D
 | policy overwrite / fill if empty | Values become the template's. | option | run options; *fields change* marker per Task |
 | name policy template (default) / keep | Renames happen / do not. | option | run options; *renamed* |
 | omit status missing | The project has no `omt`: pick one before Apply. | **yes** | blocker, run options line |
-| delete unconfirmed | Deletes wait for the second confirmation. | **yes** | blocker, headline "(to confirm)" |
 
 ### Entities
 
@@ -145,9 +144,12 @@ hover and in the CSV beside it.
 The plan shows once the reads end; the access check (094) runs on in the background. Meanwhile a
 small line by Apply says "Checking write access" and Apply waits (`applyGate` in `plan-view.ts`).
 Apply opens a confirm dialog (`plan/apply-dialog`, content from `$lib/pure/apply-confirm.ts`): one
-line of totals, then only the risky items (deletes with their publish counts, omits, hand-renamed
-Tasks, fields overwritten from the template), the download-only undo warning when the store is not
-persistent, Confirm and Cancel. Confirm starts the run and opens /apply, which shows the run only.
+line of totals; when Tasks are deleted, a destructive notice on top ("N Tasks will be deleted. V
+Versions and P Published Files will be orphaned.") and each Task with its counts; then only the
+risky items (omits, hand-renamed Tasks, fields overwritten from the template), the download-only
+undo warning when the store is not persistent, Cancel and the confirm button. It reads Apply, or
+"Apply and delete N Tasks" in the destructive tone. It starts the run and opens /apply, which
+shows the run only.
 
 ## Home and How it works (2026-09-24, #57)
 

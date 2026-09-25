@@ -20,7 +20,6 @@ import {
 	groupRows,
 	keyLabel,
 	omitChoice,
-	pendingDeletes,
 	planCsvName,
 	policyFieldViews,
 	policySummary,
@@ -28,7 +27,6 @@ import {
 	previousLinkLabel,
 	unresolvedConflicts,
 	valueLabel,
-	withDeleteConfirmed,
 	withEdgeAction,
 	withExtraAction,
 	withExtraNameAction
@@ -153,10 +151,9 @@ describe('conflicts', () => {
 });
 
 describe('extra actions', () => {
-	it('a per-Task action withdraws the delete confirmation', () => {
-		const o = withExtraAction(withDeleteConfirmed(opts0(), true), 11, 'delete');
-		expect(o.extraOverrides[11]).toBe('delete');
-		expect(o.deleteConfirmed).toBe(false);
+	it('a per-Task action sets that Task only', () => {
+		const o = withExtraAction(opts0(), 11, 'delete');
+		expect(o.extraOverrides).toEqual({ 11: 'delete' });
 	});
 
 	it('a by-name action drops per-Task overrides of that name, so the bulk choice shows', () => {
@@ -166,15 +163,6 @@ describe('extra actions', () => {
 		expect(o.extraByName).toEqual({ paint: 'delete' });
 		const row = plan(extraSnap, o).rows.find((r) => r.kind === 'extra' && r.task.id === 11);
 		expect(row && row.kind === 'extra' && row.action).toBe('delete');
-	});
-
-	it('lists pending deletes with their usage, used ones first (089)', () => {
-		const o = withExtraAction(withExtraAction(opts0(), 11, 'delete'), 1, 'delete');
-		const a = plan(extraSnap, o);
-		const b = plan(conflictSnap, acceptPicks(o, [plan(conflictSnap, o)]));
-		const list = pendingDeletes([b, a]);
-		expect(list.map((d) => d.task.id)).toEqual([11, 1]);
-		expect(list[0].usage).toEqual({ versions: 2, publishedFiles: 3 });
 	});
 });
 
@@ -244,15 +232,14 @@ describe('openConflicts', () => {
 });
 
 describe('applyBlockers', () => {
-	it('names unresolved conflicts, refused access, a missing omit status, unconfirmed deletes', () => {
+	it('names unresolved conflicts, refused access, a missing omit status; a delete blocks nothing', () => {
 		const c = ctx(['wtg', 'ip']);
 		let o = withExtraAction(withExtraAction(defaultRunOptions(c), 11, 'delete'), 12, 'omit');
 		const plans = [planEntity(template, conflictSnap, c, o), planEntity(template, extraSnap, c, o)];
 		const access = { checks: [], fields: { content: 'refused' as const }, looksShort: true };
 		expect(applyBlockers(plans, o, c, access)).toEqual([
 			'1 choice to make.',
-			'Write access looks refused.',
-			'Confirm 1 delete.'
+			'Write access looks refused.'
 		]);
 		o = withExtraAction(o, 11, 'omit');
 		const again = [planEntity(template, extraSnap, c, o)];

@@ -60,7 +60,7 @@ and recreates it, after an apply. The docstring at the top of `tools/seed.py` li
 4. The plan shows at once. The access check (probe 094: refused or rolled-back calls only, nothing
    lands) runs beside it, and Apply waits on it.
 
-Nothing up to the plan writes. Apply opens a confirm dialog; Confirm is the first write.
+Nothing up to the plan writes. Apply opens a confirm dialog; its button is the first write.
 
 ## Deploy
 

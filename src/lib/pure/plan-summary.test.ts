@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultRunOptions } from './entry';
 import { matchKey } from './matching';
 import { planEntity, withFieldPolicy } from './planner';
-import { acceptPicks, withDeleteConfirmed, withExtraAction } from './plan-view';
+import { acceptPicks, withExtraAction } from './plan-view';
 import {
 	OUTCOME_MEANING,
 	OUTCOME_ORDER,
@@ -172,8 +172,12 @@ describe('taskLines: one outcome per Task', () => {
 		expect(paint.outcome).toBe('deleted');
 		expect(paint.markers).toContainEqual({ key: 'usage', label: '2 Versions, 3 Published Files', tone: 'destructive' });
 		expect(paint.details.map((d) => d.text)).toContain(
-			'Deleted once you confirm. Its 2 Versions and 3 Published Files are orphaned; undo revives it.'
+			'Deleted. Its 2 Versions and 3 Published Files are orphaned; undo revives it.'
 		);
+		const one = { ...extraSnap, usage: { 11: { versions: 1, publishedFiles: 1 } } };
+		const single = byTask(taskLines(plan(one, o), input([plan(one, o)], o)), 11);
+		expect(single.markers).toContainEqual({ key: 'usage', label: '1 Version, 1 Published File', tone: 'destructive' });
+		expect(single.details.map((d) => d.text)).toContain('Deleted. Its 1 Version and 1 Published File are orphaned; undo revives it.');
 		expect(byTask(lines, 13).outcome).toBe('omitted');
 		expect(byTask(lines, 13).details.map((d) => d.text)).toContain('Status wtg becomes omt.');
 	});
@@ -301,14 +305,10 @@ describe('planSummary: the run summary', () => {
 		expect(t.lines.find((l) => l.key === 'policy')!.text).toBe('3 template fields on 2 existing Tasks: your values kept');
 	});
 
-	it('names deletes with publishes and the pending confirmation', () => {
+	it('names deletes with publishes', () => {
 		const o = withExtraAction(opts0(), 11, 'delete');
 		const s = planSummary(input([plan(extraSnap, o)], o));
-		expect(s.lines.find((l) => l.key === 'deleted')!.text).toBe('1 Task deleted, 1 with Versions or Published Files (to confirm)');
-		const c = withDeleteConfirmed(o, true);
-		expect(planSummary(input([plan(extraSnap, c)], c)).lines.find((l) => l.key === 'deleted')!.text).toBe(
-			'1 Task deleted, 1 with Versions or Published Files'
-		);
+		expect(s.lines.find((l) => l.key === 'deleted')!.text).toBe('1 Task deleted, 1 with Versions or Published Files');
 	});
 
 	it('each line filters the entities it counts', () => {

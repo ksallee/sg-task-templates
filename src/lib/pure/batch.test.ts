@@ -147,7 +147,6 @@ const OPTS: RunOptions = {
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false
 };
 
 const CTX: ProjectContext = {
@@ -311,10 +310,9 @@ describe('edgeKeepRequests', () => {
 				]
 			}
 		});
-		expect(edgeKeepRequests(p, { deleteConfirmed: true }).map((r) => r.request_type === 'create' && r.data.dependent_task)).toEqual([
+		expect(edgeKeepRequests(p).map((r) => r.request_type === 'create' && r.data.dependent_task)).toEqual([
 			{ type: 'Task', id: 5001 }
 		]);
-		expect(edgeKeepRequests(p, { deleteConfirmed: false })).toHaveLength(2);
 	});
 
 	it('sends nothing for a removed edge or a replaced one (second phase)', () => {
@@ -347,10 +345,9 @@ describe('extraRequests', () => {
 		expect(() => extraRequests(p, { ...OPTS, omitStatus: 'nope' }, CTX)).toThrow('"nope" is not a Task status in this project. Pick the status omitted Tasks take.');
 	});
 
-	it('delete is absent without confirmation', () => {
+	it('delete retires the Task', () => {
 		const p = plan({ rows: [extra(task(5009, 'roto', 12), 'delete')] });
-		expect(extraRequests(p, OPTS, CTX)).toEqual([]);
-		expect(extraRequests(p, { ...OPTS, deleteConfirmed: true }, CTX)).toEqual([
+		expect(extraRequests(p, OPTS, CTX)).toEqual([
 			{ request_type: 'delete', entity: 'Task', record_id: 5009 }
 		]);
 	});
@@ -588,7 +585,7 @@ describe('from planEntity', () => {
 		});
 
 		it('is not re-created when the batch deletes the outside Task', () => {
-			const o = { ...OPTS, extraOverrides: { 5009: 'delete' as const }, deleteConfirmed: true };
+			const o = { ...OPTS, extraOverrides: { 5009: 'delete' as const } };
 			const p = planEntity(tpl, snap(tasks(), edges), CTX, o);
 			const w = buildEntityWrite(p, o, CTX);
 			expect(creates(w.batch)).toEqual([]);
