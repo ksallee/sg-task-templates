@@ -23,7 +23,6 @@
 <script lang="ts">
 	import type { HTMLAttributes } from 'svelte/elements';
 	import type { FieldHop, FieldOption, FieldSchema, SgContext } from 'sg-widgets-core';
-	import { repeatedLabels } from '$lib/components/repeated-labels';
 	import {
 		currentType,
 		deriveFieldOptions,
@@ -33,6 +32,7 @@
 		moveFieldPath,
 		NO_MATCH_LABEL,
 		NOTHING_CHOSEN_LABEL,
+		repeatedLabels,
 		searchFieldOptions,
 		stateLine,
 		toggleFieldPath
