@@ -21,7 +21,6 @@ const options = (o: Partial<RunOptions> = {}): RunOptions => ({
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false,
 	...o
 });
 

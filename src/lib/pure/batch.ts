@@ -9,7 +9,7 @@
  *   3. `task_template: null` when it already holds the template (084), then `task_template: T`;
  *   4. write-backs of kept field values, which the apply just overwrote (102);
  *   5. re-creates of kept edges the apply erased (102, 109), as TaskDependency rows (086, 095);
- *   6. extras: omit (status, which the apply keeps, 102) or delete (confirmed only).
+ *   6. extras: omit (status, which the apply keeps, 102) or delete.
  *
  * Phase 2 needs ids the server makes during the apply, which a batch cannot reference (002, 086):
  * date clearing on created Tasks (097) and replaced-edge keeps (the template's copy has a new id,
@@ -137,8 +137,7 @@ const kept = (plan: EntityPlan, cause: AffectedEdge['cause']) =>
 	plan.edges.affected.filter((a) => a.cause === cause && a.action === 'keep' && !closesLoop(a));
 
 /** Extras this batch deletes: their edges go with them (089, 103). */
-function deletedExtras(plan: EntityPlan, opts?: Pick<RunOptions, 'deleteConfirmed'>): Set<Id> {
-	if (!opts?.deleteConfirmed) return new Set();
+function deletedExtras(plan: EntityPlan): Set<Id> {
 	return new Set(plan.rows.flatMap((r) => (r.kind === 'extra' && r.action === 'delete' ? [r.task.id] : [])));
 }
 
@@ -149,14 +148,14 @@ function deletedExtras(plan: EntityPlan, opts?: Pick<RunOptions, 'deleteConfirme
  * it would point at a retired Task and roll back the batch; it counts as removed (103). `remove` sends
  * nothing: the apply erases them. Replaced edges: `buildAfterApply`.
  */
-export function edgeKeepRequests(plan: EntityPlan, opts?: Pick<RunOptions, 'deleteConfirmed'>): BatchRequest[] {
-	const gone = deletedExtras(plan, opts);
+export function edgeKeepRequests(plan: EntityPlan): BatchRequest[] {
+	const gone = deletedExtras(plan);
 	return [...kept(plan, 'not_in_template'), ...kept(plan, 'outside_upstream')]
 		.filter((a) => !gone.has(a.existing.downstream) && !gone.has(a.existing.upstream))
 		.map((a) => createEdge(a.existing));
 }
 
-/** Omit writes `omitStatus`; delete only once confirmed (brief 3). Throws on an invalid status. */
+/** Omit writes `omitStatus`; delete retires the Task (the Apply dialog is its second confirmation, brief 3). Throws on an invalid status. */
 export function extraRequests(plan: EntityPlan, opts: RunOptions, ctx: ProjectContext): BatchRequest[] {
 	const out: BatchRequest[] = [];
 	for (const row of plan.rows) {
@@ -169,7 +168,7 @@ export function extraRequests(plan: EntityPlan, opts: RunOptions, ctx: ProjectCo
 				out.push(update('Task', row.task.id, { sg_status_list: opts.omitStatus }));
 			}
 		}
-		if (row.action === 'delete' && opts.deleteConfirmed) {
+		if (row.action === 'delete') {
 			// A delete inside _batch retires the Task like DELETE: revivable, same id, fields, edges
 			// and Version.sg_task (103). Its TaskDependency rows are retired with it (089).
 			out.push({ request_type: 'delete', entity: 'Task', record_id: row.task.id });
@@ -191,7 +190,7 @@ export function buildEntityWrite(plan: EntityPlan, opts: RunOptions, ctx: Projec
 		...claimRequests(plan),
 		...templateRequests(plan),
 		...writeBackRequests(plan),
-		...edgeKeepRequests(plan, opts),
+		...edgeKeepRequests(plan),
 		...extraRequests(plan, opts, ctx)
 	];
 	return { entity, batch, clearDatesFor };

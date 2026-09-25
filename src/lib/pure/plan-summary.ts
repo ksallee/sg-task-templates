@@ -341,12 +341,12 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			if (outcome === 'omitted') details.push({ text: `Status ${row.task.status ?? '(none)'} becomes ${opts.omitStatus || 'the omit status (pick one)'}.` });
 			if (outcome === 'deleted')
 				details.push({
-					text: `Deleted${opts.deleteConfirmed ? '' : ' once you confirm'}. Its ${row.usage.versions} Versions and ${row.usage.publishedFiles} Published Files are orphaned; undo revives it.`,
+					text: `Deleted. Its ${row.usage.versions} ${plural(row.usage.versions, 'Version')} and ${row.usage.publishedFiles} ${plural(row.usage.publishedFiles, 'Published File')} are orphaned; undo revives it.`,
 					...(used ? { tone: 'destructive' as const } : {})
 				});
 			const markers: Marker[] = [];
 			if (outcome === 'deleted' && used)
-				markers.push({ key: 'usage', label: `${row.usage.versions} Versions, ${row.usage.publishedFiles} Published Files`, tone: 'destructive' });
+				markers.push({ key: 'usage', label: `${row.usage.versions} ${plural(row.usage.versions, 'Version')}, ${row.usage.publishedFiles} ${plural(row.usage.publishedFiles, 'Published File')}`, tone: 'destructive' });
 			const relinked = !unlinked && row.fieldChanges !== undefined;
 			if (relinked) {
 				if (row.fieldChanges!.some((c) => changed(c))) markers.push({ key: 'fields', label: 'fields change', tone: 'info' });
@@ -604,7 +604,7 @@ export function planSummary(input: SummaryInput): PlanSummary {
 			`The template is for ${mismatch && mismatch.code === 'template_entity_type_mismatch' ? (mismatch.templateType ?? 'no type') : 'another type'}; applied to ${n} ${noun(n)} anyway`,
 		loop: (n) => `${depsWord(n)} would close a loop: removed`,
 		deleted: (n) =>
-			`${tasksWord(n)} deleted${deletedUsed ? `, ${deletedUsed} with Versions or Published Files` : ''}${opts.deleteConfirmed ? '' : ' (to confirm)'}`,
+			`${tasksWord(n)} deleted${deletedUsed ? `, ${deletedUsed} with Versions or Published Files` : ''}`,
 		omitted: (n) => `${tasksWord(n)} not in the template set to ${opts.omitStatus || 'the omit status'}`,
 		created: (n) => `${n} new ${plural(n, 'Task')} created from the template`,
 		linked: (n) => `${n} existing ${plural(n, 'Task')} matched by name and Step, linked to the template`,

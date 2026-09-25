@@ -311,7 +311,6 @@ export interface RunOptions {
 	edgeActions: Record<Id, EdgeAction>;
 	/** Offered only for created Tasks with no upstream edge (decisions, 097: they stay unpinned). */
 	clearCreatedDates: boolean;
-	deleteConfirmed: boolean; // the second confirmation (brief 3)
 }
 
 // --- plan -----------------------------------------------------------------------------------------

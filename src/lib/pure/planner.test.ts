@@ -143,7 +143,6 @@ const opts: RunOptions = {
   conflictPicks: {},
   edgeActions: {},
   clearCreatedDates: false,
-  deleteConfirmed: false,
 };
 
 function snap(
@@ -809,7 +808,7 @@ describe("planEntity: entity level", () => {
     ).toBe(false);
   });
 
-  it("is not noop with an omitted extra, nor with a confirmed delete", () => {
+  it("is not noop with an omitted extra, nor with a delete", () => {
     const s = snap([...linked(), task(9, "x", 11)], {
       taskTemplate: 202,
       edges: [tplEdge],
@@ -819,10 +818,7 @@ describe("planEntity: entity level", () => {
       planEntity(tt2, s, ctx, withExtraOverride(opts, 9, "omit")).noop,
     ).toBe(false);
     const del = withExtraOverride(opts, 9, "delete");
-    expect(planEntity(tt2, s, ctx, del).noop).toBe(true); // blocked until confirmed
-    expect(
-      planEntity(tt2, s, ctx, { ...del, deleteConfirmed: true }).noop,
-    ).toBe(false);
+    expect(planEntity(tt2, s, ctx, del).noop).toBe(false);
   });
 
   it("warns on template entity_type mismatch (083)", () => {

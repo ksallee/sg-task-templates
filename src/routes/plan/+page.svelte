@@ -29,17 +29,15 @@
 	import EntityList from '$lib/app/plan/entity-list.svelte';
 	import { planToCsv } from '$lib/pure/csv';
 	import { planTotals } from '$lib/pure/entry';
-	import { acceptPicks, accessWarningText, applyBlockers, applyGate, openConflicts, planningStep, pendingDeletes, planCsvName, withDeleteConfirmed } from '$lib/pure/plan-view';
+	import { acceptPicks, accessWarningText, applyBlockers, applyGate, openConflicts, planningStep, planCsvName } from '$lib/pure/plan-view';
 	import { matchesKey, planSummary, type SummaryKey } from '$lib/pure/plan-summary';
 	import type { EntityTask, Id, RunOptions as Options } from '$lib/pure/types';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
-	import * as Dialog from '$lib/components/ui/dialog/index.js';
 
 	let summaryKey = $state<SummaryKey | null>(null);
 	let text = $state('');
 	let selectedId = $state<Id | null>(null);
-	let confirming = $state(false);
 	let optionsOpen = $state(false);
 	let applying = $state(false);
 
@@ -77,7 +75,6 @@
 	const selectedTasks = $derived(run.snapshots.find((s) => s.entity.id === selected?.entity.id)?.tasks ?? []);
 	const blockers = $derived(options && run.ctx ? applyBlockers(run.plans, options, run.ctx, access) : []);
 	const gate = $derived(applyGate(blockers, run.access));
-	const deletes = $derived(pendingDeletes(run.plans));
 	const conflictsOpen = $derived(options ? openConflicts(run.plans, options) > 0 : false);
 	const entityNoun = $derived(totals.entities === 1 ? (run.entityType ?? 'entity') : run.entityType ? `${run.entityType}s` : 'entities');
 	const filtered = $derived(activeLine !== null || text.trim() !== '');
@@ -149,9 +146,6 @@
 					{#snippet action()}
 						{#if conflictsOpen}
 							<Button size="sm" variant="outline" onclick={() => setOptions(acceptPicks(options, run.plans))}>Accept all pre-picks</Button>
-						{/if}
-						{#if deletes.length > 0 && !options.deleteConfirmed}
-							<Button size="sm" variant="destructive" onclick={() => (confirming = true)}>Confirm {deletes.length} delete{deletes.length === 1 ? '' : 's'}</Button>
 						{/if}
 					{/snippet}
 				</Notice>
@@ -235,33 +229,4 @@
 	{#if confirmContent}
 		<ApplyDialog bind:open={applying} content={confirmContent} persistent={session.persistent} onConfirm={confirmApply} />
 	{/if}
-
-	<Dialog.Root bind:open={confirming}>
-		<Dialog.Content class="sm:max-w-xl">
-			<Dialog.Header>
-				<Dialog.Title>Delete {deletes.length} Task{deletes.length === 1 ? '' : 's'}?</Dialog.Title>
-				<Dialog.Description>
-					Deleting a Task unlinks its Versions and PublishedFiles and removes its dependencies. Undo revives it.
-				</Dialog.Description>
-			</Dialog.Header>
-			<ul class="flex max-h-72 flex-col gap-1 overflow-y-auto text-sm" data-slot="delete-list">
-				{#each deletes as d (d.task.id)}
-					{@const used = d.usage.versions + d.usage.publishedFiles > 0}
-					<li class={used ? 'text-destructive font-medium' : ''}>
-						{d.entity.name} · {d.task.content} #{d.task.id}: {d.usage.versions} Versions, {d.usage.publishedFiles} PublishedFiles
-					</li>
-				{/each}
-			</ul>
-			<Dialog.Footer>
-				<Button variant="outline" onclick={() => (confirming = false)}>Cancel</Button>
-				<Button
-					variant="destructive"
-					onclick={() => {
-						setOptions(withDeleteConfirmed(options, true));
-						confirming = false;
-					}}>Delete them</Button
-				>
-			</Dialog.Footer>
-		</Dialog.Content>
-	</Dialog.Root>
 {/if}

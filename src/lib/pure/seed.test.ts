@@ -36,7 +36,6 @@ const opts: RunOptions = {
 	conflictPicks: {},
 	edgeActions: {},
 	clearCreatedDates: false,
-	deleteConfirmed: false
 };
 
 const ref = (type: string, id: Id | null) => (id === null ? null : { type, id });

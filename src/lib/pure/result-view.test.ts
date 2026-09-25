@@ -98,7 +98,6 @@ const run = (entities: Run['entities']): Run => ({
 		conflictPicks: {},
 		edgeActions: {},
 		clearCreatedDates: false,
-		deleteConfirmed: false
 	},
 	startedAt: '2026-09-24T10:00:00Z',
 	finishedAt: null,
