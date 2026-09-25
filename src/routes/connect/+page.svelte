@@ -141,7 +141,7 @@
 			{:else}
 				<p class="text-muted-foreground flex items-center gap-1.5 text-sm" data-slot="connect-ready">
 					<CircleCheck class="text-success size-4" aria-hidden="true" />
-					Connected. Next, pick the project, entity type and template.
+					Connected.
 				</p>
 			{/if}
 		</div>

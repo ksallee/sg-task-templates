@@ -71,7 +71,7 @@ export const SNAPSHOT_BATCH = 25;
 
 const KEYS = {
 	picks: 'sg-task-templates:run',
-	types: (site: string, projectId: Id) => `sg-task-templates:types:${site}:${projectId}`
+	types: (site: string, projectId: Id) => `sg-task-templates:task-types:${site}:${projectId}`
 } as const;
 
 interface Picks {
@@ -383,8 +383,8 @@ class RunState {
 	}
 
 	/**
-	 * Which types take a template: one schema read per site type (load.ts, about a hundred on the
-	 * sandbox), so the answer is kept for the browser session, per site and project.
+	 * Which types take a template: `Task.entity`, then one field read per type a Task links to
+	 * (load.ts). Kept for the browser session, per site and project.
 	 */
 	async #readTypes(): Promise<void> {
 		const project = this.project;
