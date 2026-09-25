@@ -49,8 +49,8 @@ and recreates it, after an apply. The docstring at the top of `tools/seed.py` li
    `POST /live/dev-token` then mints a 600 s bearer from that script key under `vite dev` only, and
    the page reads without a sign-in. Signing in through the launcher over it writes as yourself.
 2. `pnpm dev`, open the URL, go to Template. Pick the project (search its name), the entity
-   type (only types with a `task_template` field are offered: Shot, Asset, Sequence, custom
-   entities), then a template: its tasks and dependencies show on the right. The project's default
+   type (only types a Task links to and with a `task_template` field are offered, as the
+   site's `Task.entity` lists them), then a template: its tasks and dependencies show on the right. The project's default
    for the type (088; Kevin sets Shot = T2 and Asset = T4 in the project's Tracking Settings) is
    tagged Project default and pre-selected.
 3. Next: entities. One list, filtered by template: All, Using this template, Other template or No

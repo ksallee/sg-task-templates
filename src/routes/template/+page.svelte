@@ -1,5 +1,5 @@
 <!--
-	Template: the project, the entity type (only those with a task_template field), and the template,
+	Template: the project, the entity type (only those a Task links to, with a task_template field), and the template,
 	previewed as its tasks by step with what each waits on. Next leads to Entities. Thin: the reads and the picks live in `$lib/app/run.svelte.ts`, the sorting in
 	`$lib/pure/entry.ts`, the preview in `$lib/pure/outline.ts`.
 -->
