@@ -1,3 +1,5 @@
-# allow crawling everything by default
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /live/
+
+Sitemap: https://sg-task-templates.vercel.app/sitemap.xml
