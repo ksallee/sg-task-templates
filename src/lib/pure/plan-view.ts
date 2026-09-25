@@ -162,11 +162,23 @@ export function policySummary(views: Array<Pick<PolicyFieldView, 'field' | 'poli
 	return [`${head}: ${policyLabel('', common)}`, ...odd].join(' · ');
 }
 
-/** The bulk extra actions in one line: how many names, leave by default, then each name set otherwise. */
-export function extrasSummary(names: Array<{ name: string; count: number }>, opts: RunOptions): string {
+/**
+ * The bulk extra actions in one line: each name set otherwise, as written, then how many are left.
+ * "Not in template: Lighting omit, Paint delete, 2 other names leave".
+ */
+export function extrasSummary(names: Array<{ name: string; label?: string; count: number }>, opts: RunOptions): string {
 	if (names.length === 0) return 'No Tasks outside the template';
-	const odd = names.filter((n) => (opts.extraByName[n.name] ?? 'leave') !== 'leave').map((n) => `${n.name || '(no name)'}: ${opts.extraByName[n.name]}`);
-	return [`${names.length} name${names.length === 1 ? '' : 's'} not in the template: leave`, ...odd].join(' · ');
+	const shown = (n: { name: string; label?: string }) => (n.label ?? n.name) || '(no name)';
+	const action = (n: { name: string }) => opts.extraByName[n.name] ?? 'leave';
+	const odd = names.filter((n) => action(n) !== 'leave').map((n) => `${shown(n)} ${action(n)}`);
+	const left = names.filter((n) => action(n) === 'leave');
+	const rest =
+		left.length === 0
+			? []
+			: odd.length > 0
+				? [`${left.length} other ${left.length === 1 ? 'name leaves' : 'names leave'}`]
+				: [left.length === 1 ? `${shown(left[0])} leave` : `${left.length} names leave`];
+	return `Not in template: ${[...odd, ...rest].join(', ')}`;
 }
 
 /** Why the pre-pick chose its Task (matching.ts `prePick`), in words. */
@@ -405,6 +417,8 @@ export interface EdgeView {
 	affected: AffectedEdgeView[];
 	/** Linked Task upstream of a Task outside the template: kept by the apply, shown for information (101, 109). */
 	outsideDownstream: AddedEdgeView[];
+	/** Edges on a Task the batch deletes: removed with it, no choice (103). `deleted` names that Task. */
+	withDeleted: Array<AddedEdgeView & { id: Id; deleted: string }>;
 	mayMove: string[];
 	wouldViolate: string[];
 }
@@ -453,6 +467,15 @@ export function edgeView(plan: EntityPlan, template: Template, tasks: EntityTask
 			type: e.type,
 			offsetDays: e.offsetDays,
 			...words(e.type, e.offsetDays)
+		})),
+		withDeleted: (plan.edges.withDeleted ?? []).map(({ edge: e, task }) => ({
+			id: e.id,
+			upstream: existing(e.upstream),
+			downstream: existing(e.downstream),
+			type: e.type,
+			offsetDays: e.offsetDays,
+			...words(e.type, e.offsetDays),
+			deleted: existing(task).label
 		})),
 		mayMove: plan.edges.mayMove.map((id) => existing(id).label),
 		wouldViolate: plan.edges.wouldViolate.map((id) => existing(id).label)

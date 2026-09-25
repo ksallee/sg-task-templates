@@ -585,10 +585,17 @@ describe('from planEntity', () => {
 		});
 
 		it('is not re-created when the batch deletes the outside Task', () => {
-			const o = { ...OPTS, extraOverrides: { 5009: 'delete' as const } };
+			const o = { ...OPTS, extraOverrides: { 5009: 'delete' as const }, edgeActions: { 701: 'keep' as const } };
 			const p = planEntity(tpl, snap(tasks(), edges), CTX, o);
+			expect(p.edges.affected).toEqual([]);
+			expect(p.edges.withDeleted?.map((w) => [w.edge.id, w.task])).toEqual([
+				[701, 5009],
+				[702, 5009]
+			]);
 			const w = buildEntityWrite(p, o, CTX);
 			expect(creates(w.batch)).toEqual([]);
+			expect(w.batch.filter((r) => r.entity === 'TaskDependency')).toEqual([]);
+			expect(validateRequests(w.batch, p)).toEqual([]);
 			expect(w.batch.at(-1)).toEqual({ request_type: 'delete', entity: 'Task', record_id: 5009 });
 		});
 

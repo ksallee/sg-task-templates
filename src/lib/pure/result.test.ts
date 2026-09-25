@@ -337,6 +337,32 @@ describe('diffEntity: affected edges (stale, not in the template)', () => {
 	});
 });
 
+describe('diffEntity: an edge on a deleted Task (103)', () => {
+	const existing = { id: 702, downstream: 602, upstream: 609, type: 'finish-to-start-next-day' as const, offsetDays: null };
+	const plan = (): EntityPlan => ({
+		entity: { type: 'Shot', id: 1, name: 'sh', entityType: 'Shot', taskTemplate: null },
+		templateId: 1,
+		rows: [],
+		edges: { expectedAdded: [], affected: [], toExtras: [], mayMove: [], wouldViolate: [], withDeleted: [{ edge: existing, task: 609 }] },
+		counts: { keep: 0, claim: 0, create: 0, extra: 0, conflict: 0 },
+		warnings: [],
+		needsClearFirst: false,
+		noop: false
+	});
+
+	it('gone with its Task: no difference', () => {
+		const before = { tasks: [], edges: [existing] } as unknown as EntitySnapshot;
+		const after = { tasks: [], edges: [] } as unknown as EntitySnapshot;
+		expect(diffEntity(plan(), before, after).differences).toEqual([]);
+	});
+
+	it('still there: flagged', () => {
+		const before = { tasks: [], edges: [existing] } as unknown as EntitySnapshot;
+		const after = { tasks: [], edges: [existing] } as unknown as EntitySnapshot;
+		expect(diffEntity(plan(), before, after).differences).toEqual([{ code: 'edge_still_present', edgeId: 702 }]);
+	});
+});
+
 describe('diffEntity: affected edges, matched on type and offset (105)', () => {
 	const existing = { id: 701, downstream: 602, upstream: 601, type: 'finish-to-finish' as const, offsetDays: 5 };
 	const templateEdge = { id: null, downstream: 602, upstream: 601, type: 'start-to-start' as const, offsetDays: 2 };

@@ -14,12 +14,9 @@
 
 import { sameValue } from './planner';
 import {
-	EXTRA_REASON,
-	PICK_REASON,
 	conflictResolved,
 	edgeView,
 	fillLabels,
-	keyLabel,
 	policyFieldViews,
 	previousLinkLabel,
 	valueLabel,
@@ -105,9 +102,14 @@ export const OUTCOME_MEANING: Record<TaskOutcome, string> = {
 	unchanged: 'linked to this template before the apply, nothing changes'
 };
 
-/** An outcome's meaning; Created names the run's entity type (a display name, "Shot") when known. */
-export function outcomeMeaning(outcome: TaskOutcome, entityType?: string | null): string {
-	return outcome === 'created' && entityType ? `missing on the ${entityType}, created from the template` : OUTCOME_MEANING[outcome];
+/**
+ * An outcome's meaning; Created names the run's entity type (a display name, "Shot") when known;
+ * Deleted says "it" for one Task.
+ */
+export function outcomeMeaning(outcome: TaskOutcome, entityType?: string | null, count?: number): string {
+	if (outcome === 'created' && entityType) return `missing on the ${entityType}, created from the template`;
+	if (outcome === 'deleted' && count === 1) return 'not in the template, deleted; undo revives it';
+	return OUTCOME_MEANING[outcome];
 }
 
 export type Tone = 'muted' | 'info' | 'success' | 'warning' | 'destructive';
@@ -152,6 +154,19 @@ export interface SummaryInput {
 	entityType: string | null;
 	/** Field display names by code name (Task schema with `project_id`). */
 	labels?: Record<FieldName, string>;
+	/** Task status display names by code (the status list's `display_values`). */
+	statusNames?: Record<string, string>;
+}
+
+/** A status by its display name, the code when it has none. */
+export function statusName(names: Record<string, string> | undefined, code: string | null): string {
+	if (code === null || code === '') return '(none)';
+	return names?.[code]?.trim() || code;
+}
+
+/** "Comp on Step Anim": a name as written and its Step, for the user (never the match key). */
+function nameOnStep(name: string, step: { name?: string } | null): string {
+	return step?.name ? `${name} on Step ${step.name}` : `${name} with no Step`;
 }
 
 const nameOf = (t: { content: string | null }) => (t.content ?? '').trim() || '(no name)';
@@ -186,6 +201,13 @@ function edgeDetails(plan: EntityPlan, template: Template, tasks: EntityTask[]) 
 	plan.edges.expectedAdded.forEach((a, i) => {
 		const v = view.added[i];
 		add(node(a.downstream), { text: `New dependency: ${words(v.phrase, v.offset)} ${end(v.upstream)}.` });
+	});
+	view.withDeleted.forEach((v, i) => {
+		const w = plan.edges.withDeleted![i];
+		const pair = `${v.downstream.label} ${words(v.phrase, v.offset)} ${v.upstream.label}`;
+		add(`t${w.task}`, { text: `${pair}: removed with this Task.` });
+		const other = w.edge.downstream === w.task ? w.edge.upstream : w.edge.downstream;
+		add(`t${other}`, { text: `${pair}: removed with ${v.deleted}, which is deleted.` });
 	});
 	plan.edges.affected.forEach((a, i) => {
 		const v = view.affected[i];
@@ -233,14 +255,13 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 		...(fills?.some((f) => f.field !== 'task_assignees') ? [{ key: 'dates_filled' as const, label: 'dates filled', tone: 'muted' as const }] : [])
 	];
 	const fillDetails = (fills: Parameters<typeof fillLabels>[0]): Detail[] => fillLabels(fills).map((text) => ({ text }));
-	const conflictDetail = (c: ConflictRow | null): Detail[] =>
-		c ? [{ text: `Picked: ${c.candidates.length} Tasks match ${keyLabel(c.key, c.templateTasks[0]?.step ?? null)}.` }] : [];
+	const conflictDetail = (c: ConflictRow | null): Detail[] => (c ? [{ text: `Picked from ${c.candidates.length} Tasks with this name and Step.` }] : []);
 
 	for (const row of plan.rows) {
 		if (row.kind === 'conflict') {
 			if (!open.includes(row)) continue;
-			const pre = row.candidates.find((c) => Object.values(row.prePick).includes(c.task.id));
-			const key = keyLabel(row.key, row.templateTasks[0]?.step ?? null);
+			const first = row.templateTasks[0];
+			const key = nameOnStep(nameOf(first ?? { content: null }), first?.step ?? null);
 			const twice = row.templateTasks.length > 1 ? `, and the template has it ${row.templateTasks.length} times` : '';
 			out.push({
 				id: `k${row.key}`,
@@ -250,10 +271,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 				templateTaskId: row.templateTasks[0]?.id ?? null,
 				status: null,
 				markers: [],
-				details: [
-					{ text: `${row.candidates.length} Tasks match ${key}${twice}: pick the Task to link, or create a new one.` },
-					...(pre ? [{ text: `Pre-pick: ${nameOf(pre.task)} #${pre.task.id}, ${PICK_REASON[row.reason]}.` }] : [])
-				],
+				details: [{ text: `${row.candidates.length} Tasks are named ${key}${twice}: pick the one to link, or create a new one.` }],
 				row,
 				conflict: row
 			});
@@ -269,7 +287,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			let outcome: TaskOutcome;
 			if (row.kind === 'claim') {
 				outcome = row.rename ? 'linked_renamed' : 'linked';
-				details.push({ text: `Same name and Step (${keyLabel(row.task.key, row.task.step)}): linked to ${nameOf(row.templateTask)} in ${template.code}.` });
+				details.push({ text: `Same name and Step: linked to ${nameOf(row.templateTask)} in ${template.code}.` });
 				details.push({
 					text: row.previousTemplateTask ? `Linked before: ${previousLinkLabel(row.previousTemplateTask, templates)}.` : 'Not linked to a template before.'
 				});
@@ -278,7 +296,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 				outcome = row.rename || fields || row.fills?.length ? 'updated' : 'unchanged';
 				details.push({ text: `Already linked to ${nameOf(row.templateTask)} in ${template.code}.` });
 				if (row.keyMismatch)
-					details.push({ text: `Its name or Step no longer matches the template task (${keyLabel(row.task.key, row.task.step)}); it stays linked.` });
+					details.push({ text: 'Its name or Step no longer matches the template task; it stays linked.' });
 				if (row.rename) {
 					markers.push({ key: 'renamed', label: 'renamed back', tone: 'warning' });
 					details.push({
@@ -331,19 +349,27 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 			const unlinked =
 				row.reason === 'conflict_loser' && !!row.task.templateTask && !!conflict?.templateTasks.some((tt) => tt.id === row.task.templateTask?.id);
 			const details: Detail[] = [];
+			const pickedFor = conflict?.templateTasks[0] ? nameOf(conflict.templateTasks[0]) : null;
 			if (row.reason === 'not_in_template') details.push({ text: 'Not in the template.' });
-			else if (row.reason === 'link_wins') details.push({ text: `Same name and Step as a template task: ${EXTRA_REASON.link_wins}.` });
+			else if (row.reason === 'link_wins') details.push({ text: 'Same name and Step as a template task, but another Task is linked to it.' });
 			else
 				details.push({
-					text: unlinked ? 'Not picked. Unlinked from the template task so only the picked Task is linked.' : 'Not picked.'
+					text: `Another Task was picked${pickedFor ? ` for ${pickedFor}` : ''}.${unlinked ? ' This one is unlinked from the template task.' : ''}`
 				});
-			if (outcome === 'left') details.push({ text: 'Not changed.' });
-			if (outcome === 'omitted') details.push({ text: `Status ${row.task.status ?? '(none)'} becomes ${opts.omitStatus || 'the omit status (pick one)'}.` });
-			if (outcome === 'deleted')
+			if (outcome === 'left') details.push({ text: 'Left as it is.' });
+			if (outcome === 'omitted')
 				details.push({
-					text: `Deleted. Its ${row.usage.versions} ${plural(row.usage.versions, 'Version')} and ${row.usage.publishedFiles} ${plural(row.usage.publishedFiles, 'Published File')} are orphaned; undo revives it.`,
-					...(used ? { tone: 'destructive' as const } : {})
+					text: `Status ${statusName(input.statusNames, row.task.status)} becomes ${opts.omitStatus ? statusName(input.statusNames, opts.omitStatus) : 'the omit status (pick one)'}.`
 				});
+			if (outcome === 'deleted')
+				details.push(
+					used
+						? {
+								text: `Deleted. Its ${row.usage.versions} ${plural(row.usage.versions, 'Version')} and ${row.usage.publishedFiles} ${plural(row.usage.publishedFiles, 'Published File')} are orphaned; undo revives it.`,
+								tone: 'destructive' as const
+							}
+						: { text: 'Deleted; undo revives it.' }
+				);
 			const markers: Marker[] = [];
 			if (outcome === 'deleted' && used)
 				markers.push({ key: 'usage', label: `${row.usage.versions} ${plural(row.usage.versions, 'Version')}, ${row.usage.publishedFiles} ${plural(row.usage.publishedFiles, 'Published File')}`, tone: 'destructive' });
@@ -354,7 +380,7 @@ export function taskLines(plan: EntityPlan, input: SummaryInput): TaskLine[] {
 				details.push({ text: 'Still linked to a template task: the apply updates it from the template too.' }, ...fieldDetails(row.fieldChanges, labels), ...fillDetails(row.fills));
 			}
 			markers.push(...dateMarkers(row.task.id));
-			details.push(...(edges.get(`t${row.task.id}`) ?? []), ...conflictDetail(conflict));
+			details.push(...(edges.get(`t${row.task.id}`) ?? []));
 			out.push({
 				id: `t${row.task.id}`,
 				outcome,
@@ -494,7 +520,7 @@ export function entitySummary(plan: EntityPlan, input: SummaryInput): EntitySumm
 	tally.fields = lines.filter((l) => has(l, 'fields')).length;
 	tally.filled = lines.filter((l) => has(l, 'assignees') || has(l, 'dates_filled')).length;
 	tally.deps_added = plan.edges.expectedAdded.length;
-	tally.deps_removed = plan.edges.affected.filter((a) => a.action === 'remove').length;
+	tally.deps_removed = plan.edges.affected.filter((a) => a.action === 'remove').length + (plan.edges.withDeleted?.length ?? 0);
 	tally.deps_recreated = plan.edges.affected.filter((a) => a.action === 'keep').length;
 	tally.dates_move = plan.edges.mayMove.length;
 	tally.violation = plan.edges.wouldViolate.length;
@@ -511,7 +537,7 @@ export function entitySummary(plan: EntityPlan, input: SummaryInput): EntitySumm
 	const groups = OUTCOME_ORDER.map((outcome) => ({
 		outcome,
 		label: OUTCOME_LABEL[outcome],
-		meaning: outcomeMeaning(outcome, input.entityType),
+		meaning: outcomeMeaning(outcome, input.entityType, lines.filter((l) => l.outcome === outcome).length),
 		lines: lines.filter((l) => l.outcome === outcome)
 	})).filter((g) => g.lines.length > 0);
 
@@ -573,7 +599,7 @@ export function policyWords(views: Array<{ field: FieldName; policy: FieldPolicy
 		fill_if_empty: "the template's where yours are empty"
 	};
 	const ODD: Record<FieldPolicy, string> = { keep: 'yours', overwrite: "the template's", fill_if_empty: "the template's if empty" };
-	const odd = views.filter((v) => v.policy !== common).map((v) => `${fieldLabel(labels, v.field)}: ${ODD[v.policy]}`);
+	const odd = views.filter((v) => v.policy !== common).map((v) => `${fieldLabel(labels, v.field)} (${ODD[v.policy]})`);
 	return `${COMMON[common]}${odd.length ? `, except ${odd.join(', ')}` : ''}`;
 }
 
@@ -605,7 +631,7 @@ export function planSummary(input: SummaryInput): PlanSummary {
 		loop: (n) => `${depsWord(n)} would close a loop: removed`,
 		deleted: (n) =>
 			`${tasksWord(n)} deleted${deletedUsed ? `, ${deletedUsed} with Versions or Published Files` : ''}`,
-		omitted: (n) => `${tasksWord(n)} not in the template set to ${opts.omitStatus || 'the omit status'}`,
+		omitted: (n) => `${tasksWord(n)} not in the template set to ${opts.omitStatus ? statusName(input.statusNames, opts.omitStatus) : 'the omit status'}`,
 		created: (n) => `${n} new ${plural(n, 'Task')} created from the template`,
 		linked: (n) => `${n} existing ${plural(n, 'Task')} matched by name and Step, linked to the template`,
 		renamed: (n) => `${tasksWord(n)} renamed to the template's name`,
@@ -622,11 +648,13 @@ export function planSummary(input: SummaryInput): PlanSummary {
 		noop: (n) => `${n} ${noun(n)} already ${plural(n, 'matches', 'match')}: nothing to write`
 	};
 	const noWhere = new Set<SummaryKey>(['mismatch', 'noop']);
+	// Said once, in the Before Apply notice, which also filters the entities to them.
+	const notListed = new Set<SummaryKey>(['needs_choice']);
 
 	const lines: SummaryLine[] = [];
 	for (const key of SUMMARY_KEYS) {
 		const count = sum(key);
-		if (count === 0) continue;
+		if (count === 0 || notListed.has(key)) continue;
 		if (key === 'policy' && views.length === 0) continue;
 		const entitiesTouched = touched(key);
 		lines.push({

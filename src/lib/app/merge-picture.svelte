@@ -115,7 +115,7 @@
 				</div>
 			{/each}
 			<p class="text-muted-foreground border-t px-3 py-2.5 text-xs leading-relaxed">
-				Status and assignees are unchanged.
+				Status is unchanged. Empty assignees are filled from the template.
 			</p>
 		</div>
 	</div>

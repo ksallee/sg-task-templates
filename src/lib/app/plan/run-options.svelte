@@ -1,6 +1,6 @@
 <!--
 	The run options, for every entity at once: a policy per field the apply rewrites (102; yours by
-	default, the name takes the template's), said in plain words with display names, one action per extra name, the omit status when the project has no `omt`,
+	default, the name takes the template's), said in plain words with display names, one action per extra name, the omit status (by display name) when the project has no `omt`,
 	the clear-dates opt-in where a created Task may take it (097). Collapsed, one line sums them up;
 	the omit status stays in that line when the project needs one picked. Every change goes out as new
 	RunOptions.
@@ -23,7 +23,6 @@
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import type { Snippet } from 'svelte';
 	import { cn } from '$lib/utils.js';
 
 	type Props = {
@@ -34,22 +33,21 @@
 		onOptions: (next: RunOptions) => void;
 		open: boolean;
 		onToggle: () => void;
-		/** A line under the options: the access check. */
-		footer?: Snippet;
 		/** Task field display names by code name. */
 		labels?: Record<string, string>;
 	};
-	let { template, plans, ctx, options, onOptions, open, onToggle, footer, labels }: Props = $props();
+	let { template, plans, ctx, options, onOptions, open, onToggle, labels }: Props = $props();
 
 	const fields = $derived(policyFieldViews(template, options));
 	const names = $derived(extraNames(plans));
 	const omit = $derived(omitChoice(ctx, options));
 	const clearable = $derived(clearableCreates(plans));
+	const status = (code: string) => ctx.taskStatusNames?.[code] || code;
 	const summary = $derived(
 		[
 			fields.length ? `Fields: ${policyWords(fields, labels)}` : 'No field to rewrite',
 			names.length > 0 ? extrasSummary(names, options) : null,
-			omit.ask ? null : `omit sets ${options.omitStatus}`,
+			omit.ask ? null : `omit sets ${status(options.omitStatus)}`,
 			clearable > 0 && options.clearCreatedDates ? `template dates cleared on ${clearable}` : null
 		]
 			.filter(Boolean)
@@ -63,15 +61,15 @@
 		<span class="text-muted-foreground text-xs font-medium">Omit sets status</span>
 		<Select.Root type="single" value={omit.current} onValueChange={(v) => onOptions(withOmitStatus(options, v))}>
 			<Select.Trigger size="sm" aria-label="Omit status" class="min-w-24">
-				<span data-slot="select-value">{omit.current || 'pick a status'}</span>
+				<span data-slot="select-value">{omit.current ? status(omit.current) : 'pick a status'}</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each omit.statuses as s (s)}
-					<Select.Item value={s} label={s} />
+					<Select.Item value={s} label={status(s)} />
 				{/each}
 			</Select.Content>
 		</Select.Root>
-		<span class="text-muted-foreground text-xs">The project has no <span class="font-mono">omt</span>.</span>
+		<span class="text-muted-foreground text-xs">The project has no Omit status.</span>
 	</div>
 {/snippet}
 
@@ -120,7 +118,7 @@
 					<span class="text-foreground font-medium">Template's if empty</span>: only where yours is empty.
 				</p>
 				<p class="text-muted-foreground text-xs" data-slot="policy-note">
-					Not listed: Flow Production Tracking always fills empty assignees and dates from the template (undo empties them again; dates
+					Not listed: Flow PT always fills empty assignees and dates from the template (undo empties them again; dates
 					only on Tasks with no dependency upstream). Status is not changed.
 				</p>
 			</div>
@@ -131,9 +129,9 @@
 					<div class="grid grid-cols-[repeat(auto-fill,20rem)] gap-x-6 gap-y-1.5">
 						{#each names as n (n.name)}
 							<div class="flex items-center gap-2">
-								<span class="w-28 truncate text-xs" title={n.name}>{n.name || '(no name)'} <span class="text-muted-foreground tabular-nums">×{n.count}</span></span>
+								<span class="w-28 truncate text-xs" title={n.label}>{n.label || '(no name)'} <span class="text-muted-foreground tabular-nums">×{n.count}</span></span>
 								<Segmented
-									label={`Action for Tasks not in the template named ${n.name}`}
+									label={`Action for Tasks not in the template named ${n.label}`}
 									value={options.extraByName[n.name] ?? 'leave'}
 									options={EXTRA_OPTIONS}
 									reselect
@@ -150,7 +148,7 @@
 					{@render omitPicker()}
 				{:else}
 					<p class="text-xs" data-slot="omit-status">
-						<span class="text-muted-foreground font-medium">Omit sets status</span> <span class="font-mono">{options.omitStatus}</span>
+						<span class="text-muted-foreground font-medium">Omit sets status</span> {status(options.omitStatus)}
 					</p>
 				{/if}
 				{#if clearable > 0}
@@ -160,7 +158,6 @@
 					</label>
 				{/if}
 			</div>
-			{#if footer}{@render footer()}{/if}
 		</div>
 	{/if}
 </section>

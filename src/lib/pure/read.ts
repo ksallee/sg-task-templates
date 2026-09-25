@@ -299,11 +299,17 @@ export function templatableTypes(fieldsByType: Record<string, Record<string, Fie
 		.map(([type]) => type);
 }
 
-/** `defaultTaskStatus` and `validTaskStatuses` (valid minus hidden) off a normalized status field. */
-export function taskStatusContext(field: FieldSchema): Pick<ProjectContext, 'defaultTaskStatus' | 'validTaskStatuses'> {
+/**
+ * `defaultTaskStatus`, `validTaskStatuses` (valid minus hidden) and the display names
+ * (`display_values`, the only source of a label, 009) off a normalized status field.
+ */
+export function taskStatusContext(
+	field: FieldSchema
+): Pick<ProjectContext, 'defaultTaskStatus' | 'validTaskStatuses' | 'taskStatusNames'> {
 	return {
 		defaultTaskStatus: typeof field.defaultValue === 'string' ? field.defaultValue : '',
-		validTaskStatuses: usableStatuses(field).map((s) => s.code)
+		validTaskStatuses: usableStatuses(field).map((s) => s.code),
+		taskStatusNames: { ...(field.displayValues ?? {}) }
 	};
 }
 
